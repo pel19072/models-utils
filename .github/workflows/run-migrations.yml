@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
         DB_URL: ${{ secrets.DATABASE_URL }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
 
     steps:
       - name: Checkout repository
