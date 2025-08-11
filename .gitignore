@@ -1,3 +1,13 @@
+# This project
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+alembic/versions/*.pyc
+*.sqlite
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
