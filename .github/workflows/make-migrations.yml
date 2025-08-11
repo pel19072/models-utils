@@ -11,9 +11,8 @@ on:
 jobs:
   autogenerate-migration:
     runs-on: ubuntu-latest
-
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}  # Use DEV DB for schema comparison
+      DB_URL: ${{ secrets.DATABASE_URL }}  # Use DEV DB for schema comparison
 
     steps:
       - name: Checkout repository
