@@ -8,6 +8,9 @@ on:
       - "my_shared_db/models/**"
       - "alembic/env.py"
 
+permissions:
+  contents: write
+
 jobs:
   autogenerate-migration:
     runs-on: ubuntu-latest
