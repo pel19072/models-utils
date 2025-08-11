@@ -109,3 +109,4 @@ class CustomField(Base):
 
     # Relationships
     company = relationship("Company", back_populates="custom_fields")
+    
