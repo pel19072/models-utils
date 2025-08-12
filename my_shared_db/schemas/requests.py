@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 
-from schemas.company import CompanyCreate
-from schemas.user import UserCreate
+from .company import CompanyCreate
+from .user import UserCreate
 
 # --- Login ---
 class LoginRequest(BaseModel):

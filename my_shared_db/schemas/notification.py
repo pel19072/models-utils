@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
 
-from schemas.user import UserCreate, UserOut
+from .user import UserCreate, UserOut
 
 class NotificationStatus(str, Enum):
     PENDING = "PENDING"

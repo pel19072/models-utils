@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from schemas.order_item import OrderItemInput, OrderItemOut
+from .order_item import OrderItemInput, OrderItemOut
 
 class OrderBase(BaseModel):
     client_id: Optional[int]
