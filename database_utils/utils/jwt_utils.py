@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from my_shared_db.schemas.user import UserOut
+from database_utils.schemas.user import UserOut
 from dotenv import load_dotenv
 from loguru import logger
 

@@ -17,9 +17,9 @@ if config.config_file_name:
     fileConfig(config.config_file_name)
 
 # --- 4. Import models ---
-from my_shared_db import database
-import my_shared_db.models.auth
-import my_shared_db.models.crm
+from database_utils import database
+import database_utils.models.auth
+import database_utils.models.crm
 
 # --- 5. Target metadata ---
 target_metadata = database.Base.metadata

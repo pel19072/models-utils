@@ -3,7 +3,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from my_shared_db.database import Base
+from database_utils.database import Base
 
 from datetime import datetime
 
