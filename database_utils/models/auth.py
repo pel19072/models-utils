@@ -7,6 +7,14 @@ from database_utils.database import Base
 
 from datetime import datetime
 
+class Tiers(Base):
+    __tablename__ = "tier"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    name = Column(String, nullable=False, unique=True)
+    companies = relationship("Company", back_populates="tier")
+
 class Company(Base):
     __tablename__ = "company"
 
@@ -16,7 +24,8 @@ class Company(Base):
     email = Column(String, nullable=True)
     active = Column(Boolean, default=True)
     start_date = Column(DateTime, nullable=True)
-    plan_id = Column(String(50), nullable=True)
+    tier_id = Column(Integer, ForeignKey("tier.id"), nullable=False)
+    tier = relationship("Tier", back_populates="companies")
     tax_id = Column(String, nullable=True)
     address = Column(String, nullable=True)
 
