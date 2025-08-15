@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "my_shared_db/models/**"
+      - "database_utils/models/**"
       - "alembic/env.py"
 
 permissions:
