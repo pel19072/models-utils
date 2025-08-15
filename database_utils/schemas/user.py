@@ -13,7 +13,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: constr(min_length=6)
-    company_id: int
+    company_id: Optional[int] = 0
 
 
 class UserUpdate(BaseModel):

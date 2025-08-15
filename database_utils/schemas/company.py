@@ -8,10 +8,10 @@ class CompanyBase(BaseModel):
     name: str
     email: Optional[EmailStr]
     active: Optional[bool] = True
-    start_date: Optional[datetime]
+    start_date: Optional[datetime] = datetime.now()
     plan_id: Optional[str]
     tax_id: Optional[str]
-    address: Optional[str]
+    address: Optional[str] = ''
 
 
 class CompanyCreate(CompanyBase):
