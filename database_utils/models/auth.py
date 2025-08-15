@@ -25,11 +25,12 @@ class Company(Base):
     active = Column(Boolean, default=True)
     start_date = Column(DateTime, nullable=True)
     tier_id = Column(Integer, ForeignKey("tier.id"), nullable=False)
-    tier = relationship("Tier", back_populates="companies")
     tax_id = Column(String, nullable=True)
     address = Column(String, nullable=True)
 
     # Relationships
+    tier = relationship("Tier", back_populates="companies")
+    
     users = relationship("User", back_populates="company", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
