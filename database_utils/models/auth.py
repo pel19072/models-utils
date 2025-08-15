@@ -7,7 +7,7 @@ from database_utils.database import Base
 
 from datetime import datetime
 
-class Tiers(Base):
+class Tier(Base):
     __tablename__ = "tier"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
