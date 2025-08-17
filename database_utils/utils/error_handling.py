@@ -19,6 +19,7 @@ def handle_exceptions(func: Callable[..., T]) -> Callable[..., T]:
             # Re-raise FastAPI HTTP exceptions as they're already formatted correctly
             raise
         except Exception as e:
+            logger.error(f"{args = } :: {kwargs = }")
             logger.error(f"Unexpected error in {func.__name__}: {str(e)}")
             # Convert generic exceptions to HTTPException
             raise HTTPException(
