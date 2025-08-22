@@ -3,6 +3,8 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
+from .user import UserOut
+
 
 class ClientBase(BaseModel):
     name: str
@@ -35,6 +37,7 @@ class ClientOut(ClientBase):
     id: int
     company_id: int
     advisor_id: Optional[int]
+    advisor: Optional[UserOut]
 
     class Config:
         orm_mode = True
