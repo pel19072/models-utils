@@ -30,10 +30,8 @@ def create_token(
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
 
-def create_access_token(
-    usuario: UserOut
-):
-    data = {"id": usuario.id, "role": usuario.role, "company_id": usuario.company_id}
+def create_access_token(usuario: UserOut):
+    data = {"id": usuario.id, "roles": [usuario.role], "company_id": usuario.company_id}
     token = create_token(data, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     logger.info(f"Access token created")
     return token
