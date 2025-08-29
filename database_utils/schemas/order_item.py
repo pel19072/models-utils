@@ -18,7 +18,7 @@ class OrderItemUpdate(BaseModel):
 
 class OrderItemOut(OrderItemBase):
     id: int
-    product = Optional[ProductOut]
+    product: Optional[ProductOut]
 
     class ConfigDict:
         from_attributes = True
