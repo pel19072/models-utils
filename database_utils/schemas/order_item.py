@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .product import ProductOut
 
 class OrderItemBase(BaseModel):
     product_id: int
@@ -17,6 +18,7 @@ class OrderItemUpdate(BaseModel):
 
 class OrderItemOut(OrderItemBase):
     id: int
+    product = Optional[ProductOut]
 
     class ConfigDict:
         from_attributes = True
