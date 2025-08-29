@@ -18,5 +18,5 @@ class OrderItemUpdate(BaseModel):
 class OrderItemOut(OrderItemBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True

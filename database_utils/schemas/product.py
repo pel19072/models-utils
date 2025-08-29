@@ -24,5 +24,5 @@ class ProductOut(ProductBase):
     id: int
     company_id: int
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True

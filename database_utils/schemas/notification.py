@@ -23,8 +23,8 @@ class NotificationOut(UserOut):
     status: NotificationStatus
     user_id: Optional[int]
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True
 
 
 class NotificationUpdate(BaseModel):

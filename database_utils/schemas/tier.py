@@ -22,5 +22,5 @@ class TierUpdate(BaseModel):
 class TierOut(TierBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True

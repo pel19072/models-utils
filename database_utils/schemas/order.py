@@ -1,6 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel
 from .order_item import OrderItemInput, OrderItemOut
+from .client import ClientOut
 
 class OrderBase(BaseModel):
     client_id: Optional[int]
@@ -15,8 +16,9 @@ class OrderUpdate(BaseModel):
 class OrderOut(OrderBase):
     id: int
     client_id: int
+    client: Optional[ClientOut]
     company_id: int
     order_items: List[OrderItemOut]
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True

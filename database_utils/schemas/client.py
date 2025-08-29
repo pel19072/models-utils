@@ -39,5 +39,5 @@ class ClientOut(ClientBase):
     advisor_id: Optional[int]
     advisor: Optional[UserOut]
 
-    class Config:
-        orm_mode = True
+    class ConfigDict:
+        from_attributes = True
