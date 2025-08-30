@@ -10,6 +10,10 @@ class OrderCreate(OrderBase):
     order_items: List[OrderItemInput]
 
 class OrderUpdate(BaseModel):
+    total: Optional[int]
+    paid: Optional[bool]
+    recurring: Optional[bool]
+    recurrence: Optional[str]
     client_id: Optional[int]
     order_items: Optional[List[OrderItemInput]]
 
