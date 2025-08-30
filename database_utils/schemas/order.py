@@ -15,6 +15,10 @@ class OrderUpdate(BaseModel):
 
 class OrderOut(OrderBase):
     id: int
+    total: int
+    paid: bool
+    recurring: bool
+    recurrence: str
     client_id: int
     client: Optional[ClientOut]
     company_id: int
