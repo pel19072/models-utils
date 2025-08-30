@@ -18,7 +18,7 @@ class OrderOut(OrderBase):
     total: int
     paid: bool
     recurring: bool
-    recurrence: str
+    recurrence: Optional[str]
     client_id: int
     client: Optional[ClientOut]
     company_id: int
