@@ -1,14 +1,14 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum
 )
 from sqlalchemy.orm import relationship
 
 from database_utils.database import Base
 
 from datetime import datetime
-from enum import Enum
+import enum
 
-class RecurrenceEnum(str, Enum):
+class RecurrenceEnum(str, enum.Enum):
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
@@ -60,7 +60,7 @@ class RecurringOrder(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    recurrence = Column(RecurrenceEnum, nullable=False)
+    recurrence = Column(Enum(RecurrenceEnum), nullable=False)
     recurrence_end = Column(DateTime, nullable=True)
 
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
