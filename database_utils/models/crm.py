@@ -60,7 +60,7 @@ class RecurringOrder(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    recurrence = Column(Enum(RecurrenceEnum), nullable=False)
+    recurrence = Column(RecurrenceEnum, nullable=False)
     recurrence_end = Column(DateTime, nullable=True)
 
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
