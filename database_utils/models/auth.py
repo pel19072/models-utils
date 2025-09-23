@@ -30,7 +30,6 @@ class Company(Base):
 
     # Relationships
     tier = relationship("Tier", back_populates="companies")
-    
     users = relationship("User", back_populates="company", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
@@ -38,6 +37,7 @@ class Company(Base):
     invoices = relationship("Invoice", back_populates="company", cascade="all, delete-orphan")
     custom_fields = relationship("CustomField", back_populates="company", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="company", cascade="all, delete-orphan")
+    recurring_orders = relationship("RecurringOrder", back_populates="company", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "user"

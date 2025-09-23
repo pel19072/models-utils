@@ -6,6 +6,14 @@ from sqlalchemy.orm import relationship
 from database_utils.database import Base
 
 from datetime import datetime
+from enum import Enum
+
+class RecurrenceEnum(str, Enum):
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    yearly = "yearly"
+
 
 class Client(Base):
     __tablename__ = "client"
@@ -27,6 +35,8 @@ class Client(Base):
     company = relationship("Company", back_populates="clients")
     advisor = relationship("User", back_populates="clients")
     orders = relationship("Order", back_populates="client", cascade="all, delete-orphan")
+    recurring_orders = relationship("RecurringOrder", back_populates="client", cascade="all, delete-orphan")
+
 
 class Product(Base):
     __tablename__ = "product"
@@ -43,6 +53,40 @@ class Product(Base):
     # Relationships
     company = relationship("Company", back_populates="products")
     order_items = relationship("OrderItem", back_populates="product", cascade="all, delete-orphan")
+
+
+class RecurringOrder(Base):
+    __tablename__ = "recurring_order"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    recurrence = Column(Enum(RecurrenceEnum), nullable=False)
+    recurrence_end = Column(DateTime, nullable=True)
+
+    client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    client = relationship("Client", back_populates="recurring_orders")
+    company = relationship("Company", back_populates="recurring_orders")
+    template_items = relationship("RecurringOrderItem", back_populates="recurring_order", cascade="all, delete-orphan")
+    generated_orders = relationship("Order", back_populates="recurring_order")
+
+
+class RecurringOrderItem(Base):
+    __tablename__ = "recurring_order_item"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    recurring_order_id = Column(Integer, ForeignKey("recurring_order.id", ondelete="CASCADE"))
+    product_id = Column(Integer, ForeignKey("product.id", ondelete="CASCADE"))
+    quantity = Column(Integer, nullable=False)
+
+    # Relationships
+    recurring_order = relationship("RecurringOrder", back_populates="template_items")
+    product = relationship("Product")
+
 
 class Order(Base):
     __tablename__ = "order"
@@ -63,6 +107,8 @@ class Order(Base):
     client = relationship("Client", back_populates="orders")
     invoices = relationship("Invoice", back_populates="order", cascade="all, delete-orphan")
     order_items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    recurring_order = relationship("RecurringOrder", back_populates="generated_orders")
+
 
 class OrderItem(Base):
     __tablename__ = "order_item"
@@ -76,6 +122,7 @@ class OrderItem(Base):
     # Relationships
     order = relationship("Order", back_populates="order_items")
     product = relationship("Product", back_populates="order_items")
+
 
 class Invoice(Base):
     __tablename__ = "invoice"
@@ -94,6 +141,7 @@ class Invoice(Base):
     # Relationships
     company = relationship("Company", back_populates="invoices")
     order = relationship("Order", back_populates="invoices")
+
 
 class CustomField(Base):
     __tablename__ = "custom_field"
