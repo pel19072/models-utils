@@ -15,6 +15,7 @@ class Tier(Base):
     name = Column(String, nullable=False, unique=True)
     companies = relationship("Company", back_populates="tier")
 
+
 class Company(Base):
     __tablename__ = "company"
 
@@ -39,6 +40,7 @@ class Company(Base):
     notifications = relationship("Notification", back_populates="company", cascade="all, delete-orphan")
     recurring_orders = relationship("RecurringOrder", back_populates="company", cascade="all, delete-orphan")
 
+
 class User(Base):
     __tablename__ = "user"
 
@@ -57,6 +59,7 @@ class User(Base):
     company = relationship("Company", back_populates="users")
     clients = relationship("Client", back_populates="advisor", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+
 
 class Notification(Base):
     __tablename__ = "notification"
