@@ -9,10 +9,10 @@ from datetime import datetime
 from enum import Enum
 
 class RecurrenceEnum(str, Enum):
-    daily = "daily"
-    weekly = "weekly"
-    monthly = "monthly"
-    yearly = "yearly"
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
 
 
 class Client(Base):
