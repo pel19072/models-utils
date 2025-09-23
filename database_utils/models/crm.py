@@ -101,6 +101,7 @@ class Order(Base):
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
+    recurring_order_id = Column(Integer, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company", back_populates="orders")
