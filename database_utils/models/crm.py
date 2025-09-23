@@ -1,18 +1,18 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum
 )
 from sqlalchemy.orm import relationship
 
 from database_utils.database import Base
 
 from datetime import datetime
-from enum import Enum
+import enum
 
-class RecurrenceEnum(str, Enum):
-    daily = "daily"
-    weekly = "weekly"
-    monthly = "monthly"
-    yearly = "yearly"
+class RecurrenceEnum(str, enum.Enum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
 
 
 class Client(Base):
