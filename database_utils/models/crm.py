@@ -63,6 +63,8 @@ class RecurringOrder(Base):
     recurrence = Column(Enum(RecurrenceEnum), nullable=False)
     recurrence_end = Column(DateTime, nullable=True)
     last_generated_at = Column(DateTime, nullable=True)
+    next_generation_date = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
 
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
@@ -97,8 +99,6 @@ class Order(Base):
     date = Column(DateTime, nullable=False)
     total = Column(Integer, nullable=False)
     paid = Column(Boolean, nullable=False)
-    recurring = Column(Boolean, nullable=False)
-    recurrence = Column(String, nullable=True)
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)

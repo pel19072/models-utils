@@ -45,6 +45,7 @@ class RecurringOrderUpdate(BaseModel):
     client_id: Optional[int] = None
     recurrence: Optional[RecurrenceEnum] = None
     recurrence_end: Optional[datetime] = None
+    is_active: Optional[bool] = None
     template_items: Optional[List[RecurringOrderItemInput]] = None
 
 
@@ -52,6 +53,9 @@ class RecurringOrderOut(RecurringOrderBase):
     id: int
     created_at: datetime
     company_id: int
+    last_generated_at: Optional[datetime] = None
+    next_generation_date: Optional[datetime] = None
+    is_active: bool
     client: Optional[ClientOut]
     template_items: List[RecurringOrderItemOut]
 
