@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text
 )
 from sqlalchemy.orm import relationship
 
@@ -64,7 +64,7 @@ class RecurringOrder(Base):
     recurrence_end = Column(DateTime, nullable=True)
     last_generated_at = Column(DateTime, nullable=True)
     next_generation_date = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text('true'))
 
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
