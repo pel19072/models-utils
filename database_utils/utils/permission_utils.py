@@ -1,0 +1,228 @@
+# utils/permission_utils.py
+from typing import List, Set, Optional
+from sqlalchemy.orm import Session
+from database_utils.models.auth import User, Role, Permission
+
+
+class PermissionChecker:
+    """Utility class for checking user permissions"""
+
+    @staticmethod
+    def get_user_permissions(user: User) -> Set[str]:
+        """
+        Get all permission names for a user from their roles.
+        Returns a set of permission names like {'clients.read', 'orders.create', ...}
+        """
+        permissions = set()
+
+        # If user has admin flag (legacy), grant all permissions
+        if user.admin:
+            return {'*'}  # Special wildcard permission
+
+        # Collect permissions from all user roles
+        for role in user.roles:
+            for permission in role.permissions:
+                permissions.add(permission.name)
+
+        return permissions
+
+    @staticmethod
+    def has_permission(user: User, permission_name: str) -> bool:
+        """
+        Check if a user has a specific permission.
+        permission_name format: 'resource.action' (e.g., 'clients.read', 'orders.create')
+        """
+        user_permissions = PermissionChecker.get_user_permissions(user)
+
+        # Check for wildcard permission (admin)
+        if '*' in user_permissions:
+            return True
+
+        # Check for exact permission
+        if permission_name in user_permissions:
+            return True
+
+        # Check for resource-level wildcard (e.g., 'clients.*' grants all client operations)
+        resource = permission_name.split('.')[0] if '.' in permission_name else permission_name
+        resource_wildcard = f"{resource}.*"
+        if resource_wildcard in user_permissions:
+            return True
+
+        return False
+
+    @staticmethod
+    def has_any_permission(user: User, permission_names: List[str]) -> bool:
+        """Check if user has any of the specified permissions"""
+        return any(PermissionChecker.has_permission(user, perm) for perm in permission_names)
+
+    @staticmethod
+    def has_all_permissions(user: User, permission_names: List[str]) -> bool:
+        """Check if user has all of the specified permissions"""
+        return all(PermissionChecker.has_permission(user, perm) for perm in permission_names)
+
+    @staticmethod
+    def get_user_by_id_with_roles(db: Session, user_id: int) -> Optional[User]:
+        """
+        Fetch a user with their roles and permissions eagerly loaded.
+        This is more efficient than lazy loading for permission checks.
+        """
+        from sqlalchemy.orm import joinedload
+
+        user = db.query(User).options(
+            joinedload(User.roles).joinedload(Role.permissions)
+        ).filter(User.id == user_id).first()
+
+        return user
+
+
+def require_permission(permission_name: str):
+    """
+    Decorator factory for FastAPI endpoints to require specific permissions.
+
+    Usage:
+        @app.get("/clients")
+        @require_permission("clients.read")
+        async def get_clients(user: User = Depends(get_current_user)):
+            ...
+    """
+    def decorator(func):
+        from functools import wraps
+        from fastapi import HTTPException, status
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extract user from kwargs (assumes user is passed as dependency)
+            user = kwargs.get('current_user') or kwargs.get('user')
+
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required"
+                )
+
+            if not PermissionChecker.has_permission(user, permission_name):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Permission denied. Required permission: {permission_name}"
+                )
+
+            return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+# Common permission constants
+class Permissions:
+    """Centralized permission name constants"""
+
+    # Client permissions
+    CLIENTS_CREATE = "clients.create"
+    CLIENTS_READ = "clients.read"
+    CLIENTS_UPDATE = "clients.update"
+    CLIENTS_DELETE = "clients.delete"
+    CLIENTS_ALL = "clients.*"
+
+    # Order permissions
+    ORDERS_CREATE = "orders.create"
+    ORDERS_READ = "orders.read"
+    ORDERS_UPDATE = "orders.update"
+    ORDERS_DELETE = "orders.delete"
+    ORDERS_ALL = "orders.*"
+
+    # Product permissions
+    PRODUCTS_CREATE = "products.create"
+    PRODUCTS_READ = "products.read"
+    PRODUCTS_UPDATE = "products.update"
+    PRODUCTS_DELETE = "products.delete"
+    PRODUCTS_ALL = "products.*"
+
+    # Recurring order permissions
+    RECURRING_ORDERS_CREATE = "recurring_orders.create"
+    RECURRING_ORDERS_READ = "recurring_orders.read"
+    RECURRING_ORDERS_UPDATE = "recurring_orders.update"
+    RECURRING_ORDERS_DELETE = "recurring_orders.delete"
+    RECURRING_ORDERS_ALL = "recurring_orders.*"
+
+    # User management permissions
+    USERS_CREATE = "users.create"
+    USERS_READ = "users.read"
+    USERS_UPDATE = "users.update"
+    USERS_DELETE = "users.delete"
+    USERS_ALL = "users.*"
+
+    # Role and permission management (admin only)
+    ROLES_CREATE = "roles.create"
+    ROLES_READ = "roles.read"
+    ROLES_UPDATE = "roles.update"
+    ROLES_DELETE = "roles.delete"
+    ROLES_ALL = "roles.*"
+
+    PERMISSIONS_CREATE = "permissions.create"
+    PERMISSIONS_READ = "permissions.read"
+    PERMISSIONS_UPDATE = "permissions.update"
+    PERMISSIONS_DELETE = "permissions.delete"
+    PERMISSIONS_ALL = "permissions.*"
+
+    # Company settings (admin only)
+    COMPANY_READ = "company.read"
+    COMPANY_UPDATE = "company.update"
+    COMPANY_ALL = "company.*"
+
+    # Special permissions
+    ADMIN_ALL = "*"  # Wildcard - grants all permissions
+
+
+def get_default_permissions() -> List[dict]:
+    """
+    Returns a list of default permissions to seed the database.
+    Each permission is a dict with 'name', 'resource', 'action', 'description'.
+    """
+    return [
+        # Client permissions
+        {"name": Permissions.CLIENTS_CREATE, "resource": "clients", "action": "create", "description": "Create new clients"},
+        {"name": Permissions.CLIENTS_READ, "resource": "clients", "action": "read", "description": "View client information"},
+        {"name": Permissions.CLIENTS_UPDATE, "resource": "clients", "action": "update", "description": "Update client information"},
+        {"name": Permissions.CLIENTS_DELETE, "resource": "clients", "action": "delete", "description": "Delete clients"},
+
+        # Order permissions
+        {"name": Permissions.ORDERS_CREATE, "resource": "orders", "action": "create", "description": "Create new orders"},
+        {"name": Permissions.ORDERS_READ, "resource": "orders", "action": "read", "description": "View order information"},
+        {"name": Permissions.ORDERS_UPDATE, "resource": "orders", "action": "update", "description": "Update order information"},
+        {"name": Permissions.ORDERS_DELETE, "resource": "orders", "action": "delete", "description": "Delete orders"},
+
+        # Product permissions
+        {"name": Permissions.PRODUCTS_CREATE, "resource": "products", "action": "create", "description": "Create new products"},
+        {"name": Permissions.PRODUCTS_READ, "resource": "products", "action": "read", "description": "View product information"},
+        {"name": Permissions.PRODUCTS_UPDATE, "resource": "products", "action": "update", "description": "Update product information"},
+        {"name": Permissions.PRODUCTS_DELETE, "resource": "products", "action": "delete", "description": "Delete products"},
+
+        # Recurring order permissions
+        {"name": Permissions.RECURRING_ORDERS_CREATE, "resource": "recurring_orders", "action": "create", "description": "Create recurring orders"},
+        {"name": Permissions.RECURRING_ORDERS_READ, "resource": "recurring_orders", "action": "read", "description": "View recurring orders"},
+        {"name": Permissions.RECURRING_ORDERS_UPDATE, "resource": "recurring_orders", "action": "update", "description": "Update recurring orders"},
+        {"name": Permissions.RECURRING_ORDERS_DELETE, "resource": "recurring_orders", "action": "delete", "description": "Delete recurring orders"},
+
+        # User management permissions
+        {"name": Permissions.USERS_CREATE, "resource": "users", "action": "create", "description": "Create new users"},
+        {"name": Permissions.USERS_READ, "resource": "users", "action": "read", "description": "View user information"},
+        {"name": Permissions.USERS_UPDATE, "resource": "users", "action": "update", "description": "Update user information"},
+        {"name": Permissions.USERS_DELETE, "resource": "users", "action": "delete", "description": "Delete users"},
+
+        # Role management permissions
+        {"name": Permissions.ROLES_CREATE, "resource": "roles", "action": "create", "description": "Create new roles"},
+        {"name": Permissions.ROLES_READ, "resource": "roles", "action": "read", "description": "View role information"},
+        {"name": Permissions.ROLES_UPDATE, "resource": "roles", "action": "update", "description": "Update role information"},
+        {"name": Permissions.ROLES_DELETE, "resource": "roles", "action": "delete", "description": "Delete roles"},
+
+        # Permission management permissions
+        {"name": Permissions.PERMISSIONS_CREATE, "resource": "permissions", "action": "create", "description": "Create new permissions"},
+        {"name": Permissions.PERMISSIONS_READ, "resource": "permissions", "action": "read", "description": "View permission information"},
+        {"name": Permissions.PERMISSIONS_UPDATE, "resource": "permissions", "action": "update", "description": "Update permission information"},
+        {"name": Permissions.PERMISSIONS_DELETE, "resource": "permissions", "action": "delete", "description": "Delete permissions"},
+
+        # Company settings permissions
+        {"name": Permissions.COMPANY_READ, "resource": "company", "action": "read", "description": "View company settings"},
+        {"name": Permissions.COMPANY_UPDATE, "resource": "company", "action": "update", "description": "Update company settings"},
+    ]

@@ -7,6 +7,7 @@ from datetime import datetime
 class CompanyBase(BaseModel):
     name: str
     email: Optional[EmailStr]
+    phone: Optional[str] = None
     active: Optional[bool] = True
     start_date: Optional[datetime] = datetime.now()
     tier_id: Optional[int]
@@ -22,6 +23,7 @@ class CompanyUpdate(BaseModel):
     """Used for PATCH - all fields optional"""
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    phone: Optional[str] = None
     active: Optional[bool] = None
     start_date: Optional[datetime] = None
     tier_id: Optional[str] = None
