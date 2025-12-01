@@ -1,5 +1,5 @@
 # schemas/permission.py
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 
 
@@ -8,6 +8,16 @@ class PermissionBase(BaseModel):
     resource: str
     action: str
     description: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def validate_name_format(cls, v):
+        if '.' not in v:
+            raise ValueError('Permission name must follow pattern: resource.action')
+        parts = v.split('.')
+        if len(parts) != 2:
+            raise ValueError('Permission name must have exactly one dot separator')
+        return v
 
 
 class PermissionCreate(PermissionBase):

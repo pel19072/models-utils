@@ -26,7 +26,7 @@ class CompanyUpdate(BaseModel):
     phone: Optional[str] = None
     active: Optional[bool] = None
     start_date: Optional[datetime] = None
-    tier_id: Optional[str] = None
+    tier_id: Optional[int] = None
     tax_id: Optional[str] = None
     address: Optional[str] = None
 
