@@ -1,6 +1,7 @@
 # utils/permission_utils.py
 from typing import List, Set, Optional
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status, Request, Depends
 from database_utils.models.auth import User, Role, Permission
 
 
@@ -75,42 +76,72 @@ class PermissionChecker:
         return user
 
 
-def require_permission(permission_name: str):
+def require_permission(permission_name: str, get_db_func):
     """
-    Decorator factory for FastAPI endpoints to require specific permissions.
+    Dependency factory for FastAPI endpoints to require specific permissions.
+    Returns a dependency callable that validates permissions and returns the user.
+
+    Args:
+        permission_name: The required permission (e.g., "clients.read")
+        get_db_func: The database session dependency function
 
     Usage:
-        @app.get("/clients")
-        @require_permission("clients.read")
-        async def get_clients(user: User = Depends(get_current_user)):
+        from dependencies.db import get_db
+
+        @router.get("/clients")
+        async def get_clients(
+            user: User = Depends(require_permission("clients.read", get_db)),
+            db: Session = Depends(get_db)
+        ):
             ...
     """
-    def decorator(func):
-        from functools import wraps
-        from fastapi import HTTPException, status
+    async def permission_dependency(
+        request: Request,
+        db: Session = Depends(get_db_func)
+    ) -> User:
+        from database_utils.utils.jwt_utils import decode_token
 
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract user from kwargs (assumes user is passed as dependency)
-            user = kwargs.get('current_user') or kwargs.get('user')
+        # Extract token from cookie
+        token = request.cookies.get("token")
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
 
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required"
-                )
+        # Decode token
+        payload = decode_token(token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
 
-            if not PermissionChecker.has_permission(user, permission_name):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permission denied. Required permission: {permission_name}"
-                )
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload"
+            )
 
-            return await func(*args, **kwargs)
+        # Get user with permissions
+        user = PermissionChecker.get_user_by_id_with_roles(db, user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
 
-        return wrapper
+        # Check permission
+        if not PermissionChecker.has_permission(user, permission_name):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied. Required permission: {permission_name}"
+            )
 
-    return decorator
+        return user
+
+    return permission_dependency
 
 
 # Common permission constants
@@ -197,12 +228,16 @@ def get_default_permissions() -> List[dict]:
         {"name": Permissions.PRODUCTS_READ, "resource": "products", "action": "read", "description": "View product information"},
         {"name": Permissions.PRODUCTS_UPDATE, "resource": "products", "action": "update", "description": "Update product information"},
         {"name": Permissions.PRODUCTS_DELETE, "resource": "products", "action": "delete", "description": "Delete products"},
+        {"name": "products.update_name", "resource": "products", "action": "update_name", "description": "Update product name"},
+        {"name": "products.update_price", "resource": "products", "action": "update_price", "description": "Update product price"},
+        {"name": "products.update_description", "resource": "products", "action": "update_description", "description": "Update product description"},
 
         # Recurring order permissions
         {"name": Permissions.RECURRING_ORDERS_CREATE, "resource": "recurring_orders", "action": "create", "description": "Create recurring orders"},
         {"name": Permissions.RECURRING_ORDERS_READ, "resource": "recurring_orders", "action": "read", "description": "View recurring orders"},
         {"name": Permissions.RECURRING_ORDERS_UPDATE, "resource": "recurring_orders", "action": "update", "description": "Update recurring orders"},
         {"name": Permissions.RECURRING_ORDERS_DELETE, "resource": "recurring_orders", "action": "delete", "description": "Delete recurring orders"},
+        {"name": "recurring_orders.generate", "resource": "recurring_orders", "action": "generate", "description": "Manually generate orders from recurring templates"},
 
         # User management permissions
         {"name": Permissions.USERS_CREATE, "resource": "users", "action": "create", "description": "Create new users"},
@@ -215,6 +250,7 @@ def get_default_permissions() -> List[dict]:
         {"name": Permissions.ROLES_READ, "resource": "roles", "action": "read", "description": "View role information"},
         {"name": Permissions.ROLES_UPDATE, "resource": "roles", "action": "update", "description": "Update role information"},
         {"name": Permissions.ROLES_DELETE, "resource": "roles", "action": "delete", "description": "Delete roles"},
+        {"name": "roles.assign_permissions", "resource": "roles", "action": "assign_permissions", "description": "Assign permissions to roles"},
 
         # Permission management permissions
         {"name": Permissions.PERMISSIONS_CREATE, "resource": "permissions", "action": "create", "description": "Create new permissions"},
@@ -225,4 +261,9 @@ def get_default_permissions() -> List[dict]:
         # Company settings permissions
         {"name": Permissions.COMPANY_READ, "resource": "company", "action": "read", "description": "View company settings"},
         {"name": Permissions.COMPANY_UPDATE, "resource": "company", "action": "update", "description": "Update company settings"},
+        {"name": "company.update_name", "resource": "company", "action": "update_name", "description": "Update company name"},
+        {"name": "company.update_email", "resource": "company", "action": "update_email", "description": "Update company email"},
+        {"name": "company.update_phone", "resource": "company", "action": "update_phone", "description": "Update company phone"},
+        {"name": "company.update_address", "resource": "company", "action": "update_address", "description": "Update company address"},
+        {"name": "company.update_tier", "resource": "company", "action": "update_tier", "description": "Update company subscription tier"},
     ]
