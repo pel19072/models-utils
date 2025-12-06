@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, ForeignKey, Table, Text
+    Column, String, Integer, Boolean, DateTime, ForeignKey, Table, Text, JSON
 )
 from sqlalchemy.orm import relationship
 
@@ -98,7 +98,8 @@ class User(Base):
     role = Column(String, default="USER")  # Legacy field - kept for backward compatibility
     admin = Column(Boolean, default=False)  # Legacy field - kept for backward compatibility
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
+    is_super_admin = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     company = relationship("Company", back_populates="users")
@@ -129,4 +130,20 @@ class Notification(Base):
     # Relationships
     user = relationship("User", back_populates="notifications")
     company = relationship("Company", back_populates="notifications")
-    
+
+
+class AuditLog(Base):
+    """Audit log for tracking super admin actions"""
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String, nullable=False)  # e.g., "company.disable", "tier.create"
+    resource_type = Column(String, nullable=False)  # e.g., "company", "tier", "user"
+    resource_id = Column(Integer, nullable=True)
+    details = Column(JSON, nullable=True)  # Store before/after state, additional context
+    ip_address = Column(String, nullable=True)
+
+    # Relationships
+    user = relationship("User")

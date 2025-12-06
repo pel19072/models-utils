@@ -30,7 +30,8 @@ class UserUpdate(BaseModel):
 
 class UserOut(UserBase):
     id: int
-    company_id: int
+    company_id: Optional[int] = None
+    is_super_admin: Optional[bool] = False
 
     class ConfigDict:
         from_attributes = True
@@ -42,3 +43,12 @@ class UserWithRoles(UserOut):
 
     class ConfigDict:
         from_attributes = True
+
+
+class SuperAdminCreate(BaseModel):
+    """Schema for creating a super admin user (no company_id required)"""
+    name: str
+    email: EmailStr
+    age: int
+    password: constr(min_length=6)
+    is_super_admin: Optional[bool] = True

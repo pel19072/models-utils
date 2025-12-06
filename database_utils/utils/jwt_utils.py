@@ -31,7 +31,12 @@ def create_token(
 
 
 def create_access_token(usuario: UserOut):
-    data = {"id": usuario.id, "roles": [usuario.role], "company_id": usuario.company_id}
+    data = {
+        "id": usuario.id,
+        "roles": [usuario.role],
+        "company_id": usuario.company_id,
+        "is_super_admin": getattr(usuario, 'is_super_admin', False)
+    }
     token = create_token(data, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     logger.info(f"Access token created")
     return token
