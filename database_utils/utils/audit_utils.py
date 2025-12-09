@@ -2,6 +2,7 @@
 from typing import Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from database_utils.models.auth import AuditLog
+from database_utils.utils.json_utils import serialize_for_json
 from loguru import logger
 
 
@@ -29,12 +30,16 @@ async def create_audit_log(
     Returns:
         Created AuditLog instance
     """
+    # Serialize details to ensure all nested objects (Pydantic models, datetime, etc.)
+    # are JSON-serializable before storing in the database
+    serialized_details = serialize_for_json(details) if details else None
+
     audit_log = AuditLog(
         user_id=user_id,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
-        details=details,
+        details=serialized_details,
         ip_address=ip_address
     )
 
