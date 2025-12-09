@@ -189,7 +189,7 @@ async def get_current_user(
             "User authenticated successfully",
             extra={
                 "user_id": user.id,
-                "username": user.username,
+                "username": user.name,
                 "role": user.role,
                 "company_id": user.company_id,
                 "endpoint": request.url.path
@@ -234,7 +234,7 @@ async def get_admin_user(
         "Verifying admin privileges",
         extra={
             "user_id": user.id,
-            "username": user.username,
+            "username": user.name,
             "is_admin": user.admin
         }
     )
@@ -244,7 +244,7 @@ async def get_admin_user(
             "Admin access denied - insufficient privileges",
             extra={
                 "user_id": user.id,
-                "username": user.username,
+                "username": user.name,
                 "role": user.role
             }
         )
@@ -257,7 +257,7 @@ async def get_admin_user(
         "Admin privileges verified",
         extra={
             "user_id": user.id,
-            "username": user.username
+            "username": user.name
         }
     )
 
@@ -287,7 +287,7 @@ async def get_super_admin(
         "Verifying super admin privileges",
         extra={
             "user_id": user.id,
-            "username": user.username,
+            "username": user.name,
             "is_super_admin": getattr(user, 'is_super_admin', False),
             "company_id": user.company_id
         }
@@ -298,7 +298,7 @@ async def get_super_admin(
             "Super admin access denied - not a super admin",
             extra={
                 "user_id": user.id,
-                "username": user.username
+                "username": user.name
             }
         )
         raise HTTPException(
@@ -311,7 +311,7 @@ async def get_super_admin(
             "Super admin access denied - user associated with company",
             extra={
                 "user_id": user.id,
-                "username": user.username,
+                "username": user.name,
                 "company_id": user.company_id
             }
         )
@@ -324,7 +324,7 @@ async def get_super_admin(
         "Super admin privileges verified",
         extra={
             "user_id": user.id,
-            "username": user.username
+            "username": user.name
         }
     )
 
@@ -398,7 +398,7 @@ def require_roles(allowed_roles: List[str]) -> Callable:
             "Checking user role against allowed roles",
             extra={
                 "user_id": user.id,
-                "username": user.username,
+                "username": user.name,
                 "user_role": user.role,
                 "allowed_roles": allowed_roles
             }
@@ -409,7 +409,7 @@ def require_roles(allowed_roles: List[str]) -> Callable:
                 "Access denied - insufficient role permissions",
                 extra={
                     "user_id": user.id,
-                    "username": user.username,
+                    "username": user.name,
                     "user_role": user.role,
                     "allowed_roles": allowed_roles
                 }
@@ -423,7 +423,7 @@ def require_roles(allowed_roles: List[str]) -> Callable:
             "Role check passed",
             extra={
                 "user_id": user.id,
-                "username": user.username,
+                "username": user.name,
                 "user_role": user.role
             }
         )
