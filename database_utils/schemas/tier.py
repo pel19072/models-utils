@@ -6,7 +6,7 @@ from datetime import datetime
 
 class TierBase(BaseModel):
     name: str
-    start_date: Optional[datetime] = datetime.now()
+    created_at: Optional[datetime] = datetime.now()
 
 
 class TierCreate(TierBase):
@@ -16,7 +16,7 @@ class TierCreate(TierBase):
 class TierUpdate(BaseModel):
     """Used for PATCH - all fields optional"""
     name: Optional[str] = None
-    start_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
 
 class TierOut(TierBase):
