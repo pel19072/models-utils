@@ -132,6 +132,8 @@ def require_permission(permission_name: str, get_db_func):
                 detail="User not found"
             )
 
+        logger.info(user)
+
         # Check permission
         if not PermissionChecker.has_permission(user, permission_name):
             raise HTTPException(

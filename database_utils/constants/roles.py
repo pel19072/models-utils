@@ -13,11 +13,15 @@ class Roles:
 
     Attributes:
         ADMIN: Administrator role with elevated privileges
+        MANAGER: Manager role with most permissions except system settings
+        SALES: Sales representative role with client and order permissions
         USER: Standard user role with basic permissions
         ALL: Set containing all available roles
     """
 
     ADMIN = "ADMIN"
+    MANAGER = "MANAGER"
+    SALES = "SALES"
     USER = "USER"
 
-    ALL = {ADMIN, USER}
+    ALL = {ADMIN, MANAGER, SALES, USER}

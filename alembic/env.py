@@ -8,6 +8,8 @@ from alembic import context
 
 # --- 1. Adjust path for imports ---
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add alembic directory to path for seed imports
+sys.path.insert(0, os.path.dirname(__file__))
 
 # --- 2. Load .env file and set DB URL from env ---
 load_dotenv()
@@ -72,6 +74,10 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
+
+            # Automatically seed RBAC data after migrations
+            from seeds.rbac_seed import seed_rbac_data
+            seed_rbac_data(connection)
 
 
 if context.is_offline_mode():
