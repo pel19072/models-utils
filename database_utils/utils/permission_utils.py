@@ -121,7 +121,7 @@ def require_permission(permission_name: str, get_db_func):
                 detail="Invalid token"
             )
 
-        user_id = payload.get("user_id")
+        user_id = payload.get("id")
         logger.info(f"[permission_dependency] {user_id = }")
         if not user_id:
             raise HTTPException(
