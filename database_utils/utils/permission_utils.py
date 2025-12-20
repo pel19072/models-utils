@@ -1,4 +1,5 @@
 # utils/permission_utils.py
+import logger
 from typing import List, Set, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Request, Depends
@@ -103,6 +104,7 @@ def require_permission(permission_name: str, get_db_func):
 
         # Extract token from cookie
         token = request.cookies.get("token")
+        logger.info(f"[permission_dependency] {token = }")
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -111,6 +113,7 @@ def require_permission(permission_name: str, get_db_func):
 
         # Decode token
         payload = decode_token(token)
+        logger.info(f"[permission_dependency] {payload = }")
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -118,6 +121,7 @@ def require_permission(permission_name: str, get_db_func):
             )
 
         user_id = payload.get("user_id")
+        logger.info(f"[permission_dependency] {user_id = }")
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -126,6 +130,7 @@ def require_permission(permission_name: str, get_db_func):
 
         # Get user with permissions
         user = PermissionChecker.get_user_by_id_with_roles(db, user_id)
+        logger.info(f"[permission_dependency] {user = }")
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
