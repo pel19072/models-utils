@@ -26,7 +26,6 @@ def create_token(
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    logger.info(f"secret key: {secret_key}")
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
 
@@ -50,7 +49,7 @@ def create_refresh_token(usuario: UserOut):
 def decode_token(token: str):
     try:
         payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
-        logger.info(f"Payload: {payload}")
+        logger.info(f"{payload = }")
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Signature has expired")

@@ -1,5 +1,5 @@
 # utils/permission_utils.py
-import logging
+from loguru import logger
 from typing import List, Set, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Request, Depends
@@ -101,8 +101,6 @@ def require_permission(permission_name: str, get_db_func):
         db: Session = Depends(get_db_func)
     ) -> User:
         from database_utils.utils.jwt_utils import decode_token
-
-        logger = logging.getLogger("permission_dependency")
 
         # Extract token from cookie
         token = request.cookies.get("token")
