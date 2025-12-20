@@ -4,6 +4,7 @@ from typing import List, Set, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Request, Depends
 from database_utils.models.auth import User, Role, Permission
+from database_utils.dependencies.auth import get_token_from_header
 
 
 class PermissionChecker:
@@ -103,7 +104,7 @@ def require_permission(permission_name: str, get_db_func):
         from database_utils.utils.jwt_utils import decode_token
 
         # Extract token from cookie
-        token = request.cookies.get("token")
+        token = get_token_from_header(request)
         logger.info(f"[permission_dependency] {token = }")
         if not token:
             raise HTTPException(
