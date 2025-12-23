@@ -1,4 +1,4 @@
-# schemas/company.py
+# schemas/tier.py
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -6,7 +6,10 @@ from datetime import datetime
 
 class TierBase(BaseModel):
     name: str
-    created_at: Optional[datetime] = datetime.now()
+    price: int = 0  # Price in cents
+    billing_cycle: str = "MONTHLY"  # MONTHLY, YEARLY
+    features: Optional[dict] = None
+    is_active: bool = True
 
 
 class TierCreate(TierBase):
@@ -16,11 +19,16 @@ class TierCreate(TierBase):
 class TierUpdate(BaseModel):
     """Used for PATCH - all fields optional"""
     name: Optional[str] = None
-    created_at: Optional[datetime] = None
+    price: Optional[int] = None
+    billing_cycle: Optional[str] = None
+    features: Optional[dict] = None
+    is_active: Optional[bool] = None
 
 
 class TierOut(TierBase):
     id: int
+    created_at: datetime
+    stripe_price_id: Optional[str] = None
 
     class ConfigDict:
         from_attributes = True

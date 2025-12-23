@@ -23,13 +23,31 @@ user_role = Table(
     Column('role_id', Integer, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
 )
 
+# Association table for many-to-many relationship between UserInvitation and Role
+user_invitation_role = Table(
+    'user_invitation_role',
+    Base.metadata,
+    Column('invitation_id', Integer, ForeignKey('user_invitation.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', Integer, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
+)
+
 class Tier(Base):
     __tablename__ = "tier"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False, unique=True)
+
+    # Billing fields
+    price = Column(Integer, nullable=False, default=0)  # Price in cents (9999 = $99.99)
+    billing_cycle = Column(String, nullable=False, default="MONTHLY")  # MONTHLY, YEARLY
+    features = Column(JSON, nullable=True)  # {"max_users": 10, "max_products": 100}
+    stripe_price_id = Column(String, nullable=True)  # Stripe Price ID for future integration
+    is_active = Column(Boolean, default=True, nullable=False)  # Can be assigned to new companies
+
+    # Relationships
     companies = relationship("Company", back_populates="tier")
+    subscriptions = relationship("Subscription", back_populates="tier")
 
 
 class Company(Base):
@@ -56,6 +74,8 @@ class Company(Base):
     custom_fields = relationship("CustomField", back_populates="company", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="company", cascade="all, delete-orphan")
     recurring_orders = relationship("RecurringOrder", back_populates="company", cascade="all, delete-orphan")
+    subscription = relationship("Subscription", back_populates="company", uselist=False, cascade="all, delete-orphan")
+    payment_methods = relationship("PaymentMethod", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):
@@ -97,6 +117,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, default="USER")  # Legacy field - kept for backward compatibility
     admin = Column(Boolean, default=False)  # Legacy field - kept for backward compatibility
+    active = Column(Boolean, default=True, nullable=False)  # User activation/deactivation
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
     is_super_admin = Column(Boolean, default=False, nullable=False)
@@ -147,3 +168,130 @@ class AuditLog(Base):
 
     # Relationships
     user = relationship("User")
+
+
+class UserInvitation(Base):
+    """User invitation system for admin-initiated user enrollment"""
+    __tablename__ = "user_invitation"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)  # 7 days from creation
+    email = Column(String, nullable=False)
+    token = Column(String, nullable=False, unique=True)  # UUID for invitation link
+    status = Column(String, nullable=False, default="PENDING")  # PENDING, ACCEPTED, EXPIRED, REVOKED
+    name = Column(String, nullable=True)  # Optional pre-fill by admin
+
+    # Foreign keys
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    invited_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    accepted_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    company = relationship("Company")
+    invited_by = relationship("User", foreign_keys=[invited_by_user_id])
+    accepted_user = relationship("User", foreign_keys=[accepted_user_id])
+    roles = relationship("Role", secondary=user_invitation_role)
+
+
+class Subscription(Base):
+    """Subscription billing for companies"""
+    __tablename__ = "subscription"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Subscription details
+    status = Column(String, nullable=False, default="ACTIVE")  # ACTIVE, PAST_DUE, CANCELED, TRIALING
+    billing_type = Column(String, nullable=False, default="AUTOMATIC")  # AUTOMATIC (Stripe), MANUAL (cash/wire)
+    current_period_start = Column(DateTime, nullable=False)
+    current_period_end = Column(DateTime, nullable=False)
+    cancel_at_period_end = Column(Boolean, default=False, nullable=False)
+    canceled_at = Column(DateTime, nullable=True)
+    trial_end = Column(DateTime, nullable=True)
+
+    # Foreign keys
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, unique=True)
+    tier_id = Column(Integer, ForeignKey("tier.id"), nullable=False)
+
+    # Stripe integration
+    stripe_subscription_id = Column(String, nullable=True, unique=True)
+    stripe_customer_id = Column(String, nullable=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="subscription")
+    tier = relationship("Tier", back_populates="subscriptions")
+    invoices = relationship("BillingInvoice", back_populates="subscription", cascade="all, delete-orphan")
+
+
+class PaymentMethod(Base):
+    """Payment methods for company billing"""
+    __tablename__ = "payment_method"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Payment method details
+    type = Column(String, nullable=False)  # "card", "bank_account"
+    last4 = Column(String, nullable=False)
+    expiry_month = Column(Integer, nullable=True)
+    expiry_year = Column(Integer, nullable=True)
+    brand = Column(String, nullable=True)  # "visa", "mastercard", etc.
+    is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Foreign keys
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+
+    # Stripe integration
+    stripe_payment_method_id = Column(String, nullable=True, unique=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="payment_methods")
+
+
+class BillingInvoice(Base):
+    """Subscription billing invoices (different from CRM invoices for customer orders)"""
+    __tablename__ = "billing_invoice"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Invoice details
+    invoice_number = Column(String, nullable=False, unique=True)
+    invoice_date = Column(DateTime, nullable=False)
+    due_date = Column(DateTime, nullable=False)
+    paid_at = Column(DateTime, nullable=True)
+
+    # Amounts in cents
+    subtotal = Column(Integer, nullable=False)
+    tax = Column(Integer, nullable=False, default=0)
+    total = Column(Integer, nullable=False)
+
+    # Status
+    status = Column(String, nullable=False, default="PENDING")  # PENDING, PAID, FAILED, REFUNDED
+    payment_type = Column(String, default="AUTOMATIC")  # AUTOMATIC, MANUAL
+
+    # Manual payment tracking
+    manual_payment_method = Column(String, nullable=True)  # "Wire Transfer", "Check", "Cash"
+    manual_payment_note = Column(Text, nullable=True)
+    marked_paid_by_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+
+    # Foreign keys
+    subscription_id = Column(Integer, ForeignKey("subscription.id", ondelete="CASCADE"), nullable=False)
+    payment_method_id = Column(Integer, ForeignKey("payment_method.id", ondelete="SET NULL"), nullable=True)
+
+    # Stripe integration
+    stripe_invoice_id = Column(String, nullable=True, unique=True)
+    stripe_payment_intent_id = Column(String, nullable=True)
+
+    # Additional details
+    billing_reason = Column(String, nullable=True)  # "subscription_cycle", "subscription_create", "manual"
+    notes = Column(Text, nullable=True)
+
+    # Relationships
+    subscription = relationship("Subscription", back_populates="invoices")
+    payment_method = relationship("PaymentMethod")
+    marked_paid_by = relationship("User", foreign_keys=[marked_paid_by_user_id])
