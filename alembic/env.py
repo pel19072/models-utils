@@ -79,6 +79,10 @@ def run_migrations_online() -> None:
             from seeds.rbac_seed import seed_rbac_data
             seed_rbac_data(connection)
 
+            # Automatically seed tier data after migrations
+            from seeds.tier_seed import seed_tier_data
+            seed_tier_data(connection)
+
 
 if context.is_offline_mode():
     run_migrations_offline()

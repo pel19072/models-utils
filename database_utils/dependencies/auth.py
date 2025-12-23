@@ -185,6 +185,21 @@ async def get_current_user(
                 detail="User not found"
             )
 
+        # Check if user is active
+        if not user.active:
+            logger.warning(
+                "Inactive user attempted to access resource",
+                extra={
+                    "user_id": user.id,
+                    "email": user.email,
+                    "endpoint": request.url.path
+                }
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been deactivated"
+            )
+
         logger.info(
             "User authenticated successfully",
             extra={

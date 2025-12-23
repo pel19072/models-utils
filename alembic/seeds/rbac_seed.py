@@ -98,6 +98,9 @@ def seed_rbac_data(connection: Connection) -> None:
             # Company settings permissions
             {"name": "company.read", "resource": "company", "action": "read", "description": "View company settings"},
             {"name": "company.update", "resource": "company", "action": "update", "description": "Update company settings"},
+
+            # Dashboard permissions
+            {"name": "dashboard.read", "resource": "dashboard", "action": "read", "description": "View dashboard statistics"},
         ]
 
         for perm in permissions_data:
@@ -186,12 +189,13 @@ def seed_rbac_data(connection: Connection) -> None:
 
         logger.info(f"✓ MANAGER role assigned {len(manager_permissions)} permissions")
 
-        # SALES: CRUD on clients, orders, recurring orders, read on products
+        # SALES: CRUD on clients, orders, recurring orders, read on products and dashboard
         sales_permission_names = [
             'clients.create', 'clients.read', 'clients.update', 'clients.delete',
             'orders.create', 'orders.read', 'orders.update', 'orders.delete',
             'recurring_orders.create', 'recurring_orders.read', 'recurring_orders.update', 'recurring_orders.delete',
-            'products.read'
+            'products.read',
+            'dashboard.read'
         ]
 
         sales_count = 0
@@ -218,7 +222,7 @@ def seed_rbac_data(connection: Connection) -> None:
 
         # USER: Read-only permissions
         user_permission_names = [
-            'clients.read', 'orders.read', 'products.read', 'recurring_orders.read'
+            'clients.read', 'orders.read', 'products.read', 'recurring_orders.read', 'dashboard.read'
         ]
 
         user_count = 0

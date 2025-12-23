@@ -209,6 +209,9 @@ class Permissions:
     COMPANY_UPDATE = "company.update"
     COMPANY_ALL = "company.*"
 
+    # Dashboard permissions
+    DASHBOARD_READ = "dashboard.read"
+
     # Special permissions
     ADMIN_ALL = "*"  # Wildcard - grants all permissions
 
