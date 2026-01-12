@@ -1,5 +1,6 @@
 from .client import *
 from .company import *
+from .invoice import *
 from .notification import *
 from .order import *
 from .order_item import *
