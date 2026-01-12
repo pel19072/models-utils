@@ -15,6 +15,12 @@ from database_utils.dependencies.auth import (
     get_company_id,
     require_roles
 )
+from database_utils.dependencies.audit import (
+    AuditContext,
+    get_client_ip,
+    get_audit_context,
+    get_audit_context_optional
+)
 
 __all__ = [
     "get_db",
@@ -23,5 +29,9 @@ __all__ = [
     "get_admin_user",
     "get_super_admin",
     "get_company_id",
-    "require_roles"
+    "require_roles",
+    "AuditContext",
+    "get_client_ip",
+    "get_audit_context",
+    "get_audit_context_optional"
 ]
