@@ -99,6 +99,7 @@ class Order(Base):
     date = Column(DateTime, nullable=False)
     total = Column(Integer, nullable=False)
     paid = Column(Boolean, nullable=False)
+    generation_date = Column(DateTime, nullable=True)  # The period/date this recurring order was generated for
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
