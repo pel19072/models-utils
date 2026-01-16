@@ -5,6 +5,12 @@ from .client import ClientOut
 from enum import Enum
 
 
+# Forward reference import
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .order import OrderOut
+
+
 class RecurrenceEnum(str, Enum):
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
@@ -58,6 +64,17 @@ class RecurringOrderOut(RecurringOrderBase):
     is_active: bool
     client: Optional[ClientOut]
     template_items: List[RecurringOrderItemOut]
+
+    class ConfigDict:
+        from_attributes = True
+
+
+class OrderGenerationResponse(BaseModel):
+    """Response when manually generating an order from a recurring template."""
+    order: dict  # Use dict instead of OrderOut to avoid circular imports
+    generation_for_date: datetime
+    generation_period: str  # Human-readable period (e.g., "February 2026", "Week 7 2026")
+    next_generation_date: Optional[datetime] = None
 
     class ConfigDict:
         from_attributes = True
