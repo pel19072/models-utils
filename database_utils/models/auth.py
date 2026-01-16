@@ -115,8 +115,6 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     age = Column(Integer, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="USER")  # Legacy field - kept for backward compatibility
-    admin = Column(Boolean, default=False)  # Legacy field - kept for backward compatibility
     active = Column(Boolean, default=True, nullable=False)  # User activation/deactivation
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
@@ -137,12 +135,12 @@ class Notification(Base):
     status = Column(String, nullable=False, default="PENDING")  # PENDING, ACCEPTED, REJECTED
 
     # --- [INIT] Possible User data: Add User Fields ---
+    # Note: Notifications store user invitation data, not actual user records
+    # For role assignments, use the UserInvitation model with its role relationship
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     age = Column(Integer, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="USER")
-    admin = Column(Boolean, default=False)
     # --- [END] Possible User data: Add User Fields ---
 
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)

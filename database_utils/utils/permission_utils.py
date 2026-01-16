@@ -18,12 +18,12 @@ class PermissionChecker:
         """
         permissions = set()
 
-        # If user has admin flag (legacy), grant all permissions
-        if user.admin:
-            return {'*'}  # Special wildcard permission
-
         # Collect permissions from all user roles
         for role in user.roles:
+            # ADMIN role gets all permissions (wildcard)
+            if role.name == "ADMIN":
+                return {'*'}  # Special wildcard permission
+
             for permission in role.permissions:
                 permissions.add(permission.name)
 

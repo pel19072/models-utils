@@ -205,7 +205,7 @@ async def get_current_user(
             extra={
                 "user_id": user.id,
                 "username": user.name,
-                "role": user.role,
+                "roles": [role.name for role in user.roles],
                 "company_id": user.company_id,
                 "endpoint": request.url.path
             }
@@ -236,6 +236,8 @@ async def get_admin_user(
     """
     Dependency to verify the current user has admin privileges.
 
+    Checks if the user has the ADMIN role in their roles relationship.
+
     Args:
         user: Current authenticated user (injected via dependency)
 
@@ -245,22 +247,27 @@ async def get_admin_user(
     Raises:
         HTTPException: If user does not have admin privileges
     """
+    # Get user's role names from many-to-many relationship
+    user_role_names = [role.name for role in user.roles]
+    has_admin_role = "ADMIN" in user_role_names
+
     logger.info(
         "Verifying admin privileges",
         extra={
             "user_id": user.id,
             "username": user.name,
-            "is_admin": user.admin
+            "roles": user_role_names,
+            "has_admin_role": has_admin_role
         }
     )
 
-    if not user.admin:
+    if not has_admin_role:
         logger.warning(
             "Admin access denied - insufficient privileges",
             extra={
                 "user_id": user.id,
                 "username": user.name,
-                "role": user.role
+                "roles": user_role_names
             }
         )
         raise HTTPException(
@@ -409,23 +416,29 @@ def require_roles(allowed_roles: List[str]) -> Callable:
         Raises:
             HTTPException: If user role not in allowed_roles
         """
+        # Get user's role names from many-to-many relationship
+        user_role_names = [role.name for role in user.roles]
+
         logger.info(
-            "Checking user role against allowed roles",
+            "Checking user roles against allowed roles",
             extra={
                 "user_id": user.id,
                 "username": user.name,
-                "user_role": user.role,
+                "user_roles": user_role_names,
                 "allowed_roles": allowed_roles
             }
         )
 
-        if user.role not in allowed_roles:
+        # Check if user has any of the allowed roles
+        has_allowed_role = any(role_name in allowed_roles for role_name in user_role_names)
+
+        if not has_allowed_role:
             logger.warning(
                 "Access denied - insufficient role permissions",
                 extra={
                     "user_id": user.id,
                     "username": user.name,
-                    "user_role": user.role,
+                    "user_roles": user_role_names,
                     "allowed_roles": allowed_roles
                 }
             )
@@ -439,7 +452,7 @@ def require_roles(allowed_roles: List[str]) -> Callable:
             extra={
                 "user_id": user.id,
                 "username": user.name,
-                "user_role": user.role
+                "user_roles": user_role_names
             }
         )
 

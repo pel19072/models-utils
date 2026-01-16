@@ -4,31 +4,31 @@ from typing import Optional, List
 
 
 class UserBase(BaseModel):
+    """Base user schema without legacy role/admin fields"""
     name: str
     email: EmailStr
     age: int
-    role: Optional[str] = "USER"
-    admin: Optional[bool] = False
 
 
 class UserCreate(UserBase):
+    """Schema for creating a new user with role assignments"""
     password: constr(min_length=6)
     company_id: Optional[int] = 0
     role_ids: Optional[List[int]] = []
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str]
-    email: Optional[EmailStr]
-    age: Optional[int]
-    role: Optional[str]
-    admin: Optional[bool]
-    password: Optional[constr(min_length=6)]
-    company_id: Optional[int]
+    """Schema for updating user information"""
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    age: Optional[int] = None
+    password: Optional[constr(min_length=6)] = None
+    company_id: Optional[int] = None
     role_ids: Optional[List[int]] = None
 
 
 class UserOut(UserBase):
+    """Output schema for user information"""
     id: int
     company_id: Optional[int] = None
     is_super_admin: Optional[bool] = False

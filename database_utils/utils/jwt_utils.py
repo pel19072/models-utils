@@ -29,15 +29,33 @@ def create_token(
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
 
-def create_access_token(usuario: UserOut):
+def create_access_token(usuario):
+    """
+    Create an access token for a user.
+
+    Args:
+        usuario: User object (can be UserOut, User model, or any object with id, roles, company_id)
+
+    Returns:
+        str: Encoded JWT token
+    """
+    # Get role names from the many-to-many relationship
+    # Support both Pydantic models and SQLAlchemy models
+    role_names = []
+    if hasattr(usuario, 'roles'):
+        roles = getattr(usuario, 'roles', [])
+        if roles:
+            # Handle SQLAlchemy relationship or Pydantic list
+            role_names = [role.name if hasattr(role, 'name') else role for role in roles]
+
     data = {
         "id": usuario.id,
-        "roles": [usuario.role],
-        "company_id": usuario.company_id,
+        "roles": role_names,
+        "company_id": getattr(usuario, 'company_id', None),
         "is_super_admin": getattr(usuario, 'is_super_admin', False)
     }
     token = create_token(data, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    logger.info(f"Access token created")
+    logger.info(f"Access token created for user {usuario.id} with roles {role_names}")
     return token
     
 def create_refresh_token(usuario: UserOut):
