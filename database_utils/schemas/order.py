@@ -13,6 +13,7 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     order_items: List[OrderItemInput]
+    generation_date: Optional[datetime] = None  # Allow setting due date for manually created orders
 
 class OrderUpdate(BaseModel):
     total: Optional[int] = None
