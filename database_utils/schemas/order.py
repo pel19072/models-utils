@@ -1,6 +1,6 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
-from pydantic import BaseModel, computed_field, Field
+from pydantic import BaseModel, computed_field, Field, ConfigDict
 from .order_item import OrderItemInput, OrderItemOut
 from .client import ClientOut
 import calendar
@@ -21,6 +21,8 @@ class OrderUpdate(BaseModel):
     order_items: Optional[List[OrderItemInput]] = None
 
 class OrderOut(OrderBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     total: int
     paid: bool
@@ -56,6 +58,3 @@ class OrderOut(OrderBase):
             return gen_date.strftime("%B %d, %Y")
         else:
             return gen_date.strftime("%B %d, %Y")
-
-    class ConfigDict:
-        from_attributes = True
