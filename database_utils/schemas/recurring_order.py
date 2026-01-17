@@ -71,7 +71,7 @@ class OrderGenerationResponse(BaseModel):
     """Response when manually generating an order from a recurring template."""
     model_config = ConfigDict(from_attributes=True)
 
-    order: dict  # Use dict instead of OrderOut to avoid circular imports
+    order: "OrderOut"  # Properly typed using forward reference
     generation_for_date: datetime
     generation_period: str  # Human-readable period (e.g., "February 2026", "Week 7 2026")
     next_generation_date: Optional[datetime] = None
