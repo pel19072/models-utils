@@ -11,9 +11,10 @@ from loguru import logger
 
 load_dotenv()
 
-refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE"))
-access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE"))
-secret_key = os.getenv("SECRET_KEY")
+# Load environment variables with defaults to avoid errors during import
+refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "7"))
+access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE", "30"))
+secret_key = os.getenv("SECRET_KEY", "default-secret-key-for-development")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30

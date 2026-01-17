@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from .client import ClientOut
@@ -29,11 +29,10 @@ class RecurringOrderItemInput(RecurringOrderItemBase):
 
 
 class RecurringOrderItemOut(RecurringOrderItemBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     created_at: datetime
-
-    class ConfigDict:
-        from_attributes = True
 
 
 # ===================== Orders =====================
@@ -56,6 +55,8 @@ class RecurringOrderUpdate(BaseModel):
 
 
 class RecurringOrderOut(RecurringOrderBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     created_at: datetime
     company_id: int
@@ -65,16 +66,12 @@ class RecurringOrderOut(RecurringOrderBase):
     client: Optional[ClientOut]
     template_items: List[RecurringOrderItemOut]
 
-    class ConfigDict:
-        from_attributes = True
-
 
 class OrderGenerationResponse(BaseModel):
     """Response when manually generating an order from a recurring template."""
+    model_config = ConfigDict(from_attributes=True)
+
     order: dict  # Use dict instead of OrderOut to avoid circular imports
     generation_for_date: datetime
     generation_period: str  # Human-readable period (e.g., "February 2026", "Week 7 2026")
     next_generation_date: Optional[datetime] = None
-
-    class ConfigDict:
-        from_attributes = True
