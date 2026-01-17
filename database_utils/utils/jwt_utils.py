@@ -12,8 +12,8 @@ from loguru import logger
 load_dotenv()
 
 # Load environment variables with defaults to avoid errors during import
-refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "7"))
-access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE", "30"))
+refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "604800"))  # 7 days in seconds
+access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE", "30"))  # 30 minutes
 secret_key = os.getenv("SECRET_KEY", "default-secret-key-for-development")
 
 ALGORITHM = "HS256"
@@ -61,7 +61,7 @@ def create_access_token(usuario):
     
 def create_refresh_token(usuario: UserOut):
     data = {"id": usuario.id}
-    token = create_token(data, expires_delta=timedelta(days=access_expire))
+    token = create_token(data, expires_delta=timedelta(seconds=refresh_expire))
     logger.info(f"Refresh token created")
     return token
 
