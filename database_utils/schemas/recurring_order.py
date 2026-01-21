@@ -18,6 +18,13 @@ class RecurrenceEnum(str, Enum):
     YEARLY = "YEARLY"
 
 
+class RecurringOrderStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    INACTIVE = "INACTIVE"
+    CANCELLED = "CANCELLED"
+
+
 # ===================== Items =====================
 class RecurringOrderItemBase(BaseModel):
     product_id: int
@@ -50,7 +57,7 @@ class RecurringOrderUpdate(BaseModel):
     client_id: Optional[int] = None
     recurrence: Optional[RecurrenceEnum] = None
     recurrence_end: Optional[datetime] = None
-    is_active: Optional[bool] = None
+    status: Optional[RecurringOrderStatus] = None
     template_items: Optional[List[RecurringOrderItemInput]] = None
 
 
@@ -62,7 +69,7 @@ class RecurringOrderOut(RecurringOrderBase):
     company_id: int
     last_generated_at: Optional[datetime] = None
     next_generation_date: Optional[datetime] = None
-    is_active: bool
+    status: RecurringOrderStatus
     client: Optional[ClientOut]
     template_items: List[RecurringOrderItemOut]
 

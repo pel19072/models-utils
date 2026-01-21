@@ -15,6 +15,13 @@ class RecurrenceEnum(str, enum.Enum):
     YEARLY = "YEARLY"
 
 
+class RecurringOrderStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    INACTIVE = "INACTIVE"
+    CANCELLED = "CANCELLED"
+
+
 class Client(Base):
     __tablename__ = "client"
 
@@ -64,7 +71,7 @@ class RecurringOrder(Base):
     recurrence_end = Column(DateTime, nullable=True)
     last_generated_at = Column(DateTime, nullable=True)
     next_generation_date = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default=text('true'))
+    status = Column(Enum(RecurringOrderStatus), nullable=False, default=RecurringOrderStatus.ACTIVE, server_default='ACTIVE')
 
     client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
     company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
