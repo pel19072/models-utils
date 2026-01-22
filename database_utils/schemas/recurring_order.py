@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
+from uuid import UUID
 from .client import ClientOut
 from enum import Enum
 
@@ -27,7 +28,7 @@ class RecurringOrderStatus(str, Enum):
 
 # ===================== Items =====================
 class RecurringOrderItemBase(BaseModel):
-    product_id: int
+    product_id: UUID
     quantity: int
 
 
@@ -38,13 +39,13 @@ class RecurringOrderItemInput(RecurringOrderItemBase):
 class RecurringOrderItemOut(RecurringOrderItemBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: UUID
     created_at: datetime
 
 
 # ===================== Orders =====================
 class RecurringOrderBase(BaseModel):
-    client_id: Optional[int]
+    client_id: Optional[UUID]
     recurrence: RecurrenceEnum
     recurrence_end: Optional[datetime] = None
 
@@ -54,7 +55,7 @@ class RecurringOrderCreate(RecurringOrderBase):
 
 
 class RecurringOrderUpdate(BaseModel):
-    client_id: Optional[int] = None
+    client_id: Optional[UUID] = None
     recurrence: Optional[RecurrenceEnum] = None
     recurrence_end: Optional[datetime] = None
     status: Optional[RecurringOrderStatus] = None
@@ -64,9 +65,9 @@ class RecurringOrderUpdate(BaseModel):
 class RecurringOrderOut(RecurringOrderBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: UUID
     created_at: datetime
-    company_id: int
+    company_id: UUID
     last_generated_at: Optional[datetime] = None
     next_generation_date: Optional[datetime] = None
     status: RecurringOrderStatus

@@ -198,8 +198,8 @@ def seed_tier_data(connection: Connection) -> None:
             tier_data = tiers_data_map[tier_name]
             connection.execute(
                 text(
-                    "INSERT INTO tier (created_at, name, price, billing_cycle, features, stripe_price_id, is_active) "
-                    "VALUES (:created_at, :name, :price, :billing_cycle, :features, :stripe_price_id, :is_active)"
+                    "INSERT INTO tier (id, created_at, name, price, billing_cycle, features, stripe_price_id, is_active) "
+                    "VALUES (gen_random_uuid(), :created_at, :name, :price, :billing_cycle, :features, :stripe_price_id, :is_active)"
                 ),
                 {
                     'created_at': datetime.utcnow(),

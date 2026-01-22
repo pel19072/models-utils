@@ -1,25 +1,26 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
+from uuid import UUID
 
 
 class InvitationCreate(BaseModel):
     """Schema for creating a user invitation"""
     email: EmailStr
     name: Optional[str] = None
-    role_ids: List[int] = []
+    role_ids: List[UUID] = []
 
 
 class InvitationOut(BaseModel):
     """Schema for returning invitation data"""
-    id: int
+    id: UUID
     created_at: datetime
     expires_at: datetime
     email: str
     name: Optional[str]
     status: str
-    company_id: int
-    invited_by_user_id: Optional[int]
+    company_id: UUID
+    invited_by_user_id: Optional[UUID]
 
     class ConfigDict:
         from_attributes = True

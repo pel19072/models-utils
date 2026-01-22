@@ -1,5 +1,6 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, computed_field, Field, ConfigDict
 from .order_item import OrderItemInput, OrderItemOut
 from .client import ClientOut
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
     from .recurring_order import RecurringOrderOut
 
 class OrderBase(BaseModel):
-    client_id: Optional[int]
+    client_id: Optional[UUID]
 
 class OrderCreate(OrderBase):
     order_items: List[OrderItemInput]
@@ -18,20 +19,20 @@ class OrderCreate(OrderBase):
 class OrderUpdate(BaseModel):
     total: Optional[int] = None
     paid: Optional[bool] = None
-    client_id: Optional[int] = None
+    client_id: Optional[UUID] = None
     order_items: Optional[List[OrderItemInput]] = None
 
 class OrderOut(OrderBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: UUID
     total: int
     paid: bool
-    recurring_order_id: Optional[int] = None
+    recurring_order_id: Optional[UUID] = None
     generation_date: Optional[datetime] = None
-    client_id: int
+    client_id: UUID
     client: Optional[ClientOut]
-    company_id: int
+    company_id: UUID
     order_items: List[OrderItemOut]
     recurring_order: Optional["RecurringOrderOut"] = None
 

@@ -1,9 +1,10 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
 from .product import ProductOut
 
 class OrderItemBase(BaseModel):
-    product_id: int
+    product_id: UUID
     quantity: int
 
 class OrderItemInput(OrderItemBase):
@@ -13,11 +14,11 @@ class OrderItemCreate(OrderItemBase):
     pass
 
 class OrderItemUpdate(BaseModel):
-    product_id: Optional[int]
+    product_id: Optional[UUID]
     quantity: Optional[int]
 
 class OrderItemOut(OrderItemBase):
-    id: int
+    id: UUID
     product: Optional[ProductOut]
 
     class ConfigDict:

@@ -106,8 +106,8 @@ def seed_rbac_data(connection: Connection) -> None:
         for perm in permissions_data:
             connection.execute(
                 text(
-                    "INSERT INTO permission (created_at, name, resource, action, description) "
-                    "VALUES (:created_at, :name, :resource, :action, :description)"
+                    "INSERT INTO permission (id, created_at, name, resource, action, description) "
+                    "VALUES (gen_random_uuid(), :created_at, :name, :resource, :action, :description)"
                 ),
                 {
                     'created_at': datetime.utcnow(),
@@ -132,8 +132,8 @@ def seed_rbac_data(connection: Connection) -> None:
         for role_data in roles_data:
             result = connection.execute(
                 text(
-                    "INSERT INTO role (created_at, name, description, is_system) "
-                    "VALUES (:created_at, :name, :description, :is_system) "
+                    "INSERT INTO role (id, created_at, name, description, is_system) "
+                    "VALUES (gen_random_uuid(), :created_at, :name, :description, :is_system) "
                     "RETURNING id"
                 ),
                 {
@@ -248,48 +248,8 @@ def seed_rbac_data(connection: Connection) -> None:
         logger.info(f"✓ USER role assigned {user_count} permissions")
 
         # 4. Migrate existing users to new role system (if any exist)
-        # Users with admin=True get ADMIN role, others get USER role
-        try:
-            admin_users = connection.execute(
-                text('SELECT id FROM "user" WHERE admin = true')
-            ).fetchall()
-
-            for user_row in admin_users:
-                connection.execute(
-                    text(
-                        "INSERT INTO user_role (user_id, role_id) "
-                        "VALUES (:user_id, :role_id)"
-                    ),
-                    {
-                        'user_id': user_row[0],
-                        'role_id': role_ids['ADMIN']
-                    }
-                )
-
-            if admin_users:
-                logger.info(f"✓ Migrated {len(admin_users)} admin users to ADMIN role")
-
-            regular_users = connection.execute(
-                text('SELECT id FROM "user" WHERE admin = false OR admin IS NULL')
-            ).fetchall()
-
-            for user_row in regular_users:
-                connection.execute(
-                    text(
-                        "INSERT INTO user_role (user_id, role_id) "
-                        "VALUES (:user_id, :role_id)"
-                    ),
-                    {
-                        'user_id': user_row[0],
-                        'role_id': role_ids['USER']
-                    }
-                )
-
-            if regular_users:
-                logger.info(f"✓ Migrated {len(regular_users)} regular users to USER role")
-
-        except Exception as e:
-            logger.warning(f"Could not migrate existing users (table may not exist yet): {e}")
+        # Skip legacy admin column migration - this is no longer needed with UUID migration
+        logger.info("Skipping legacy user migration (fresh database with UUID schema)")
 
         connection.commit()
         logger.info("✓ RBAC seed completed successfully!")

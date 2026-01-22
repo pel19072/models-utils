@@ -1,6 +1,7 @@
 # schemas/user.py
 from pydantic import BaseModel, EmailStr, constr
 from typing import Optional, List
+from uuid import UUID
 
 
 class UserBase(BaseModel):
@@ -13,8 +14,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for creating a new user with role assignments"""
     password: constr(min_length=6)
-    company_id: Optional[int] = 0
-    role_ids: Optional[List[int]] = []
+    company_id: Optional[UUID] = None
+    role_ids: Optional[List[UUID]] = []
 
 
 class UserUpdate(BaseModel):
@@ -23,14 +24,14 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     age: Optional[int] = None
     password: Optional[constr(min_length=6)] = None
-    company_id: Optional[int] = None
-    role_ids: Optional[List[int]] = None
+    company_id: Optional[UUID] = None
+    role_ids: Optional[List[UUID]] = None
 
 
 class UserOut(UserBase):
     """Output schema for user information"""
-    id: int
-    company_id: Optional[int] = None
+    id: UUID
+    company_id: Optional[UUID] = None
     is_super_admin: Optional[bool] = False
 
     class ConfigDict:

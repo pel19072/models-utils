@@ -1,6 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
+from uuid import UUID
 
 
 class InvoiceBase(BaseModel):
@@ -12,7 +13,7 @@ class InvoiceBase(BaseModel):
 
 
 class InvoiceCreate(InvoiceBase):
-    order_id: int
+    order_id: UUID
 
 
 class InvoiceUpdate(BaseModel):
@@ -24,10 +25,10 @@ class InvoiceUpdate(BaseModel):
 
 
 class InvoiceOut(InvoiceBase):
-    id: int
+    id: UUID
     created_at: datetime
-    company_id: int
-    order_id: int
+    company_id: UUID
+    order_id: UUID
 
     class ConfigDict:
         from_attributes = True

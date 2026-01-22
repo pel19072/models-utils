@@ -1,6 +1,7 @@
 # schemas/client.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from uuid import UUID
 
 from .user import UserOut
 
@@ -16,8 +17,8 @@ class ClientBase(BaseModel):
 
 
 class ClientCreate(ClientBase):
-    company_id: int  # required
-    advisor_id: Optional[int] = None
+    company_id: UUID  # required
+    advisor_id: Optional[UUID] = None
 
 
 class ClientUpdate(BaseModel):
@@ -28,14 +29,14 @@ class ClientUpdate(BaseModel):
     email: Optional[EmailStr]
     contact: Optional[str]
     observations: Optional[str]
-    company_id: Optional[int]
-    advisor_id: Optional[int]
+    company_id: Optional[UUID]
+    advisor_id: Optional[UUID]
 
 
 class ClientOut(ClientBase):
-    id: int
-    company_id: int
-    advisor_id: Optional[int]
+    id: UUID
+    company_id: UUID
+    advisor_id: Optional[UUID]
     advisor: Optional[UserOut]
 
     class ConfigDict:

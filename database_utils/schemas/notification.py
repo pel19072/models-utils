@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
+from uuid import UUID
 
 from .user import UserCreate, UserOut
 
@@ -19,9 +20,9 @@ class NotificationCreate(NotificationBase):
 
 
 class NotificationOut(UserOut):
-    id: int
+    id: UUID
     status: NotificationStatus
-    user_id: Optional[int]
+    user_id: Optional[UUID]
 
     class ConfigDict:
         from_attributes = True

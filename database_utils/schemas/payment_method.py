@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
 
 
 class PaymentMethodCreate(BaseModel):
@@ -12,7 +13,7 @@ class PaymentMethodCreate(BaseModel):
 
 class PaymentMethodOut(BaseModel):
     """Schema for returning payment method data"""
-    id: int
+    id: UUID
     type: str
     last4: str
     expiry_month: Optional[int]

@@ -1,12 +1,13 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database_utils.database import Base
 
 from datetime import datetime
 import enum
+import uuid
 
 class RecurrenceEnum(str, enum.Enum):
     DAILY = "DAILY"
@@ -25,7 +26,7 @@ class RecurringOrderStatus(str, enum.Enum):
 class Client(Base):
     __tablename__ = "client"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False)
     tax_id = Column(String, nullable=True)
@@ -35,8 +36,8 @@ class Client(Base):
     contact = Column(String, nullable=True)
     observations = Column(String, nullable=True)
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
-    advisor_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    advisor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company", back_populates="clients")
@@ -48,14 +49,14 @@ class Client(Base):
 class Product(Base):
     __tablename__ = "product"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False)
     price = Column(Integer, nullable=False)
     description = Column(String, nullable=False)
     stock = Column(Integer, nullable=False)
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
     company = relationship("Company", back_populates="products")
@@ -65,7 +66,7 @@ class Product(Base):
 class RecurringOrder(Base):
     __tablename__ = "recurring_order"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     recurrence = Column(Enum(RecurrenceEnum), nullable=False)
     recurrence_end = Column(DateTime, nullable=True)
@@ -73,8 +74,8 @@ class RecurringOrder(Base):
     next_generation_date = Column(DateTime, nullable=True)
     status = Column(Enum(RecurringOrderStatus), nullable=False, default=RecurringOrderStatus.ACTIVE, server_default='ACTIVE')
 
-    client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
     client = relationship("Client", back_populates="recurring_orders")
@@ -86,11 +87,11 @@ class RecurringOrder(Base):
 class RecurringOrderItem(Base):
     __tablename__ = "recurring_order_item"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    recurring_order_id = Column(Integer, ForeignKey("recurring_order.id", ondelete="CASCADE"))
-    product_id = Column(Integer, ForeignKey("product.id", ondelete="CASCADE"))
+    recurring_order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("recurring_order.id", ondelete="CASCADE"))
+    product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("product.id", ondelete="CASCADE"))
     quantity = Column(Integer, nullable=False)
 
     # Relationships
@@ -101,16 +102,16 @@ class RecurringOrderItem(Base):
 class Order(Base):
     __tablename__ = "order"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     date = Column(DateTime, nullable=False)
     total = Column(Integer, nullable=False)
     paid = Column(Boolean, nullable=False)
     generation_date = Column(DateTime, nullable=True)  # The period/date this recurring order was generated for
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
-    client_id = Column(Integer, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
-    recurring_order_id = Column(Integer, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
+    recurring_order_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company", back_populates="orders")
@@ -123,10 +124,10 @@ class Order(Base):
 class OrderItem(Base):
     __tablename__ = "order_item"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    order_id = Column(Integer, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(Integer, ForeignKey("product.id", ondelete="CASCADE"), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("product.id", ondelete="CASCADE"), nullable=False)
     quantity = Column(Integer, nullable=False)
 
     # Relationships
@@ -137,7 +138,7 @@ class OrderItem(Base):
 class Invoice(Base):
     __tablename__ = "invoice"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     issue_date = Column(DateTime, nullable=False)
     subtotal = Column(Integer, nullable=False)
@@ -145,8 +146,8 @@ class Invoice(Base):
     total = Column(Integer, nullable=False)
     details = Column(JSON, nullable=False)
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
-    order_id = Column(Integer, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
     company = relationship("Company", back_populates="invoices")
@@ -156,14 +157,14 @@ class Invoice(Base):
 class CustomField(Base):
     __tablename__ = "custom_field"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     table = Column(String, nullable=False)
     field_name = Column(String, nullable=False)
     field_type = Column(String, nullable=False)
     field_value = Column(String, nullable=True)
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
     company = relationship("Company", back_populates="custom_fields")

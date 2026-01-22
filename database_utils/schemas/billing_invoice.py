@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class BillingInvoiceOut(BaseModel):
     """Schema for returning billing invoice data"""
-    id: int
+    id: UUID
     invoice_number: str
     invoice_date: datetime
     due_date: datetime
@@ -31,5 +32,5 @@ class ManualPaymentMark(BaseModel):
 
 class BillingInvoiceWithCompany(BillingInvoiceOut):
     """Schema for invoice with company details (super admin view)"""
-    company_id: int
+    company_id: UUID
     company_name: str

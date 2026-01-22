@@ -2,6 +2,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class TierBase(BaseModel):
@@ -26,7 +27,7 @@ class TierUpdate(BaseModel):
 
 
 class TierOut(TierBase):
-    id: int
+    id: UUID
     created_at: datetime
     stripe_price_id: Optional[str] = None
 

@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class SubscriptionOut(BaseModel):
     """Schema for returning subscription data"""
-    id: int
+    id: UUID
     status: str
     billing_type: str
     current_period_start: datetime
@@ -13,8 +14,8 @@ class SubscriptionOut(BaseModel):
     cancel_at_period_end: bool
     canceled_at: Optional[datetime]
     trial_end: Optional[datetime]
-    tier_id: int
-    company_id: int
+    tier_id: UUID
+    company_id: UUID
     stripe_subscription_id: Optional[str]
 
     class ConfigDict:
@@ -23,7 +24,7 @@ class SubscriptionOut(BaseModel):
 
 class SubscriptionUpdate(BaseModel):
     """Schema for updating subscription"""
-    tier_id: Optional[int] = None
+    tier_id: Optional[UUID] = None
     cancel_at_period_end: Optional[bool] = None
 
 

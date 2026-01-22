@@ -1,40 +1,41 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, ForeignKey, Table, Text, JSON
+    Column, String, Integer, Boolean, DateTime, ForeignKey, Table, Text, JSON, Uuid
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database_utils.database import Base
 
 from datetime import datetime
+import uuid
 
 # Association table for many-to-many relationship between Role and Permission
 role_permission = Table(
     'role_permission',
     Base.metadata,
-    Column('role_id', Integer, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True),
-    Column('permission_id', Integer, ForeignKey('permission.id', ondelete='CASCADE'), primary_key=True)
+    Column('role_id', Uuid, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True),
+    Column('permission_id', Uuid, ForeignKey('permission.id', ondelete='CASCADE'), primary_key=True)
 )
 
 # Association table for many-to-many relationship between User and Role
 user_role = Table(
     'user_role',
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('user.id', ondelete='CASCADE'), primary_key=True),
-    Column('role_id', Integer, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
+    Column('user_id', Uuid, ForeignKey('user.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', Uuid, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
 )
 
 # Association table for many-to-many relationship between UserInvitation and Role
 user_invitation_role = Table(
     'user_invitation_role',
     Base.metadata,
-    Column('invitation_id', Integer, ForeignKey('user_invitation.id', ondelete='CASCADE'), primary_key=True),
-    Column('role_id', Integer, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
+    Column('invitation_id', Uuid, ForeignKey('user_invitation.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', Uuid, ForeignKey('role.id', ondelete='CASCADE'), primary_key=True)
 )
 
 class Tier(Base):
     __tablename__ = "tier"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False, unique=True)
 
@@ -53,14 +54,14 @@ class Tier(Base):
 class Company(Base):
     __tablename__ = "company"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False, unique=True)
     email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     active = Column(Boolean, default=True)
     start_date = Column(DateTime, nullable=True)
-    tier_id = Column(Integer, ForeignKey("tier.id"), nullable=False)
+    tier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tier.id"), nullable=False)
     tax_id = Column(String, nullable=True)
     address = Column(String, nullable=True)
 
@@ -81,7 +82,7 @@ class Company(Base):
 class Permission(Base):
     __tablename__ = "permission"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False, unique=True)  # e.g., "clients.read", "orders.create"
     resource = Column(String, nullable=False)  # e.g., "clients", "orders", "products"
@@ -95,7 +96,7 @@ class Permission(Base):
 class Role(Base):
     __tablename__ = "role"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False, unique=True)  # e.g., "ADMIN", "MANAGER", "SALES"
     description = Column(Text, nullable=True)
@@ -109,7 +110,7 @@ class Role(Base):
 class User(Base):
     __tablename__ = "user"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
@@ -117,7 +118,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     active = Column(Boolean, default=True, nullable=False)  # User activation/deactivation
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
     is_super_admin = Column(Boolean, default=False, nullable=False)
 
     # Relationships
@@ -130,7 +131,7 @@ class User(Base):
 class Notification(Base):
     __tablename__ = "notification"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     status = Column(String, nullable=False, default="PENDING")  # PENDING, ACCEPTED, REJECTED
 
@@ -143,8 +144,8 @@ class Notification(Base):
     password_hash = Column(String, nullable=False)
     # --- [END] Possible User data: Add User Fields ---
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="notifications")
@@ -155,12 +156,12 @@ class AuditLog(Base):
     """Audit log for tracking super admin actions"""
     __tablename__ = "audit_log"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     action = Column(String, nullable=False)  # e.g., "company.disable", "tier.create"
     resource_type = Column(String, nullable=False)  # e.g., "company", "tier", "user"
-    resource_id = Column(Integer, nullable=True)
+    resource_id = Column(String, nullable=True)  # Changed to String to store UUID as text
     details = Column(JSON, nullable=True)  # Store before/after state, additional context
     ip_address = Column(String, nullable=True)
 
@@ -172,7 +173,7 @@ class UserInvitation(Base):
     """User invitation system for admin-initiated user enrollment"""
     __tablename__ = "user_invitation"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)  # 7 days from creation
     email = Column(String, nullable=False)
@@ -181,9 +182,9 @@ class UserInvitation(Base):
     name = Column(String, nullable=True)  # Optional pre-fill by admin
 
     # Foreign keys
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
-    invited_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
-    accepted_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    accepted_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company")
@@ -196,7 +197,7 @@ class Subscription(Base):
     """Subscription billing for companies"""
     __tablename__ = "subscription"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -210,8 +211,8 @@ class Subscription(Base):
     trial_end = Column(DateTime, nullable=True)
 
     # Foreign keys
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, unique=True)
-    tier_id = Column(Integer, ForeignKey("tier.id"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, unique=True)
+    tier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tier.id"), nullable=False)
 
     # Stripe integration
     stripe_subscription_id = Column(String, nullable=True, unique=True)
@@ -227,7 +228,7 @@ class PaymentMethod(Base):
     """Payment methods for company billing"""
     __tablename__ = "payment_method"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -241,7 +242,7 @@ class PaymentMethod(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Foreign keys
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
 
     # Stripe integration
     stripe_payment_method_id = Column(String, nullable=True, unique=True)
@@ -254,7 +255,7 @@ class BillingInvoice(Base):
     """Subscription billing invoices (different from CRM invoices for customer orders)"""
     __tablename__ = "billing_invoice"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Invoice details
@@ -275,11 +276,11 @@ class BillingInvoice(Base):
     # Manual payment tracking
     manual_payment_method = Column(String, nullable=True)  # "Wire Transfer", "Check", "Cash"
     manual_payment_note = Column(Text, nullable=True)
-    marked_paid_by_user_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    marked_paid_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id"), nullable=True)
 
     # Foreign keys
-    subscription_id = Column(Integer, ForeignKey("subscription.id", ondelete="CASCADE"), nullable=False)
-    payment_method_id = Column(Integer, ForeignKey("payment_method.id", ondelete="SET NULL"), nullable=True)
+    subscription_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("subscription.id", ondelete="CASCADE"), nullable=False)
+    payment_method_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("payment_method.id", ondelete="SET NULL"), nullable=True)
 
     # Stripe integration
     stripe_invoice_id = Column(String, nullable=True, unique=True)

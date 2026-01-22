@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
 
 
 class ProductBase(BaseModel):
@@ -21,8 +22,8 @@ class ProductUpdate(BaseModel):
 
 
 class ProductOut(ProductBase):
-    id: int
-    company_id: int
+    id: UUID
+    company_id: UUID
 
     class ConfigDict:
         from_attributes = True
