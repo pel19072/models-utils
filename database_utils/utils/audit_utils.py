@@ -1,5 +1,6 @@
 # utils/audit_utils.py
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Union
+from uuid import UUID
 from sqlalchemy.orm import Session
 from database_utils.models.auth import AuditLog
 from database_utils.utils.json_utils import serialize_for_json
@@ -9,10 +10,10 @@ from pydantic import BaseModel
 
 def create_audit_log(
     db: Session,
-    user_id: Optional[int],
+    user_id: Optional[UUID],
     action: str,
     resource_type: str,
-    resource_id: Optional[int] = None,
+    resource_id: Optional[Union[UUID, int]] = None,
     details: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None
 ) -> AuditLog:
@@ -95,9 +96,9 @@ def create_audit_log(
 
 def log_create_operation(
     db: Session,
-    user_id: Optional[int],
+    user_id: Optional[UUID],
     resource_type: str,
-    resource_id: int,
+    resource_id: Union[UUID, int],
     resource_data: Any,
     ip_address: Optional[str] = None
 ) -> AuditLog:
@@ -137,9 +138,9 @@ def log_create_operation(
 
 def log_update_operation(
     db: Session,
-    user_id: Optional[int],
+    user_id: Optional[UUID],
     resource_type: str,
-    resource_id: int,
+    resource_id: Union[UUID, int],
     before_data: Any,
     after_data: Any,
     ip_address: Optional[str] = None
@@ -184,9 +185,9 @@ def log_update_operation(
 
 def log_delete_operation(
     db: Session,
-    user_id: Optional[int],
+    user_id: Optional[UUID],
     resource_type: str,
-    resource_id: int,
+    resource_id: Union[UUID, int],
     resource_data: Any,
     ip_address: Optional[str] = None
 ) -> AuditLog:
@@ -226,10 +227,10 @@ def log_delete_operation(
 
 def log_custom_operation(
     db: Session,
-    user_id: Optional[int],
+    user_id: Optional[UUID],
     action: str,
     resource_type: str,
-    resource_id: Optional[int] = None,
+    resource_id: Optional[Union[UUID, int]] = None,
     details: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None
 ) -> AuditLog:

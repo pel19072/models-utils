@@ -1,6 +1,7 @@
 # utils/permission_utils.py
 from loguru import logger
 from typing import List, Set, Optional
+from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Request, Depends
 from database_utils.models.auth import User, Role, Permission
@@ -64,7 +65,7 @@ class PermissionChecker:
         return all(PermissionChecker.has_permission(user, perm) for perm in permission_names)
 
     @staticmethod
-    def get_user_by_id_with_roles(db: Session, user_id: int) -> Optional[User]:
+    def get_user_by_id_with_roles(db: Session, user_id: UUID) -> Optional[User]:
         """
         Fetch a user with their roles and permissions eagerly loaded.
         This is more efficient than lazy loading for permission checks.
