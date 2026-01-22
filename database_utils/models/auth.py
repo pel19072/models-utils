@@ -72,7 +72,7 @@ class Company(Base):
     products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="company", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="company", cascade="all, delete-orphan")
-    custom_fields = relationship("CustomField", back_populates="company", cascade="all, delete-orphan")
+    custom_field_definitions = relationship("CustomFieldDefinition", back_populates="company", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="company", cascade="all, delete-orphan")
     recurring_orders = relationship("RecurringOrder", back_populates="company", cascade="all, delete-orphan")
     subscription = relationship("Subscription", back_populates="company", uselist=False, cascade="all, delete-orphan")

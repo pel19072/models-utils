@@ -23,6 +23,16 @@ class RecurringOrderStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class CustomFieldType(str, enum.Enum):
+    TEXT = "TEXT"
+    NUMBER = "NUMBER"
+    EMAIL = "EMAIL"
+    PHONE = "PHONE"
+    URL = "URL"
+    DATE = "DATE"
+    BOOLEAN = "BOOLEAN"
+
+
 class Client(Base):
     __tablename__ = "client"
 
@@ -44,6 +54,7 @@ class Client(Base):
     advisor = relationship("User", back_populates="clients")
     orders = relationship("Order", back_populates="client", cascade="all, delete-orphan")
     recurring_orders = relationship("RecurringOrder", back_populates="client", cascade="all, delete-orphan")
+    custom_field_values = relationship("ClientCustomFieldValue", back_populates="client", cascade="all, delete-orphan")
 
 
 class Product(Base):
@@ -154,17 +165,36 @@ class Invoice(Base):
     order = relationship("Order", back_populates="invoices")
 
 
-class CustomField(Base):
-    __tablename__ = "custom_field"
+class CustomFieldDefinition(Base):
+    __tablename__ = "custom_field_definition"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    table = Column(String, nullable=False)
-    field_name = Column(String, nullable=False)
-    field_type = Column(String, nullable=False)
-    field_value = Column(String, nullable=True)
+
+    field_name = Column(String, nullable=False)  # The human-readable label
+    field_key = Column(String, nullable=False)  # The unique identifier (e.g., "ip_address")
+    field_type = Column(Enum(CustomFieldType), nullable=False)
+    is_required = Column(Boolean, nullable=False, default=False)
+    display_order = Column(Integer, nullable=False, default=0)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
-    company = relationship("Company", back_populates="custom_fields")
+    company = relationship("Company", back_populates="custom_field_definitions")
+    client_values = relationship("ClientCustomFieldValue", back_populates="field_definition", cascade="all, delete-orphan")
+
+
+class ClientCustomFieldValue(Base):
+    __tablename__ = "client_custom_field_value"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    value = Column(String, nullable=True)  # All types stored as string
+
+    client_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("client.id", ondelete="CASCADE"), nullable=False)
+    field_definition_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("custom_field_definition.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    client = relationship("Client", back_populates="custom_field_values")
+    field_definition = relationship("CustomFieldDefinition", back_populates="client_values")

@@ -1,5 +1,6 @@
 from .client import *
 from .company import *
+from .custom_field import *
 from .invoice import *
 from .notification import *
 from .order import *

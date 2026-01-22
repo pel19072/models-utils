@@ -10,7 +10,8 @@ from .crm import (
     Order,
     OrderItem,
     Invoice,
-    CustomField
+    CustomFieldDefinition,
+    ClientCustomFieldValue
 )
 
 # Import all models here so Alembic can detect them
@@ -25,5 +26,6 @@ __all__ = [
     "Order",
     "OrderItem",
     "Invoice",
-    "CustomField"
+    "CustomFieldDefinition",
+    "ClientCustomFieldValue"
 ]
