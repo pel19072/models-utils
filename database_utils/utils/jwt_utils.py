@@ -49,20 +49,27 @@ def create_access_token(usuario):
             # Handle SQLAlchemy relationship or Pydantic list
             role_names = [role.name if hasattr(role, 'name') else role for role in roles]
 
+    # Convert UUID to string for JSON serialization
+    user_id = str(usuario.id) if usuario.id else None
+    company_id = getattr(usuario, 'company_id', None)
+    company_id = str(company_id) if company_id else None
+
     data = {
-        "id": usuario.id,
+        "id": user_id,
         "roles": role_names,
-        "company_id": getattr(usuario, 'company_id', None),
+        "company_id": company_id,
         "is_super_admin": getattr(usuario, 'is_super_admin', False)
     }
     token = create_token(data, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    logger.info(f"Access token created for user {usuario.id} with roles {role_names}")
+    logger.info(f"Access token created for user {user_id} with roles {role_names}")
     return token
     
 def create_refresh_token(usuario: UserOut):
-    data = {"id": usuario.id}
+    # Convert UUID to string for JSON serialization
+    user_id = str(usuario.id) if usuario.id else None
+    data = {"id": user_id}
     token = create_token(data, expires_delta=timedelta(seconds=refresh_expire))
-    logger.info(f"Refresh token created")
+    logger.info(f"Refresh token created for user {user_id}")
     return token
 
 def decode_token(token: str):

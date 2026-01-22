@@ -10,6 +10,7 @@ This module provides reusable dependency functions for:
 """
 
 import logging
+import uuid
 from typing import List, Callable
 
 from fastapi import Depends, HTTPException, Request, status
@@ -144,12 +145,22 @@ async def get_current_user(
             }
         )
 
-        user_id = payload.get("id")
-        if user_id is None:
+        user_id_str = payload.get("id")
+        if user_id_str is None:
             logger.error("Token payload missing user ID")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
+            )
+
+        # Convert string UUID back to UUID object for database query
+        try:
+            user_id = uuid.UUID(user_id_str)
+        except (ValueError, AttributeError) as e:
+            logger.error(f"Invalid UUID format in token: {user_id_str}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user ID format in token"
             )
 
     except HTTPException:

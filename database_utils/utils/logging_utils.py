@@ -12,7 +12,7 @@ import time
 import traceback
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Dict, Optional, Callable, Union
 from functools import wraps
 from contextvars import ContextVar
 
@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session
 
 # Context variables for request-scoped data
 request_id_context: ContextVar[str] = ContextVar('request_id', default='')
-user_id_context: ContextVar[Optional[int]] = ContextVar('user_id', default=None)
-company_id_context: ContextVar[Optional[int]] = ContextVar('company_id', default=None)
+user_id_context: ContextVar[Optional[Union[int, uuid.UUID, str]]] = ContextVar('user_id', default=None)
+company_id_context: ContextVar[Optional[Union[int, uuid.UUID, str]]] = ContextVar('company_id', default=None)
 user_roles_context: ContextVar[list] = ContextVar('user_roles', default=[])
 user_permissions_context: ContextVar[set] = ContextVar('user_permissions', default=set())
 
@@ -160,8 +160,8 @@ def setup_logger(
 
 def set_request_context(
     request_id: Optional[str] = None,
-    user_id: Optional[int] = None,
-    company_id: Optional[int] = None,
+    user_id: Optional[Union[int, uuid.UUID, str]] = None,
+    company_id: Optional[Union[int, uuid.UUID, str]] = None,
     user_roles: Optional[list] = None,
     user_permissions: Optional[set] = None
 ) -> None:
@@ -172,8 +172,8 @@ def set_request_context(
 
     Args:
         request_id: Unique identifier for this request
-        user_id: ID of the authenticated user
-        company_id: ID of the user's company
+        user_id: ID of the authenticated user (int, UUID, or string)
+        company_id: ID of the user's company (int, UUID, or string)
         user_roles: List of user's role names
         user_permissions: Set of user's permission strings
     """
@@ -248,8 +248,8 @@ def log_with_context(logger: logging.Logger, level: str, message: str, **kwargs)
 def log_endpoint_call(
     logger: logging.Logger,
     request: Request,
-    user_id: Optional[int] = None,
-    company_id: Optional[int] = None,
+    user_id: Optional[Union[int, uuid.UUID, str]] = None,
+    company_id: Optional[Union[int, uuid.UUID, str]] = None,
     roles: Optional[list] = None
 ) -> None:
     """
@@ -258,8 +258,8 @@ def log_endpoint_call(
     Args:
         logger: Logger instance
         request: FastAPI Request object
-        user_id: Authenticated user ID
-        company_id: User's company ID
+        user_id: Authenticated user ID (int, UUID, or string)
+        company_id: User's company ID (int, UUID, or string)
         roles: User's roles
     """
     log_with_context(
@@ -280,7 +280,7 @@ def log_database_operation(
     logger: logging.Logger,
     operation: str,
     model: str,
-    record_id: Optional[int] = None,
+    record_id: Optional[Union[int, uuid.UUID, str]] = None,
     **kwargs
 ) -> None:
     """
@@ -290,7 +290,7 @@ def log_database_operation(
         logger: Logger instance
         operation: Type of operation (CREATE, READ, UPDATE, DELETE)
         model: Model/table name
-        record_id: ID of the record being operated on
+        record_id: ID of the record being operated on (int, UUID, or string)
         **kwargs: Additional context
     """
     log_with_context(
@@ -329,7 +329,7 @@ def log_business_operation(
     logger: logging.Logger,
     operation: str,
     entity_type: str,
-    entity_id: Optional[int] = None,
+    entity_id: Optional[Union[int, uuid.UUID, str]] = None,
     **kwargs
 ) -> None:
     """
@@ -339,7 +339,7 @@ def log_business_operation(
         logger: Logger instance
         operation: Type of business operation (e.g., 'CLIENT_CREATED', 'ORDER_PLACED')
         entity_type: Type of entity (e.g., 'Client', 'Order')
-        entity_id: ID of the entity
+        entity_id: ID of the entity (int, UUID, or string)
         **kwargs: Additional context
     """
     log_with_context(
