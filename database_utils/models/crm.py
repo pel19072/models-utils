@@ -115,10 +115,10 @@ class Order(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    date = Column(DateTime, nullable=False)
+    due_date = Column(DateTime, nullable=True)  # When the order is due (optional for regular orders, calculated for recurring)
+    payment_date = Column(DateTime, nullable=True)  # When the order was paid (automatically set when paid=True)
     total = Column(Integer, nullable=False)
     paid = Column(Boolean, nullable=False)
-    generation_date = Column(DateTime, nullable=True)  # The period/date this recurring order was generated for
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
