@@ -4,6 +4,7 @@ JSON serialization utilities for handling datetime and other non-JSON-serializab
 """
 from typing import Any, Dict
 from datetime import datetime, date, time, timedelta
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -13,6 +14,7 @@ def serialize_for_json(obj: Any) -> Any:
 
     Handles:
     - Pydantic models (converts to dict then serializes)
+    - UUID objects (converts to string)
     - datetime, date, time objects (converts to ISO format strings)
     - timedelta objects (converts to total seconds)
     - dict objects (recursively serializes values)
@@ -29,6 +31,10 @@ def serialize_for_json(obj: Any) -> Any:
     if isinstance(obj, BaseModel):
         # Use model_dump with mode='json' to get JSON-serializable output
         return obj.model_dump(mode='json')
+
+    # Handle UUID objects
+    if isinstance(obj, UUID):
+        return str(obj)
 
     # Handle datetime objects
     if isinstance(obj, datetime):

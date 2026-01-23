@@ -17,7 +17,7 @@ class ClientBase(BaseModel):
 
 
 class ClientCreate(ClientBase):
-    company_id: UUID  # required
+    company_id: Optional[UUID] = None  # Optional - will be set from authenticated user context
     advisor_id: Optional[UUID] = None
     custom_field_values: Optional[List["ClientCustomFieldValueInput"]] = None
 
