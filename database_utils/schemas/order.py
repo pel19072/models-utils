@@ -14,22 +14,25 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     order_items: List[OrderItemInput]
-    generation_date: Optional[datetime] = None  # Allow setting due date for manually created orders
+    due_date: Optional[datetime] = None  # Optional due date for manually created orders
 
 class OrderUpdate(BaseModel):
     total: Optional[int] = None
     paid: Optional[bool] = None
     client_id: Optional[UUID] = None
     order_items: Optional[List[OrderItemInput]] = None
+    due_date: Optional[datetime] = None
 
 class OrderOut(OrderBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    created_at: datetime
+    due_date: Optional[datetime] = None
+    payment_date: Optional[datetime] = None
     total: int
     paid: bool
     recurring_order_id: Optional[UUID] = None
-    generation_date: Optional[datetime] = None
     client_id: UUID
     client: Optional[ClientOut]
     company_id: UUID
@@ -41,22 +44,24 @@ class OrderOut(OrderBase):
     def generation_period(self) -> Optional[str]:
         """
         Compute a human-readable period label for recurring orders.
-        Returns None if this is not a recurring order or if generation_date is not set.
+        Returns None if this is not a recurring order.
+        Uses the due_date to determine the period.
         """
-        if not self.generation_date or not self.recurring_order:
+        if not self.recurring_order or not self.due_date:
             return None
 
         recurrence = self.recurring_order.recurrence
-        gen_date = self.generation_date
+        # For recurring orders, the due_date represents the end of the billing period
+        period_date = self.due_date
 
         if recurrence == "MONTHLY":
-            return f"{calendar.month_name[gen_date.month]} {gen_date.year}"
+            return f"{calendar.month_name[period_date.month]} {period_date.year}"
         elif recurrence == "WEEKLY":
-            week_num = gen_date.isocalendar()[1]
-            return f"Week {week_num} {gen_date.year}"
+            week_num = period_date.isocalendar()[1]
+            return f"Week {week_num} {period_date.year}"
         elif recurrence == "YEARLY":
-            return f"{gen_date.year}"
+            return f"{period_date.year}"
         elif recurrence == "DAILY":
-            return gen_date.strftime("%B %d, %Y")
+            return period_date.strftime("%B %d, %Y")
         else:
-            return gen_date.strftime("%B %d, %Y")
+            return period_date.strftime("%B %d, %Y")
