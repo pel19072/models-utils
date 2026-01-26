@@ -191,9 +191,9 @@ def seed_rbac_data(connection: Connection) -> None:
 
         # SALES: CRUD on clients, orders, recurring orders, read on products and dashboard
         sales_permission_names = [
-            'clients.create', 'clients.read', 'clients.update', 'clients.delete',
-            'orders.create', 'orders.read', 'orders.update', 'orders.delete',
-            'recurring_orders.create', 'recurring_orders.read', 'recurring_orders.update', 'recurring_orders.delete',
+            'clients.create', 'clients.read', 'clients.update',
+            'orders.create', 'orders.read', 'orders.update',
+            'recurring_orders.create', 'recurring_orders.read', 'recurring_orders.update',
             'products.read',
             'dashboard.read'
         ]
