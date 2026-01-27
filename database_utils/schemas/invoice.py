@@ -29,6 +29,7 @@ class InvoiceOut(InvoiceBase):
     created_at: datetime
     company_id: UUID
     order_id: UUID
+    is_valid: bool = True
 
     class ConfigDict:
         from_attributes = True
