@@ -156,6 +156,7 @@ class Invoice(Base):
     tax = Column(Integer, nullable=False)
     total = Column(Integer, nullable=False)
     details = Column(JSON, nullable=False)
+    is_valid = Column(Boolean, nullable=False, default=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)

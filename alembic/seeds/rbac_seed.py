@@ -64,6 +64,7 @@ def seed_rbac_data(connection: Connection) -> None:
             {"name": "orders.read", "resource": "orders", "action": "read", "description": "View order information"},
             {"name": "orders.update", "resource": "orders", "action": "update", "description": "Update order information"},
             {"name": "orders.delete", "resource": "orders", "action": "delete", "description": "Delete orders"},
+            {"name": "orders.revert_payment", "resource": "orders", "action": "revert_payment", "description": "Revert order payment and invalidate invoice (ADMIN only)"},
 
             # Product permissions
             {"name": "products.create", "resource": "products", "action": "create", "description": "Create new products"},
@@ -168,10 +169,11 @@ def seed_rbac_data(connection: Connection) -> None:
 
         logger.info(f"✓ ADMIN role assigned {len(admin_permissions)} permissions")
 
-        # MANAGER: All permissions except roles, permissions, and company settings
+        # MANAGER: All permissions except roles, permissions, company settings, and revert_payment
         manager_permissions = connection.execute(
             text(
-                "SELECT id FROM permission WHERE resource NOT IN ('roles', 'permissions', 'company')"
+                "SELECT id FROM permission WHERE resource NOT IN ('roles', 'permissions', 'company') "
+                "AND name != 'orders.revert_payment'"
             )
         ).fetchall()
 
