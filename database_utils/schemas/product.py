@@ -5,7 +5,7 @@ from uuid import UUID
 
 class ProductBase(BaseModel):
     name: str
-    price: int
+    price: float
     description: str
     stock: int
 
@@ -16,7 +16,7 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
-    price: Optional[int] = None
+    price: Optional[float] = None
     description: Optional[str] = None
     stock: Optional[int] = None
 

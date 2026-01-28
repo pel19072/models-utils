@@ -6,9 +6,9 @@ from uuid import UUID
 
 class InvoiceBase(BaseModel):
     issue_date: datetime
-    subtotal: int
-    tax: int
-    total: int
+    subtotal: float
+    tax: float
+    total: float
     details: dict
 
 
@@ -18,9 +18,9 @@ class InvoiceCreate(InvoiceBase):
 
 class InvoiceUpdate(BaseModel):
     issue_date: Optional[datetime] = None
-    subtotal: Optional[int] = None
-    tax: Optional[int] = None
-    total: Optional[int] = None
+    subtotal: Optional[float] = None
+    tax: Optional[float] = None
+    total: Optional[float] = None
     details: Optional[dict] = None
 
 

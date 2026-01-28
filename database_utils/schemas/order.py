@@ -17,7 +17,7 @@ class OrderCreate(OrderBase):
     due_date: Optional[datetime] = None  # Optional due date for manually created orders
 
 class OrderUpdate(BaseModel):
-    total: Optional[int] = None
+    total: Optional[float] = None
     paid: Optional[bool] = None
     client_id: Optional[UUID] = None
     order_items: Optional[List[OrderItemInput]] = None
@@ -30,7 +30,7 @@ class OrderOut(OrderBase):
     created_at: datetime
     due_date: Optional[datetime] = None
     payment_date: Optional[datetime] = None
-    total: int
+    total: float
     paid: bool
     recurring_order_id: Optional[UUID] = None
     client_id: UUID

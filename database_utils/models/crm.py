@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -63,7 +63,7 @@ class Product(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     name = Column(String, nullable=False)
-    price = Column(Integer, nullable=False)
+    price = Column(Float, nullable=False)
     description = Column(String, nullable=False)
     stock = Column(Integer, nullable=False)
 
@@ -117,7 +117,7 @@ class Order(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     due_date = Column(DateTime, nullable=True)  # When the order is due (optional for regular orders, calculated for recurring)
     payment_date = Column(DateTime, nullable=True)  # When the order was paid (automatically set when paid=True)
-    total = Column(Integer, nullable=False)
+    total = Column(Float, nullable=False)
     paid = Column(Boolean, nullable=False)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
@@ -152,9 +152,9 @@ class Invoice(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     issue_date = Column(DateTime, nullable=False)
-    subtotal = Column(Integer, nullable=False)
-    tax = Column(Integer, nullable=False)
-    total = Column(Integer, nullable=False)
+    subtotal = Column(Float, nullable=False)
+    tax = Column(Float, nullable=False)
+    total = Column(Float, nullable=False)
     details = Column(JSON, nullable=False)
     is_valid = Column(Boolean, nullable=False, default=True)
 
