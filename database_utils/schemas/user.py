@@ -4,6 +4,15 @@ from typing import Optional, List
 from uuid import UUID
 
 
+class RoleSimple(BaseModel):
+    """Simple role schema for user responses"""
+    id: UUID
+    name: str
+
+    class ConfigDict:
+        from_attributes = True
+
+
 class UserBase(BaseModel):
     """Base user schema without legacy role/admin fields"""
     name: str
@@ -33,6 +42,7 @@ class UserOut(UserBase):
     id: UUID
     company_id: Optional[UUID] = None
     is_super_admin: Optional[bool] = False
+    active: bool = True
 
     class ConfigDict:
         from_attributes = True
@@ -40,7 +50,7 @@ class UserOut(UserBase):
 
 class UserWithRoles(UserOut):
     """Extended user model with role details"""
-    roles: List = []
+    roles: List[RoleSimple] = []
 
     class ConfigDict:
         from_attributes = True
