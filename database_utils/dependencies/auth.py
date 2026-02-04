@@ -8,17 +8,19 @@ This module provides reusable dependency functions for:
 - Role-based access control (RBAC)
 - Admin and super admin verification
 """
+from __future__ import annotations
 
 import logging
 import uuid
-from typing import List, Callable
+from typing import List, Callable, TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from database_utils.utils.jwt_utils import decode_token
-from database_utils.models.auth import User
 from database_utils.dependencies.db import get_db
+
+if TYPE_CHECKING:
+    from database_utils.models.auth import User
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -107,7 +109,7 @@ def get_token_from_header(request: Request) -> str:
 async def get_current_user(
     request: Request,
     db: Session = Depends(get_db)
-) -> User:
+) -> "User":
     """
     Dependency to get the current authenticated user.
 
@@ -123,6 +125,9 @@ async def get_current_user(
     Raises:
         HTTPException: If token is invalid or user not found
     """
+    from database_utils.utils.jwt_utils import decode_token
+    from database_utils.models.auth import User
+
     logger.info(
         "Authenticating user",
         extra={
@@ -242,8 +247,8 @@ async def get_current_user(
 
 
 async def get_admin_user(
-    user: User = Depends(get_current_user),
-) -> User:
+    user: "User" = Depends(get_current_user),
+) -> "User":
     """
     Dependency to verify the current user has admin privileges.
 
@@ -298,8 +303,8 @@ async def get_admin_user(
 
 
 async def get_super_admin(
-    user: User = Depends(get_current_user),
-) -> User:
+    user: "User" = Depends(get_current_user),
+) -> "User":
     """
     Dependency to verify the current user is a super admin.
 
@@ -365,7 +370,7 @@ async def get_super_admin(
 
 
 async def get_company_id(
-    user: User = Depends(get_current_user),
+    user: "User" = Depends(get_current_user),
 ) -> int:
     """
     Get the company ID of the authenticated user.
@@ -414,7 +419,7 @@ def require_roles(allowed_roles: List[str]) -> Callable:
         extra={"allowed_roles": allowed_roles}
     )
 
-    async def role_checker(user: User = Depends(get_current_user)) -> User:
+    async def role_checker(user: "User" = Depends(get_current_user)) -> "User":
         """
         Inner dependency function that checks user role.
 

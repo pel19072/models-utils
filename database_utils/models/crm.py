@@ -4,7 +4,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database_utils.database import Base
-from database_utils.utils.timezone_utils import now_gt
+from ..utils.timezone_utils import now_gt
 
 from datetime import datetime
 import enum

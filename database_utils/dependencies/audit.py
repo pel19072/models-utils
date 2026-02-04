@@ -6,12 +6,15 @@ This module provides dependencies to capture audit-related information
 like user ID and IP address from requests, making it easy to add
 comprehensive audit logging to any endpoint.
 """
+from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from fastapi import Request, Depends
-from database_utils.models.auth import User
 from database_utils.dependencies.auth import get_current_user
+
+if TYPE_CHECKING:
+    from database_utils.models.auth import User
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -29,7 +32,7 @@ class AuditContext:
         self,
         user_id: Optional[int],
         ip_address: Optional[str],
-        user: Optional[User] = None
+        user: Optional["User"] = None
     ):
         """
         Initialize audit context.
@@ -89,7 +92,7 @@ def get_client_ip(request: Request) -> Optional[str]:
 
 async def get_audit_context(
     request: Request,
-    user: User = Depends(get_current_user)
+    user: "User" = Depends(get_current_user)
 ) -> AuditContext:
     """
     Dependency to get audit context for authenticated endpoints.
