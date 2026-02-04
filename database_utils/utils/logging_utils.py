@@ -18,6 +18,7 @@ from contextvars import ContextVar
 
 from fastapi import Request
 from sqlalchemy.orm import Session
+from database_utils.utils.timezone_utils import now_gt
 
 # Context variables for request-scoped data
 request_id_context: ContextVar[str] = ContextVar('request_id', default='')
@@ -35,7 +36,7 @@ class StructuredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
         log_data = {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': now_gt().isoformat(),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
@@ -87,7 +88,7 @@ class SimpleFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record in a readable format."""
-        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = now_gt().strftime('%Y-%m-%d %H:%M:%S')
 
         # Build context string
         context_parts = []

@@ -11,6 +11,12 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 import logging
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from database_utils.utils.timezone_utils import now_gt
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +208,7 @@ def seed_tier_data(connection: Connection) -> None:
                     "VALUES (gen_random_uuid(), :created_at, :name, :price, :billing_cycle, :features, :stripe_price_id, :is_active)"
                 ),
                 {
-                    'created_at': datetime.utcnow(),
+                    'created_at': now_gt(),
                     'name': tier_name,
                     'price': tier_data['price'],
                     'billing_cycle': tier_data['billing_cycle'],

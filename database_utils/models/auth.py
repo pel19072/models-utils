@@ -4,6 +4,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database_utils.database import Base
+from database_utils.utils.timezone_utils import now_gt
 
 from datetime import datetime
 import uuid
@@ -36,7 +37,7 @@ class Tier(Base):
     __tablename__ = "tier"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     name = Column(String, nullable=False, unique=True)
 
     # Billing fields
@@ -55,7 +56,7 @@ class Company(Base):
     __tablename__ = "company"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     name = Column(String, nullable=False, unique=True)
     email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
@@ -83,7 +84,7 @@ class Permission(Base):
     __tablename__ = "permission"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     name = Column(String, nullable=False, unique=True)  # e.g., "clients.read", "orders.create"
     resource = Column(String, nullable=False)  # e.g., "clients", "orders", "products"
     action = Column(String, nullable=False)  # e.g., "create", "read", "update", "delete"
@@ -97,7 +98,7 @@ class Role(Base):
     __tablename__ = "role"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     name = Column(String, nullable=False, unique=True)  # e.g., "ADMIN", "MANAGER", "SALES"
     description = Column(Text, nullable=True)
     is_system = Column(Boolean, default=False)  # System roles (ADMIN, USER) cannot be deleted
@@ -111,7 +112,7 @@ class User(Base):
     __tablename__ = "user"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     age = Column(Integer, nullable=False)
@@ -132,7 +133,7 @@ class Notification(Base):
     __tablename__ = "notification"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     status = Column(String, nullable=False, default="PENDING")  # PENDING, ACCEPTED, REJECTED
 
     # --- [INIT] Possible User data: Add User Fields ---
@@ -157,7 +158,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     action = Column(String, nullable=False)  # e.g., "company.disable", "tier.create"
     resource_type = Column(String, nullable=False)  # e.g., "company", "tier", "user"
@@ -174,7 +175,7 @@ class UserInvitation(Base):
     __tablename__ = "user_invitation"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
     expires_at = Column(DateTime, nullable=False)  # 7 days from creation
     email = Column(String, nullable=False)
     token = Column(String, nullable=False, unique=True)  # UUID for invitation link
@@ -198,8 +199,8 @@ class Subscription(Base):
     __tablename__ = "subscription"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
+    updated_at = Column(DateTime, nullable=False, default=now_gt, onupdate=now_gt)
 
     # Subscription details
     status = Column(String, nullable=False, default="ACTIVE")  # ACTIVE, PAST_DUE, CANCELED, TRIALING
@@ -229,8 +230,8 @@ class PaymentMethod(Base):
     __tablename__ = "payment_method"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
+    updated_at = Column(DateTime, nullable=False, default=now_gt, onupdate=now_gt)
 
     # Payment method details
     type = Column(String, nullable=False)  # "card", "bank_account"
@@ -256,7 +257,7 @@ class BillingInvoice(Base):
     __tablename__ = "billing_invoice"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=now_gt)
 
     # Invoice details
     invoice_number = Column(String, nullable=False, unique=True)

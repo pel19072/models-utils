@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from database_utils.schemas.user import UserOut
+from database_utils.utils.timezone_utils import now_gt
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -21,11 +22,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def create_token(
-    data: dict, 
+    data: dict,
     expires_delta: Optional[timedelta] = None
 ):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = now_gt() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 

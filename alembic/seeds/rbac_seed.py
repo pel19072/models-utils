@@ -11,6 +11,12 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 import logging
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from database_utils.utils.timezone_utils import now_gt
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +117,7 @@ def seed_rbac_data(connection: Connection) -> None:
                     "VALUES (gen_random_uuid(), :created_at, :name, :resource, :action, :description)"
                 ),
                 {
-                    'created_at': datetime.utcnow(),
+                    'created_at': now_gt(),
                     'name': perm['name'],
                     'resource': perm['resource'],
                     'action': perm['action'],
@@ -138,7 +144,7 @@ def seed_rbac_data(connection: Connection) -> None:
                     "RETURNING id"
                 ),
                 {
-                    'created_at': datetime.utcnow(),
+                    'created_at': now_gt(),
                     'name': role_data['name'],
                     'description': role_data['description'],
                     'is_system': role_data['is_system']
