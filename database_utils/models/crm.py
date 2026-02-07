@@ -38,7 +38,7 @@ class Client(Base):
     __tablename__ = "client"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     name = Column(String, nullable=False)
     tax_id = Column(String, nullable=True)
     address = Column(String, nullable=True)
@@ -62,7 +62,7 @@ class Product(Base):
     __tablename__ = "product"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     description = Column(String, nullable=False)
@@ -79,11 +79,11 @@ class RecurringOrder(Base):
     __tablename__ = "recurring_order"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, default=now_gt, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_gt, nullable=False)
     recurrence = Column(Enum(RecurrenceEnum), nullable=False)
-    recurrence_end = Column(DateTime, nullable=True)
-    last_generated_at = Column(DateTime, nullable=True)
-    next_generation_date = Column(DateTime, nullable=True)
+    recurrence_end = Column(DateTime(timezone=True), nullable=True)
+    last_generated_at = Column(DateTime(timezone=True), nullable=True)
+    next_generation_date = Column(DateTime(timezone=True), nullable=True)
     status = Column(Enum(RecurringOrderStatus), nullable=False, default=RecurringOrderStatus.ACTIVE, server_default='ACTIVE')
 
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
@@ -100,7 +100,7 @@ class RecurringOrderItem(Base):
     __tablename__ = "recurring_order_item"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, default=now_gt, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_gt, nullable=False)
 
     recurring_order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("recurring_order.id", ondelete="CASCADE"))
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("product.id", ondelete="CASCADE"))
@@ -115,9 +115,9 @@ class Order(Base):
     __tablename__ = "order"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
-    due_date = Column(DateTime, nullable=True)  # When the order is due (optional for regular orders, calculated for recurring)
-    payment_date = Column(DateTime, nullable=True)  # When the order was paid (automatically set when paid=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    due_date = Column(DateTime(timezone=True), nullable=True)  # When the order is due (optional for regular orders, calculated for recurring)
+    payment_date = Column(DateTime(timezone=True), nullable=True)  # When the order was paid (automatically set when paid=True)
     total = Column(Float, nullable=False)
     paid = Column(Boolean, nullable=False)
 
@@ -137,7 +137,7 @@ class OrderItem(Base):
     __tablename__ = "order_item"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("product.id", ondelete="CASCADE"), nullable=False)
     quantity = Column(Integer, nullable=False)
@@ -151,8 +151,8 @@ class Invoice(Base):
     __tablename__ = "invoice"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
-    issue_date = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    issue_date = Column(DateTime(timezone=True), nullable=False)
     subtotal = Column(Float, nullable=False)
     tax = Column(Float, nullable=False)
     total = Column(Float, nullable=False)
@@ -171,7 +171,7 @@ class CustomFieldDefinition(Base):
     __tablename__ = "custom_field_definition"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
 
     field_name = Column(String, nullable=False)  # The human-readable label
     field_key = Column(String, nullable=False)  # The unique identifier (e.g., "ip_address")
@@ -190,7 +190,7 @@ class ClientCustomFieldValue(Base):
     __tablename__ = "client_custom_field_value"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=now_gt)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
 
     value = Column(String, nullable=True)  # All types stored as string
 
