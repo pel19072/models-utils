@@ -9,6 +9,7 @@ from .crm import (
     Product,
     Order,
     OrderItem,
+    OrderStatus,
     Invoice,
     CustomFieldDefinition,
     ClientCustomFieldValue
@@ -25,6 +26,7 @@ __all__ = [
     "Product",
     "Order",
     "OrderItem",
+    "OrderStatus",
     "Invoice",
     "CustomFieldDefinition",
     "ClientCustomFieldValue"

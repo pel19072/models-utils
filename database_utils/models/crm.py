@@ -24,6 +24,11 @@ class RecurringOrderStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class OrderStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    CANCELLED = "CANCELLED"
+
+
 class CustomFieldType(str, enum.Enum):
     TEXT = "TEXT"
     NUMBER = "NUMBER"
@@ -120,6 +125,7 @@ class Order(Base):
     payment_date = Column(DateTime(timezone=True), nullable=True)  # When the order was paid (automatically set when paid=True)
     total = Column(Float, nullable=False)
     paid = Column(Boolean, nullable=False)
+    status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.ACTIVE, server_default='ACTIVE')
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)

@@ -1,6 +1,7 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
+from enum import Enum
 from pydantic import BaseModel, computed_field, Field, ConfigDict
 from .order_item import OrderItemInput, OrderItemOut
 from .client import ClientOut
@@ -8,6 +9,11 @@ import calendar
 
 if TYPE_CHECKING:
     from .recurring_order import RecurringOrderOut
+
+
+class OrderStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    CANCELLED = "CANCELLED"
 
 class OrderBase(BaseModel):
     client_id: Optional[UUID]
@@ -22,6 +28,7 @@ class OrderUpdate(BaseModel):
     client_id: Optional[UUID] = None
     order_items: Optional[List[OrderItemInput]] = None
     due_date: Optional[datetime] = None
+    status: Optional[OrderStatus] = None
 
 class OrderOut(OrderBase):
     model_config = ConfigDict(from_attributes=True)
@@ -32,6 +39,7 @@ class OrderOut(OrderBase):
     payment_date: Optional[datetime] = None
     total: float
     paid: bool
+    status: OrderStatus
     recurring_order_id: Optional[UUID] = None
     client_id: UUID
     client: Optional[ClientOut]
