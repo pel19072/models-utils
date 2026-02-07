@@ -174,6 +174,7 @@ class Permissions:
     ORDERS_READ = "orders.read"
     ORDERS_UPDATE = "orders.update"
     ORDERS_DELETE = "orders.delete"
+    ORDERS_CHANGE_STATUS = "orders.change_status"
     ORDERS_ALL = "orders.*"
 
     # Product permissions

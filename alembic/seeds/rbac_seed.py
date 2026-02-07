@@ -71,6 +71,7 @@ def seed_rbac_data(connection: Connection) -> None:
             {"name": "orders.update", "resource": "orders", "action": "update", "description": "Update order information"},
             {"name": "orders.delete", "resource": "orders", "action": "delete", "description": "Delete orders"},
             {"name": "orders.revert_payment", "resource": "orders", "action": "revert_payment", "description": "Revert order payment and invalidate invoice (ADMIN only)"},
+            {"name": "orders.change_status", "resource": "orders", "action": "change_status", "description": "Change order status (cancel/activate) - ADMIN only"},
 
             # Product permissions
             {"name": "products.create", "resource": "products", "action": "create", "description": "Create new products"},
