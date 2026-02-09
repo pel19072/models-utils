@@ -52,6 +52,7 @@ class RecurringOrderBase(BaseModel):
 
 class RecurringOrderCreate(RecurringOrderBase):
     template_items: List[RecurringOrderItemInput]
+    generate_initial_order: bool = False
 
 
 class RecurringOrderUpdate(BaseModel):
@@ -73,6 +74,14 @@ class RecurringOrderOut(RecurringOrderBase):
     status: RecurringOrderStatus
     client: Optional[ClientOut]
     template_items: List[RecurringOrderItemOut]
+
+
+class RecurringOrderCreateResponse(BaseModel):
+    """Response when creating a recurring order, optionally including the initial generated order."""
+    model_config = ConfigDict(from_attributes=True)
+
+    recurring_order: RecurringOrderOut
+    initial_order: Optional["OrderOut"] = None
 
 
 class OrderGenerationResponse(BaseModel):
