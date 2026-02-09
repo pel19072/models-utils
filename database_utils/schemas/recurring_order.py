@@ -83,3 +83,33 @@ class OrderGenerationResponse(BaseModel):
     generation_for_date: datetime
     generation_period: str  # Human-readable period (e.g., "February 2026", "Week 7 2026")
     next_generation_date: Optional[datetime] = None
+
+
+# ===================== Gap Detection & Regeneration =====================
+class MissingPeriod(BaseModel):
+    """A period where an order should have been generated but wasn't."""
+    period_date: datetime      # Start date of the missing period
+    period_label: str          # Human-readable label (e.g., "March 2026")
+    expected_due_date: datetime  # What the due_date would be for this period
+
+
+class GeneratedOrdersWithGaps(BaseModel):
+    """Response with orders and detected missing periods."""
+    orders: List["OrderOut"]
+    missing_periods: List[MissingPeriod]
+    total_expected: int
+    total_generated: int
+    total_missing: int
+
+
+class RegeneratePeriodRequest(BaseModel):
+    """Request to regenerate orders for specific missing periods."""
+    period_dates: List[datetime]
+
+
+class RegeneratePeriodResponse(BaseModel):
+    """Response after regenerating orders for missing periods."""
+    generated_orders: List["OrderOut"]
+    failed_periods: List[MissingPeriod]
+    success_count: int
+    failure_count: int
