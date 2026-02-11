@@ -1,64 +1,45 @@
-# Common Library
+# models-utils
 
-## Purpose
-Shared utilities, types, and functions used across all backend API projects.
+Shared Python library containing SQLAlchemy models, Pydantic schemas, and utilities used by both `backend-erp` and `auth-erp`.
 
-## Structure
-```
-.
-├── alembic
-│   ├── README
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions/
-├── alembic.ini
-├── database_utils
-│   ├── __init__.py
-│   ├── containers
-│   │   ├── __init__.py
-│   │   └── jwt.py
-│   ├── database.py
-│   ├── migrations.py
-│   ├── models
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   └── crm.py
-│   ├── schemas
-│   │   ├── __init__.py
-│   │   ├── client.py
-│   │   ├── company.py
-│   │   ├── notification.py
-│   │   ├── order.py
-│   │   ├── order_item.py
-│   │   ├── product.py
-│   │   ├── recurring_order.py
-│   │   ├── requests.py
-│   │   ├── tier.py
-│   │   └── user.py
-│   └── utils
-│       ├── __init__.py
-│       ├── error_handling.py
-│       ├── exception_handlers.py
-│       ├── jwt_utils.py
-│       ├── password.py
-│       └── router_factory.py
-├── pyproject.toml
-└── setup.cfg
+Published to GitHub: `git+https://github.com/pel19072/models-utils.git@main`
+
+## This is a critical dependency — changes affect both backend services.
+
+## Commands
+
+```bash
+pip install -e .     # Install in editable mode for local dev
 ```
 
-## Usage
-This library is imported by:
-- backend-erp
-- auth-erp
+## Migration Workflow (Alembic)
 
-## Guidelines
+```bash
+cd models-utils
+alembic revision --autogenerate -m "description"
+alembic upgrade head
+```
+
+## After Changing Models
+
+You must update both backend services:
+```bash
+cd backend-erp  # then repeat for auth-erp
+pip uninstall database-utils -y
+pip install git+https://github.com/pel19072/models-utils.git@main
+pip freeze > requirements.txt
+```
+
+## Key Directories
+
+- `database_utils/models/` — SQLAlchemy models (`auth.py`: User, Company, Tier; `crm.py`: Client, Order, Product, RecurringOrder)
+- `database_utils/schemas/` — Pydantic request/response schemas
+- `database_utils/utils/` — Shared utilities (JWT, error handling, password hashing, CRUD router factory)
+- `alembic/` — Database migration scripts
+
+## Conventions
+
+- Always increment version in `pyproject.toml` for non-trivial changes
+- Document breaking changes
 - All exports must be well-typed
-- Changes here affect all consuming projects
-- Document breaking changes clearly
-
-## Instructions for Claude
-- This is a critical shared dependency
-- Before making changes, consider impact on all consumers
-- Always update version number for changes
-- This is a public Python library deployed into my GitHub Account at the repository https://github.com/pel19072/models-utils. So take that into account when updating the requirements.txt of the dependant projects
-- Run tests from consuming projects after changes
+- Test changes from consuming projects (`backend-erp`, `auth-erp`) before publishing
