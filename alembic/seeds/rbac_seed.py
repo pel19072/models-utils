@@ -109,6 +109,18 @@ def seed_rbac_data(connection: Connection) -> None:
 
             # Dashboard permissions
             {"name": "dashboard.read", "resource": "dashboard", "action": "read", "description": "View dashboard statistics"},
+
+            # Task permissions
+            {"name": "tasks.create", "resource": "tasks", "action": "create", "description": "Create new tasks"},
+            {"name": "tasks.read", "resource": "tasks", "action": "read", "description": "View task information"},
+            {"name": "tasks.update", "resource": "tasks", "action": "update", "description": "Update task information"},
+            {"name": "tasks.delete", "resource": "tasks", "action": "delete", "description": "Delete tasks"},
+
+            # Task state permissions
+            {"name": "task_states.create", "resource": "task_states", "action": "create", "description": "Create task states/columns"},
+            {"name": "task_states.read", "resource": "task_states", "action": "read", "description": "View task states/columns"},
+            {"name": "task_states.update", "resource": "task_states", "action": "update", "description": "Update task states/columns"},
+            {"name": "task_states.delete", "resource": "task_states", "action": "delete", "description": "Delete task states/columns"},
         ]
 
         for perm in permissions_data:
@@ -204,7 +216,9 @@ def seed_rbac_data(connection: Connection) -> None:
             'orders.create', 'orders.read', 'orders.update',
             'recurring_orders.create', 'recurring_orders.read', 'recurring_orders.update',
             'products.read',
-            'dashboard.read'
+            'dashboard.read',
+            'tasks.create', 'tasks.read', 'tasks.update', 'tasks.delete',
+            'task_states.read',
         ]
 
         sales_count = 0
@@ -231,7 +245,8 @@ def seed_rbac_data(connection: Connection) -> None:
 
         # USER: Read-only permissions
         user_permission_names = [
-            'clients.read', 'orders.read', 'products.read', 'recurring_orders.read', 'dashboard.read'
+            'clients.read', 'orders.read', 'products.read', 'recurring_orders.read', 'dashboard.read',
+            'tasks.read', 'task_states.read',
         ]
 
         user_count = 0

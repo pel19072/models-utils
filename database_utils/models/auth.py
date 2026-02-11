@@ -78,6 +78,8 @@ class Company(Base):
     recurring_orders = relationship("RecurringOrder", back_populates="company", cascade="all, delete-orphan")
     subscription = relationship("Subscription", back_populates="company", uselist=False, cascade="all, delete-orphan")
     payment_methods = relationship("PaymentMethod", back_populates="company", cascade="all, delete-orphan")
+    task_states = relationship("TaskState", back_populates="company", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):

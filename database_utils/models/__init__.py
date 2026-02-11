@@ -12,7 +12,11 @@ from .crm import (
     OrderStatus,
     Invoice,
     CustomFieldDefinition,
-    ClientCustomFieldValue
+    ClientCustomFieldValue,
+    TaskState,
+    TaskStateColor,
+    Task,
+    task_assignee,
 )
 
 # Import all models here so Alembic can detect them
@@ -29,5 +33,9 @@ __all__ = [
     "OrderStatus",
     "Invoice",
     "CustomFieldDefinition",
-    "ClientCustomFieldValue"
+    "ClientCustomFieldValue",
+    "TaskState",
+    "TaskStateColor",
+    "Task",
+    "task_assignee",
 ]

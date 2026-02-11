@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float, Table
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -37,6 +37,26 @@ class CustomFieldType(str, enum.Enum):
     URL = "URL"
     DATE = "DATE"
     BOOLEAN = "BOOLEAN"
+
+
+class TaskStateColor(str, enum.Enum):
+    GRAY = "GRAY"
+    RED = "RED"
+    ORANGE = "ORANGE"
+    YELLOW = "YELLOW"
+    GREEN = "GREEN"
+    BLUE = "BLUE"
+    PURPLE = "PURPLE"
+    PINK = "PINK"
+
+
+# Association table for many-to-many relationship between Task and User (assignees)
+task_assignee = Table(
+    'task_assignee',
+    Base.metadata,
+    Column('task_id', Uuid, ForeignKey('task.id', ondelete='CASCADE'), primary_key=True),
+    Column('user_id', Uuid, ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+)
 
 
 class Client(Base):
@@ -206,3 +226,42 @@ class ClientCustomFieldValue(Base):
     # Relationships
     client = relationship("Client", back_populates="custom_field_values")
     field_definition = relationship("CustomFieldDefinition", back_populates="client_values")
+
+
+class TaskState(Base):
+    __tablename__ = "task_state"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    color = Column(Enum(TaskStateColor), nullable=False, default=TaskStateColor.GRAY, server_default='GRAY')
+    position = Column(Integer, nullable=False, default=0)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    company = relationship("Company", back_populates="task_states")
+    tasks = relationship("Task", back_populates="task_state", cascade="all, delete-orphan")
+
+
+class Task(Base):
+    __tablename__ = "task"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    position = Column(Integer, nullable=False, default=0)
+    due_date = Column(DateTime(timezone=True), nullable=True)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    task_state_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("task_state.id", ondelete="RESTRICT"), nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="tasks")
+    task_state = relationship("TaskState", back_populates="tasks")
+    creator = relationship("User", foreign_keys=[created_by])
+    assignees = relationship("User", secondary=task_assignee)

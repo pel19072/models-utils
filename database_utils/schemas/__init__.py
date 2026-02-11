@@ -10,6 +10,8 @@ from .product import *
 from .recurring_order import *
 from .requests import *
 from .role import *
+from .task import *
+from .task_state import *
 from .user import *
 
 # Rebuild models with forward references to resolve circular dependencies
