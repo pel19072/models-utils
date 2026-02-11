@@ -12,18 +12,18 @@ from loguru import logger
 load_dotenv()
 
 # Load environment variables with defaults to avoid errors during import
+access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "114400"))  # 1 day in minutes
 refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "604800"))  # 7 days in seconds
 secret_key = os.getenv("SECRET_KEY", "default-secret-key-for-development")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 def create_token(
     data: dict,
     expires_delta: Optional[timedelta] = None
 ):
     to_encode = data.copy()
-    expire = now_gt() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = now_gt() + (expires_delta or timedelta(minutes=access_expire))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
@@ -58,7 +58,7 @@ def create_access_token(usuario):
         "company_id": company_id,
         "is_super_admin": getattr(usuario, 'is_super_admin', False)
     }
-    token = create_token(data, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    token = create_token(data, expires_delta=timedelta(minutes=access_expire))
     logger.info(f"Access token created for user {user_id} with roles {role_names}")
     return token
     
