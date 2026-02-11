@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException, RequestValidationError
 from sqlalchemy.exc import IntegrityError, OperationalError, DataError
 from loguru import logger
-from typing import Dict, Any, Union
 import traceback
 
 from database_utils.utils.logging_utils import (
@@ -219,27 +218,3 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
             }
         }
     )
-
-# Add this to your main.py file:
-"""
-from database_utils.utils.exception_handlers import (
-    http_exception_handler,
-    validation_exception_handler,
-    integrity_error_handler,
-    operational_error_handler,
-    data_error_handler,
-    general_exception_handler
-)
-from fastapi.exceptions import HTTPException, RequestValidationError
-from sqlalchemy.exc import IntegrityError, OperationalError, DataError
-
-app = FastAPI()
-
-# Register exception handlers
-app.add_exception_handler(HTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(IntegrityError, integrity_error_handler)
-app.add_exception_handler(OperationalError, operational_error_handler)
-app.add_exception_handler(DataError, data_error_handler)
-app.add_exception_handler(Exception, general_exception_handler)
-"""

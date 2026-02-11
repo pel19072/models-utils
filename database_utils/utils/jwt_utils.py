@@ -4,7 +4,6 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException
-from fastapi.security import OAuth2PasswordBearer
 from database_utils.schemas.user import UserOut
 from database_utils.utils.timezone_utils import now_gt
 from dotenv import load_dotenv
@@ -14,12 +13,10 @@ load_dotenv()
 
 # Load environment variables with defaults to avoid errors during import
 refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "604800"))  # 7 days in seconds
-access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE", "30"))  # 30 minutes
 secret_key = os.getenv("SECRET_KEY", "default-secret-key-for-development")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def create_token(
     data: dict,
