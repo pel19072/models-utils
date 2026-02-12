@@ -1,5 +1,5 @@
 # schemas/company.py
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -47,5 +47,4 @@ class CompanyUpdate(BaseModel):
 class CompanyOut(CompanyBase):
     id: UUID
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from uuid import UUID
 
@@ -22,8 +22,7 @@ class PaymentMethodOut(BaseModel):
     is_default: bool
     is_active: bool
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaymentMethodSetDefault(BaseModel):

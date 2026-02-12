@@ -1,5 +1,5 @@
 # schemas/client.py
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 
@@ -42,8 +42,7 @@ class ClientOut(ClientBase):
     advisor: Optional[UserOut] = None
     custom_field_values: Optional[List["ClientCustomFieldValueOut"]] = None
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Import at the end to avoid circular imports

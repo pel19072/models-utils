@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
@@ -22,8 +22,7 @@ class InvitationOut(BaseModel):
     company_id: UUID
     invited_by_user_id: Optional[UUID]
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InvitationAccept(BaseModel):

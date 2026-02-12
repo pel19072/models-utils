@@ -1,5 +1,5 @@
 # schemas/permission.py
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from typing import Optional
 from uuid import UUID
 
@@ -36,5 +36,4 @@ class PermissionUpdate(BaseModel):
 class PermissionOut(PermissionBase):
     id: UUID
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

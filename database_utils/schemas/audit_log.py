@@ -1,5 +1,5 @@
 # schemas/audit_log.py
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Any
 from datetime import datetime
 from uuid import UUID
@@ -25,5 +25,4 @@ class AuditLogOut(AuditLogBase):
     created_at: datetime
     user_id: Optional[UUID] = None
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

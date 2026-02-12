@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -18,8 +18,7 @@ class SubscriptionOut(BaseModel):
     company_id: UUID
     stripe_subscription_id: Optional[str]
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubscriptionUpdate(BaseModel):

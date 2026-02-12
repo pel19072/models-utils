@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from enum import Enum
 from uuid import UUID
@@ -24,8 +24,7 @@ class NotificationOut(UserOut):
     status: NotificationStatus
     user_id: Optional[UUID]
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationUpdate(BaseModel):

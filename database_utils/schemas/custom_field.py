@@ -1,5 +1,5 @@
 # schemas/custom_field.py
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -71,8 +71,7 @@ class CustomFieldDefinitionOut(CustomFieldDefinitionBase):
     created_at: datetime
     company_id: UUID
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClientCustomFieldValueBase(BaseModel):
@@ -95,8 +94,7 @@ class ClientCustomFieldValueOut(ClientCustomFieldValueBase):
     field_definition_id: UUID
     field_definition: Optional[CustomFieldDefinitionOut] = None
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # For use in client create/update - simplified version

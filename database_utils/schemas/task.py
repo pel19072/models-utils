@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -9,8 +9,7 @@ class TaskAssigneeSimple(BaseModel):
     name: str
     email: str
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskBase(BaseModel):
@@ -45,8 +44,7 @@ class TaskOut(TaskBase):
     assignees: List[TaskAssigneeSimple] = []
     creator: Optional[TaskAssigneeSimple] = None
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskMove(BaseModel):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -20,8 +20,7 @@ class BillingInvoiceOut(BaseModel):
     manual_payment_note: Optional[str]
     billing_reason: Optional[str]
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ManualPaymentMark(BaseModel):

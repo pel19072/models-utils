@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from uuid import UUID
 from .product import ProductOut
@@ -21,5 +21,4 @@ class OrderItemOut(OrderItemBase):
     id: UUID
     product: Optional[ProductOut]
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

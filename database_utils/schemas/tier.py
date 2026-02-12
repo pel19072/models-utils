@@ -1,5 +1,5 @@
 # schemas/tier.py
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -31,5 +31,4 @@ class TierOut(TierBase):
     created_at: datetime
     stripe_price_id: Optional[str] = None
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
