@@ -80,6 +80,7 @@ class Company(Base):
     payment_methods = relationship("PaymentMethod", back_populates="company", cascade="all, delete-orphan")
     task_states = relationship("TaskState", back_populates="company", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="company", cascade="all, delete-orphan")
+    workflows = relationship("Workflow", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):

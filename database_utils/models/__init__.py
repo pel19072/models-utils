@@ -19,6 +19,19 @@ from .crm import (
     task_assignee,
 )
 
+from .workflow import (
+    Workflow,
+    WorkflowTrigger,
+    WorkflowStep,
+    WorkflowStepEdge,
+    WorkflowExecution,
+    WorkflowStepExecution,
+    WorkflowStatus,
+    TriggerEventType,
+    StepActionType,
+    ExecutionStatus,
+)
+
 # Import all models here so Alembic can detect them
 __all__ = [
     # Auth
@@ -38,4 +51,15 @@ __all__ = [
     "TaskStateColor",
     "Task",
     "task_assignee",
+    # Workflows
+    "Workflow",
+    "WorkflowTrigger",
+    "WorkflowStep",
+    "WorkflowStepEdge",
+    "WorkflowExecution",
+    "WorkflowStepExecution",
+    "WorkflowStatus",
+    "TriggerEventType",
+    "StepActionType",
+    "ExecutionStatus",
 ]

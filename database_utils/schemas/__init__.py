@@ -13,6 +13,7 @@ from .role import *
 from .task import *
 from .task_state import *
 from .user import *
+from .workflow import *
 
 # Rebuild models with forward references to resolve circular dependencies
 from .order import OrderOut

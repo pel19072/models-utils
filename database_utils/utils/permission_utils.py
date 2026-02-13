@@ -216,6 +216,13 @@ class Permissions:
     COMPANY_UPDATE = "company.update"
     COMPANY_ALL = "company.*"
 
+    # Workflow permissions
+    WORKFLOWS_CREATE = "workflows.create"
+    WORKFLOWS_READ = "workflows.read"
+    WORKFLOWS_UPDATE = "workflows.update"
+    WORKFLOWS_DELETE = "workflows.delete"
+    WORKFLOWS_ALL = "workflows.*"
+
     # Dashboard permissions
     DASHBOARD_READ = "dashboard.read"
 
@@ -275,6 +282,12 @@ def get_default_permissions() -> List[dict]:
         {"name": Permissions.PERMISSIONS_READ, "resource": "permissions", "action": "read", "description": "View permission information"},
         {"name": Permissions.PERMISSIONS_UPDATE, "resource": "permissions", "action": "update", "description": "Update permission information"},
         {"name": Permissions.PERMISSIONS_DELETE, "resource": "permissions", "action": "delete", "description": "Delete permissions"},
+
+        # Workflow permissions
+        {"name": Permissions.WORKFLOWS_CREATE, "resource": "workflows", "action": "create", "description": "Create workflows"},
+        {"name": Permissions.WORKFLOWS_READ, "resource": "workflows", "action": "read", "description": "View workflows"},
+        {"name": Permissions.WORKFLOWS_UPDATE, "resource": "workflows", "action": "update", "description": "Update workflows"},
+        {"name": Permissions.WORKFLOWS_DELETE, "resource": "workflows", "action": "delete", "description": "Delete workflows"},
 
         # Company settings permissions
         {"name": Permissions.COMPANY_READ, "resource": "company", "action": "read", "description": "View company settings"},
