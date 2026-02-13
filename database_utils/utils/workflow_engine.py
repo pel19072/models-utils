@@ -355,33 +355,70 @@ def _execute_update_field(
 
     model_class = model_map[resource_type]
 
-    # Determine which resource to update
-    resource_id_source = config.get("resource_id_source", "trigger")
-    if resource_id_source == "trigger":
-        resource_id = context["trigger"]["resource_id"]
-    else:
-        resource_id = config.get("resource_id")
-
-    if not resource_id:
-        raise ValueError("No resource_id resolved for UPDATE_FIELD step")
-
-    entity = db.query(model_class).filter(
-        model_class.id == resource_id,
-        model_class.company_id == company_id,
-    ).first()
-
-    if not entity:
-        raise ValueError(f"{resource_type} {resource_id} not found")
-
     updates = config.get("updates", {})
-    updated_fields = []
-    for field, value in updates.items():
-        if hasattr(entity, field):
-            setattr(entity, field, value)
-            updated_fields.append(field)
 
-    db.flush()
-    return {"updated_fields": updated_fields, "resource_id": str(resource_id)}
+    # Determine which resource(s) to update
+    resource_id_source = config.get("resource_id_source", "trigger")
+
+    if resource_id_source == "match_field":
+        # Match by relationship: update ALL records where match_field == trigger resource_id
+        match_field = config.get("match_field")
+        if not match_field:
+            raise ValueError("match_field is required when resource_id_source is 'match_field'")
+
+        trigger_resource_id = context["trigger"]["resource_id"]
+        if not hasattr(model_class, match_field):
+            raise ValueError(f"{resource_type} has no field '{match_field}'")
+
+        entities = db.query(model_class).filter(
+            getattr(model_class, match_field) == trigger_resource_id,
+            model_class.company_id == company_id,
+        ).all()
+
+        updated_ids = []
+        updated_fields = []
+        for entity in entities:
+            for field, value in updates.items():
+                if hasattr(entity, field):
+                    setattr(entity, field, value)
+                    if field not in updated_fields:
+                        updated_fields.append(field)
+            updated_ids.append(str(entity.id))
+
+        db.flush()
+        return {
+            "updated_fields": updated_fields,
+            "updated_count": len(entities),
+            "updated_ids": updated_ids,
+            "match_field": match_field,
+        }
+
+    else:
+        # Single-record mode: trigger or custom resource_id
+        if resource_id_source == "trigger":
+            resource_id = context["trigger"]["resource_id"]
+        else:
+            resource_id = config.get("resource_id")
+
+        if not resource_id:
+            raise ValueError("No resource_id resolved for UPDATE_FIELD step")
+
+        entity = db.query(model_class).filter(
+            model_class.id == resource_id,
+            model_class.company_id == company_id,
+        ).first()
+
+        if not entity:
+            raise ValueError(f"{resource_type} {resource_id} not found")
+
+        updated_fields = []
+        for field, value in updates.items():
+            if hasattr(entity, field):
+                setattr(entity, field, value)
+                updated_fields.append(field)
+
+        db.flush()
+        return {"updated_fields": updated_fields, "resource_id": str(resource_id)}
 
 
 def _execute_create_entity(
