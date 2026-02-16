@@ -1,5 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from uuid import UUID
 
@@ -32,3 +32,20 @@ class InvoiceOut(InvoiceBase):
     is_valid: bool = True
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BulkOrderIdsRequest(BaseModel):
+    order_ids: List[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class BulkOperationItemResult(BaseModel):
+    order_id: UUID
+    success: bool
+    invoice_id: Optional[UUID] = None
+    error: Optional[str] = None
+
+
+class BulkOperationResponse(BaseModel):
+    succeeded: int
+    failed: int
+    results: List[BulkOperationItemResult]
