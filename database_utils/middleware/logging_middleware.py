@@ -26,6 +26,7 @@ from database_utils.utils.logging_utils import (
 )
 from database_utils.utils.jwt_utils import decode_token
 from database_utils.utils.permission_utils import PermissionChecker
+from database_utils.utils.telemetry_utils import set_request_span_attributes
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -100,6 +101,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             user_roles=user_roles,
             user_permissions=user_permissions
         )
+
+        # Promote identity context to the active OTEL span for Honeycomb filtering.
+        # OTEL ASGI middleware runs outermost, so the HTTP span is already active here.
+        set_request_span_attributes()
 
         # Get client information
         client_host = request.client.host if request.client else "unknown"
