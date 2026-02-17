@@ -7,6 +7,7 @@ from database_utils.database import Base
 from ..utils.timezone_utils import now_gt
 
 from datetime import datetime
+from typing import Optional
 import uuid
 
 # Association table for many-to-many relationship between Role and Permission
@@ -146,6 +147,7 @@ class Notification(Base):
     email = Column(String, nullable=False, unique=True)
     age = Column(Integer, nullable=False)
     password_hash = Column(String, nullable=False)
+    pending_role_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # --- [END] Possible User data: Add User Fields ---
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
