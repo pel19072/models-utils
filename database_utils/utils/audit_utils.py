@@ -258,3 +258,31 @@ def log_custom_operation(
         details=details,
         ip_address=ip_address
     )
+
+
+def serialize_for_audit(data: dict) -> dict:
+    """Convert a model column dict to JSON-safe types for audit logging.
+
+    Handles UUID, datetime, date, and Decimal types that are not
+    JSON-serializable by default.
+
+    Args:
+        data: Dictionary of model column values to serialize.
+
+    Returns:
+        A new dictionary with all non-JSON-serializable values converted to str.
+    """
+    from uuid import UUID
+    from datetime import datetime, date
+    from decimal import Decimal
+
+    def _convert(v):
+        if isinstance(v, (UUID, datetime, date, Decimal)):
+            return str(v)
+        if isinstance(v, dict):
+            return {k: _convert(val) for k, val in v.items()}
+        if isinstance(v, list):
+            return [_convert(item) for item in v]
+        return v
+
+    return {k: _convert(v) for k, v in data.items()}
