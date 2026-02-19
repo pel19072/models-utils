@@ -101,13 +101,15 @@ async def check_workflow_triggers(
             f"{resource_type}.{event_type} on resource {resource_id}"
         )
 
-        trigger_event = {
+        from database_utils.utils.audit_utils import serialize_for_audit
+
+        trigger_event = serialize_for_audit({
             "resource_type": resource_type,
             "event_type": event_type,
             "resource_id": str(resource_id),
             "before": before_data,
             "after": after_data,
-        }
+        })
 
         for workflow in matched:
             asyncio.create_task(
