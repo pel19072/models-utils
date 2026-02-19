@@ -12,6 +12,7 @@ from .requests import *
 from .role import *
 from .task import *
 from .task_state import *
+from .task_template import *
 from .user import *
 from .workflow import *
 

@@ -2,6 +2,13 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+import enum
+
+
+class TaskLinkedObjectType(str, enum.Enum):
+    CLIENT = "CLIENT"
+    ORDER = "ORDER"
+    RECURRING_ORDER = "RECURRING_ORDER"
 
 
 class TaskAssigneeSimple(BaseModel):
@@ -16,12 +23,15 @@ class TaskBase(BaseModel):
     name: str
     description: Optional[str] = None
     due_date: Optional[datetime] = None
+    linked_object_type: Optional[TaskLinkedObjectType] = None
+    linked_object_id: Optional[UUID] = None
 
 
 class TaskCreate(TaskBase):
     task_state_id: UUID
     assignee_ids: Optional[List[UUID]] = []
     position: Optional[int] = None
+    time_spent_minutes: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
@@ -31,6 +41,9 @@ class TaskUpdate(BaseModel):
     task_state_id: Optional[UUID] = None
     assignee_ids: Optional[List[UUID]] = None
     position: Optional[int] = None
+    linked_object_type: Optional[TaskLinkedObjectType] = None
+    linked_object_id: Optional[UUID] = None
+    time_spent_minutes: Optional[int] = None
 
 
 class TaskOut(TaskBase):
@@ -43,6 +56,7 @@ class TaskOut(TaskBase):
     updated_at: datetime
     assignees: List[TaskAssigneeSimple] = []
     creator: Optional[TaskAssigneeSimple] = None
+    time_spent_minutes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

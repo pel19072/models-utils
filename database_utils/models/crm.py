@@ -50,6 +50,12 @@ class TaskStateColor(str, enum.Enum):
     PINK = "PINK"
 
 
+class TaskLinkedObjectType(str, enum.Enum):
+    CLIENT = "CLIENT"
+    ORDER = "ORDER"
+    RECURRING_ORDER = "RECURRING_ORDER"
+
+
 # Association table for many-to-many relationship between Task and User (assignees)
 task_assignee = Table(
     'task_assignee',
@@ -255,6 +261,9 @@ class Task(Base):
     description = Column(String, nullable=True)
     position = Column(Integer, nullable=False, default=0)
     due_date = Column(DateTime(timezone=True), nullable=True)
+    time_spent_minutes = Column(Integer, nullable=True)
+    linked_object_type = Column(Enum(TaskLinkedObjectType), nullable=True)
+    linked_object_id = Column(Uuid, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     task_state_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("task_state.id", ondelete="RESTRICT"), nullable=False)
@@ -265,3 +274,23 @@ class Task(Base):
     task_state = relationship("TaskState", back_populates="tasks")
     creator = relationship("User", foreign_keys=[created_by])
     assignees = relationship("User", secondary=task_assignee)
+
+
+class TaskTemplate(Base):
+    __tablename__ = "task_template"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    task_name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    due_date_offset_days = Column(Integer, nullable=True)
+    default_assignee_ids = Column(JSON, nullable=True)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="task_templates")
+    creator = relationship("User", foreign_keys=[created_by])
