@@ -83,6 +83,7 @@ class Company(Base):
     tasks = relationship("Task", back_populates="company", cascade="all, delete-orphan")
     task_templates = relationship("TaskTemplate", back_populates="company", cascade="all, delete-orphan")
     workflows = relationship("Workflow", back_populates="company", cascade="all, delete-orphan")
+    roles = relationship("Role", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):
@@ -104,13 +105,16 @@ class Role(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    name = Column(String, nullable=False, unique=True)  # e.g., "ADMIN", "MANAGER", "SALES"
+    name = Column(String, nullable=False)  # e.g., "ADMIN", "MANAGER", "SALES"; uniqueness enforced in app logic
     description = Column(Text, nullable=True)
     is_system = Column(Boolean, default=False)  # System roles (ADMIN, USER) cannot be deleted
+    # NULL = global base role (managed by superadmin); non-NULL = company-specific custom role
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Relationships
     permissions = relationship("Permission", secondary=role_permission, back_populates="roles")
     users = relationship("User", secondary=user_role, back_populates="roles")
+    company = relationship("Company", back_populates="roles")
 
 
 class User(Base):

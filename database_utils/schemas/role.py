@@ -13,6 +13,7 @@ class RoleBase(BaseModel):
 
 class RoleCreate(RoleBase):
     permission_ids: Optional[List[UUID]] = []
+    company_id: Optional[UUID] = None  # None = global base role; set by backend, not client
 
 
 class RoleUpdate(BaseModel):
@@ -24,6 +25,7 @@ class RoleUpdate(BaseModel):
 
 class RoleOut(RoleBase):
     id: UUID
+    company_id: Optional[UUID] = None
     permissions: List[PermissionOut] = []
 
     model_config = ConfigDict(from_attributes=True)
