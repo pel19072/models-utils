@@ -1,0 +1,58 @@
+name: Alembic Migrate
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "alembic/versions/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "alembic/versions/**"
+
+jobs:
+  migrate-dev:
+    name: Migrate development database
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      DB_URL: ${{ secrets.DB_URL_DEV }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Apply migrations (development)
+        run: alembic upgrade head
+
+  migrate-prod:
+    name: Migrate production database
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      DB_URL: ${{ secrets.DB_URL_PROD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Apply migrations (production)
+        run: alembic upgrade head
