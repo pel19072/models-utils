@@ -17,8 +17,9 @@ jobs:
     name: Migrate development database
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    environment: development
     env:
-      DB_URL: ${{ secrets.DB_URL_DEV }}
+      DB_URL: ${{ secrets.DB_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +40,9 @@ jobs:
     name: Migrate production database
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: production
     env:
-      DB_URL: ${{ secrets.DB_URL_PROD }}
+      DB_URL: ${{ secrets.DB_URL }}
 
     steps:
       - uses: actions/checkout@v4
