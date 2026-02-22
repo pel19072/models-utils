@@ -287,6 +287,7 @@ class TaskTemplate(Base):
     description = Column(String, nullable=True)
     due_date_offset_days = Column(Integer, nullable=True)
     default_assignee_ids = Column(JSON, nullable=True)
+    linked_object_type = Column(Enum(TaskLinkedObjectType), nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
