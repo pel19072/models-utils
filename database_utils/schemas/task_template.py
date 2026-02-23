@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
-from .task import TaskAssigneeSimple
+from .task import TaskAssigneeSimple, TaskLinkedObjectType
 
 
 class TaskTemplateBase(BaseModel):
@@ -12,6 +12,7 @@ class TaskTemplateBase(BaseModel):
     description: Optional[str] = None
     due_date_offset_days: Optional[int] = None
     default_assignee_ids: Optional[List[UUID]] = None
+    linked_object_type: Optional[TaskLinkedObjectType] = None
 
 
 class TaskTemplateCreate(TaskTemplateBase):
@@ -24,6 +25,7 @@ class TaskTemplateUpdate(BaseModel):
     description: Optional[str] = None
     due_date_offset_days: Optional[int] = None
     default_assignee_ids: Optional[List[UUID]] = None
+    linked_object_type: Optional[TaskLinkedObjectType] = None
 
 
 class TaskTemplateOut(TaskTemplateBase):
