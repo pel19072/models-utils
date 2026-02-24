@@ -339,6 +339,8 @@ def execute_step(
         return _execute_update_field(db, config, context, company_id)
     elif step.action_type == StepActionType.CREATE_ENTITY:
         return _execute_create_entity(db, config, context, company_id)
+    elif step.action_type == StepActionType.HTTP_REQUEST:
+        return _execute_http_request(db, step, context, company_id)
     else:
         raise ValueError(f"Unsupported action type: {step.action_type}")
 
@@ -444,6 +446,122 @@ def _execute_create_entity(
     db.flush()
 
     return {"created_resource_type": resource_type, "resource_id": str(entity.id)}
+
+
+def _resolve_template(value: Any, context: dict) -> Any:
+    """
+    Recursively resolve {{template}} variables in strings, lists, and dicts.
+
+    Supported patterns:
+      {{trigger.resource_id}}         — from context["trigger"]["resource_id"]
+      {{trigger.after.FIELD}}         — from context["trigger"]["after"][FIELD]
+      {{trigger.before.FIELD}}        — from context["trigger"]["before"][FIELD]
+      {{steps.STEP_UUID.FIELD}}       — from context[STEP_UUID][FIELD]
+    """
+    import re
+    if isinstance(value, str):
+        def replacer(match: re.Match) -> str:
+            expr = match.group(1).strip()
+            parts = expr.split(".")
+            try:
+                if parts[0] == "trigger":
+                    trigger = context.get("trigger", {})
+                    if len(parts) == 2:
+                        return str(trigger.get(parts[1], ""))
+                    elif len(parts) >= 3 and parts[1] in ("after", "before"):
+                        nested = trigger.get(parts[1]) or {}
+                        return str(nested.get(parts[2], ""))
+                elif parts[0] == "steps" and len(parts) >= 3:
+                    step_result = context.get(parts[1], {}) or {}
+                    return str(step_result.get(parts[2], ""))
+            except Exception:
+                pass
+            return match.group(0)  # leave unresolved templates as-is
+        return re.sub(r"\{\{(.+?)\}\}", replacer, value)
+    elif isinstance(value, dict):
+        return {k: _resolve_template(v, context) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_resolve_template(item, context) for item in value]
+    return value
+
+
+def _execute_http_request(
+    db: Session,
+    step: WorkflowStep,
+    context: dict,
+    company_id: UUID,
+) -> dict:
+    """
+    Make an HTTP request to an external API using a registered Integration.
+
+    action_config format:
+    {
+      "integration_id": "uuid",
+      "method": "POST",
+      "path": "/configure-router",
+      "headers": {"Content-Type": "application/json"},  # optional extra headers
+      "body": {"client_id": "{{trigger.resource_id}}"}  # template-enabled JSON body
+    }
+
+    Uses httpx.Client (sync) — execute_step is a regular def.
+    Lazy-imports both httpx and Integration to avoid hard dependencies in models-utils.
+    """
+    import httpx  # lazy: httpx is in backend-erp, not models-utils
+    from database_utils.models.crm import Integration
+
+    config = step.action_config
+    integration_id = config.get("integration_id")
+    if not integration_id:
+        raise ValueError("HTTP_REQUEST step requires 'integration_id' in action_config")
+
+    integration = db.query(Integration).filter(
+        Integration.id == integration_id,
+        Integration.company_id == company_id,
+    ).first()
+    if not integration:
+        raise ValueError(f"Integration {integration_id} not found for company {company_id}")
+
+    # Build URL
+    path = config.get("path", "")
+    url = integration.base_url.rstrip("/") + path
+
+    # Build headers: start with configured extra headers, then inject auth
+    headers: dict = dict(config.get("headers", {}))
+    creds: dict = integration.credentials or {}
+
+    auth_type = integration.auth_type.value
+    if auth_type == "API_KEY":
+        header_name = creds.get("header_name", "X-API-Key")
+        headers[header_name] = creds.get("api_key", "")
+    elif auth_type == "BEARER_TOKEN":
+        headers["Authorization"] = f"Bearer {creds.get('token', '')}"
+    elif auth_type == "BASIC_AUTH":
+        import base64
+        raw = f"{creds.get('username', '')}:{creds.get('password', '')}"
+        encoded = base64.b64encode(raw.encode()).decode()
+        headers["Authorization"] = f"Basic {encoded}"
+    # NONE: no auth headers added
+
+    # Resolve template variables in the body
+    body = _resolve_template(config.get("body"), context)
+
+    method = config.get("method", "POST").upper()
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            response = client.request(method, url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        raise ValueError(f"HTTP_REQUEST step timed out after 30s: {method} {url}")
+    except httpx.RequestError as e:
+        raise ValueError(f"HTTP_REQUEST step network error: {e}")
+
+    return {
+        "status_code": response.status_code,
+        "response_body": response.text[:10_000],
+        "success": response.is_success,
+        "url": url,
+        "method": method,
+    }
 
 
 def detect_cycle(steps_count: int, edges: List[tuple]) -> bool:

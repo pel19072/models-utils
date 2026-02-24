@@ -25,6 +25,7 @@ class TriggerEventType(str, enum.Enum):
 class StepActionType(str, enum.Enum):
     UPDATE_FIELD = "UPDATE_FIELD"
     CREATE_ENTITY = "CREATE_ENTITY"
+    HTTP_REQUEST = "HTTP_REQUEST"
 
 
 class ExecutionStatus(str, enum.Enum):

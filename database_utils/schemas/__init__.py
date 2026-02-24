@@ -15,6 +15,7 @@ from .task_state import *
 from .task_template import *
 from .user import *
 from .workflow import *
+from .integration import *
 
 # Rebuild models with forward references to resolve circular dependencies
 from .order import OrderOut

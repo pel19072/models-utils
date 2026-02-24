@@ -17,6 +17,8 @@ from .crm import (
     TaskStateColor,
     Task,
     task_assignee,
+    Integration,
+    IntegrationAuthType,
 )
 
 from .workflow import (
@@ -51,6 +53,8 @@ __all__ = [
     "TaskStateColor",
     "Task",
     "task_assignee",
+    "Integration",
+    "IntegrationAuthType",
     # Workflows
     "Workflow",
     "WorkflowTrigger",
