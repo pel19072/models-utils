@@ -121,6 +121,12 @@ def seed_rbac_data(connection: Connection) -> None:
             {"name": "task_states.read", "resource": "task_states", "action": "read", "description": "View task states/columns"},
             {"name": "task_states.update", "resource": "task_states", "action": "update", "description": "Update task states/columns"},
             {"name": "task_states.delete", "resource": "task_states", "action": "delete", "description": "Delete task states/columns"},
+
+            # Integration permissions
+            {"name": "integrations.create", "resource": "integrations", "action": "create", "description": "Create external API integrations"},
+            {"name": "integrations.read", "resource": "integrations", "action": "read", "description": "View external API integrations"},
+            {"name": "integrations.update", "resource": "integrations", "action": "update", "description": "Update external API integrations"},
+            {"name": "integrations.delete", "resource": "integrations", "action": "delete", "description": "Delete external API integrations"},
         ]
 
         for perm in permissions_data:
