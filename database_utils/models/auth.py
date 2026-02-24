@@ -83,6 +83,7 @@ class Company(Base):
     tasks = relationship("Task", back_populates="company", cascade="all, delete-orphan")
     task_templates = relationship("TaskTemplate", back_populates="company", cascade="all, delete-orphan")
     workflows = relationship("Workflow", back_populates="company", cascade="all, delete-orphan")
+    integrations = relationship("Integration", back_populates="company", cascade="all, delete-orphan")
     roles = relationship("Role", back_populates="company", cascade="all, delete-orphan")
 
 

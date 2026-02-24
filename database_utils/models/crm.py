@@ -295,3 +295,34 @@ class TaskTemplate(Base):
     # Relationships
     company = relationship("Company", back_populates="task_templates")
     creator = relationship("User", foreign_keys=[created_by])
+
+
+class IntegrationAuthType(str, enum.Enum):
+    NONE = "NONE"
+    API_KEY = "API_KEY"
+    BEARER_TOKEN = "BEARER_TOKEN"
+    BASIC_AUTH = "BASIC_AUTH"
+
+
+class Integration(Base):
+    __tablename__ = "integration"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    base_url = Column(String, nullable=False)
+    auth_type = Column(Enum(IntegrationAuthType), nullable=False, default=IntegrationAuthType.NONE)
+    credentials = Column(JSON, nullable=True)
+    # Credentials format per auth_type:
+    # API_KEY:       {"header_name": "X-API-Key", "api_key": "sk-..."}
+    # BEARER_TOKEN:  {"token": "eyJ..."}
+    # BASIC_AUTH:    {"username": "admin", "password": "..."}
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Relationships
+    company = relationship("Company", back_populates="integrations")
