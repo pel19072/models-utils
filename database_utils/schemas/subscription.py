@@ -9,6 +9,7 @@ class SubscriptionOut(BaseModel):
     id: UUID
     status: str
     billing_type: str
+    billing_cycle: str  # Company's chosen cycle: MONTHLY or YEARLY
     current_period_start: datetime
     current_period_end: datetime
     cancel_at_period_end: bool
@@ -25,10 +26,13 @@ class SubscriptionUpdate(BaseModel):
     """Schema for updating subscription"""
     tier_id: Optional[UUID] = None
     cancel_at_period_end: Optional[bool] = None
+    billing_cycle: Optional[str] = None  # Change between MONTHLY and YEARLY
 
 
 class SubscriptionWithTier(SubscriptionOut):
     """Schema for subscription with tier details"""
     tier_name: str
-    tier_price: int
-    tier_billing_cycle: str
+    tier_price: float  # Monthly price in GTQ
+    tier_price_yearly: Optional[float] = None  # Yearly price in GTQ
+    tier_billing_cycle: str  # Tier's default billing cycle
+    tier_modules: Optional[list] = None  # Enabled module groups for this tier
