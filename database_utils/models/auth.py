@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, ForeignKey, Table, Text, JSON, Uuid
+    Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Table, Text, JSON, Uuid
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -42,9 +42,11 @@ class Tier(Base):
     name = Column(String, nullable=False, unique=True)
 
     # Billing fields
-    price = Column(Integer, nullable=False, default=0)  # Price in cents (9999 = $99.99)
-    billing_cycle = Column(String, nullable=False, default="MONTHLY")  # MONTHLY, YEARLY
-    features = Column(JSON, nullable=True)  # {"max_users": 10, "max_products": 100}
+    price = Column(Float, nullable=False, default=0.0)  # Monthly price in GTQ (e.g. 299.00)
+    price_yearly = Column(Float, nullable=True)  # Yearly price in GTQ (None = yearly not available)
+    billing_cycle = Column(String, nullable=False, default="MONTHLY")  # MONTHLY, YEARLY (tier default)
+    features = Column(JSON, nullable=True)  # {"max_users": 10, "max_products": 100, "support": "basic"}
+    modules = Column(JSON, nullable=True)  # ["core", "admin", "management", "automations"]
     stripe_price_id = Column(String, nullable=True)  # Stripe Price ID for future integration
     is_active = Column(Boolean, default=True, nullable=False)  # Can be assigned to new companies
 
@@ -216,6 +218,7 @@ class Subscription(Base):
     # Subscription details
     status = Column(String, nullable=False, default="ACTIVE")  # ACTIVE, PAST_DUE, CANCELED, TRIALING
     billing_type = Column(String, nullable=False, default="AUTOMATIC")  # AUTOMATIC (Stripe), MANUAL (cash/wire)
+    billing_cycle = Column(String, nullable=False, default="MONTHLY", server_default="MONTHLY")  # Company's chosen cycle: MONTHLY, YEARLY
     current_period_start = Column(DateTime(timezone=True), nullable=False)
     current_period_end = Column(DateTime(timezone=True), nullable=False)
     cancel_at_period_end = Column(Boolean, default=False, nullable=False)
