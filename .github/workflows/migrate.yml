@@ -8,6 +8,7 @@ on:
       - "alembic/versions/**"
   push:
     branches:
+      - develop
       - main
     paths:
       - "alembic/versions/**"
@@ -15,7 +16,7 @@ on:
 jobs:
   migrate-dev:
     name: Migrate development database
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     environment: development
     env:
@@ -38,7 +39,7 @@ jobs:
 
   migrate-prod:
     name: Migrate production database
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     env:
