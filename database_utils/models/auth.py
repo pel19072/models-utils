@@ -87,6 +87,7 @@ class Company(Base):
     workflows = relationship("Workflow", back_populates="company", cascade="all, delete-orphan")
     integrations = relationship("Integration", back_populates="company", cascade="all, delete-orphan")
     roles = relationship("Role", back_populates="company", cascade="all, delete-orphan")
+    tier_change_requests = relationship("TierChangeRequest", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):
@@ -309,3 +310,34 @@ class BillingInvoice(Base):
     subscription = relationship("Subscription", back_populates="invoices")
     payment_method = relationship("PaymentMethod")
     marked_paid_by = relationship("User", foreign_keys=[marked_paid_by_user_id])
+
+
+class TierChangeRequest(Base):
+    """Request by a company admin to change the company's subscription tier.
+    Requires superadmin approval before the tier is actually changed."""
+    __tablename__ = "tier_change_request"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+
+    # Who is requesting and for which company
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+
+    # Tier details
+    current_tier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tier.id"), nullable=False)
+    requested_tier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tier.id"), nullable=False)
+    reason = Column(Text, nullable=True)
+
+    # Review
+    status = Column(String, nullable=False, default="PENDING")  # PENDING, APPROVED, REJECTED
+    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    note = Column(Text, nullable=True)  # Superadmin note on approval/rejection
+
+    # Relationships
+    company = relationship("Company", back_populates="tier_change_requests")
+    requested_by = relationship("User", foreign_keys=[requested_by_user_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
+    current_tier = relationship("Tier", foreign_keys=[current_tier_id])
+    requested_tier = relationship("Tier", foreign_keys=[requested_tier_id])
