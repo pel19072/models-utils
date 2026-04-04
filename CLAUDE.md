@@ -14,34 +14,43 @@ pip install -e .     # Install in editable mode for local dev
 
 ## Git Policy
 
-**Push directly to `main`.** No feature branches or PRs for models-utils.
+Uses the same feature branch + PR model as all other services. **Never push directly to `main`.**
+
+Branch naming: `{type}/{feature-id}/models-{description}` (e.g. `feat/tier-billing/models-subscription`)
+
+GitHub Actions runs `alembic upgrade head` automatically:
+- On PR open/push to `develop` → migrates **development** database
+- On merge to `main` → migrates **production** database
 
 ## Migration Workflow (Alembic)
 
-Use the **erp-migration** skill — it covers the full ordered cycle automatically. **The human never does this manually.**
+Use the **erp-migration** skill — it covers the full ordered cycle automatically.
 
 Correct order:
-1. Edit model + schema + bump version
-2. Generate revision (`alembic revision --autogenerate`)
-3. Push to main
-4. Apply migration (`alembic upgrade head`)
-5. Run `update_lib` in both backend services
+1. Create feature branch from `main`
+2. Edit model + schema + bump version in `pyproject.toml`
+3. Generate revision: `alembic revision --autogenerate -m "description"`
+4. Commit and push feature branch
+5. Open PR to `develop` — GitHub Actions migrates dev DB
+6. Pin consuming services (`backend-erp`, `auth-erp`) to the feature branch SHA
+7. After E2E passes, merge PR to `main` — GitHub Actions migrates prod DB
 
-## After Changing Models
+## After Changing Models (local dev)
 
-Run `update_lib` (bash function in `~/.bashrc`) in **both** backend services:
-```bash
-cd backend-erp  # then repeat for auth-erp
-source venv/bin/activate && source ~/.bashrc && update_lib
+Pin consuming services to the feature branch SHA in their `requirements.txt`:
+```
+database-utils @ git+https://github.com/pel19072/models-utils.git@<sha>
 ```
 
-`update_lib` = `pip uninstall database-utils -y && pip install git+https://github.com/pel19072/models-utils.git@main && pip freeze > requirements.txt`
+After the models-utils PR merges to `main`, update the pin to the new `main` SHA.
 
 ## Key Directories
 
-- `database_utils/models/` — SQLAlchemy models (`auth.py`: User, Company, Tier; `crm.py`: Client, Order, Product, RecurringOrder)
+- `database_utils/models/` — SQLAlchemy models
+  - `auth.py`: User, Company, Tier, Subscription, BillingInvoice, PaymentMethod, TierChangeRequest
+  - `crm.py`: Client, Order, Product, RecurringOrder, Integration
 - `database_utils/schemas/` — Pydantic request/response schemas
-- `database_utils/utils/` — Shared utilities (JWT, error handling, password hashing, CRUD router factory)
+- `database_utils/utils/` — Shared utilities (JWT, error handling, password hashing, CRUD router factory, tier limits, timezone)
 - `alembic/` — Database migration scripts
 
 ## Conventions
