@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float, Table
+    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float, Table, Index
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -163,6 +163,18 @@ class Order(Base):
     invoices = relationship("Invoice", back_populates="order", cascade="all, delete-orphan")
     order_items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     recurring_order = relationship("RecurringOrder", back_populates="generated_orders")
+
+    # Partial unique index: at most one non-cancelled order per (recurring_order_id, due_date).
+    # Prevents the duplicate-generation race in RecurringOrderService.generate_order_from_template.
+    __table_args__ = (
+        Index(
+            "uq_order_active_recurring_due_date",
+            "recurring_order_id",
+            "due_date",
+            unique=True,
+            postgresql_where=text("status != 'CANCELLED' AND recurring_order_id IS NOT NULL"),
+        ),
+    )
 
 
 class OrderItem(Base):
