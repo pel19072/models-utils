@@ -11,15 +11,16 @@ Located in `alembic/versions/` — each file is an auto-generated Alembic revisi
 
 ## Connections to Other Components
 - **auth-erp** and **backend-erp**: Both share the same PostgreSQL database; migrations apply to both
-- **GitHub Actions**: Automatically runs `alembic upgrade head` on dev DB when PR to `develop` is opened; on prod DB when merged to `main`
-- **Feature branches**: Schema changes committed to feature branch in models-utils; PR to develop triggers migration
+- **Local development**: the `migrate` service in the root `docker-compose.yml` runs `alembic upgrade head` against the local DB on every `docker compose up` (Railway dev was decommissioned)
+- **GitHub Actions**: Runs `alembic upgrade head` on the **production** DB when merged to `main`
+- **Feature branches**: Schema changes committed to a feature branch in models-utils, then composed into `develop`
 
 ## Key Implementation Details
 - Migration workflow:
   1. Modify model in `database_utils/models/`
   2. Run `alembic revision --autogenerate -m "description"` to generate revision file
   3. Review generated file for correctness
-  4. Commit to feature branch; GitHub Actions applies on push to develop/main
+  4. Commit to feature branch; the local `migrate` service applies it on `docker compose up`, and GitHub Actions applies it to prod on merge to `main`
 - `alembic.ini`: configured to use `POSTGRES_*` env vars for connection string
 - All migrations are reversible (downgrade functions implemented)
 - Additive changes (new columns, new tables): safe to apply before consuming service code
