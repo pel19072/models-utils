@@ -133,7 +133,12 @@ def seed_rbac_data(connection: Connection) -> None:
             connection.execute(
                 text(
                     "INSERT INTO permission (id, created_at, name, resource, action, description) "
-                    "VALUES (gen_random_uuid(), :created_at, :name, :resource, :action, :description)"
+                    "VALUES (gen_random_uuid(), :created_at, :name, :resource, :action, :description) "
+                    # Some permissions are also inserted by individual migrations
+                    # (e.g. orders.change_status, integrations.*). On a from-scratch
+                    # DB the seed runs while `role` is still empty, so it must not
+                    # collide with those migration-inserted rows.
+                    "ON CONFLICT (name) DO NOTHING"
                 ),
                 {
                     'created_at': now_gt(),
