@@ -1,45 +1,19 @@
 name: Alembic Migrate
 
+# Development DB is now LOCAL (docker compose `migrate` service) — there is no
+# remote dev migration job anymore. This workflow only migrates PRODUCTION on
+# merge to `main`. The Railway development environment was decommissioned.
+
 on:
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - "alembic/versions/**"
   push:
     branches:
-      - develop
       - main
     paths:
       - "alembic/versions/**"
 
 jobs:
-  migrate-dev:
-    name: Migrate development database
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
-    runs-on: ubuntu-latest
-    environment: development
-    env:
-      DB_URL: ${{ secrets.DB_URL }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install .
-
-      - name: Apply migrations (development)
-        run: alembic upgrade head
-
   migrate-prod:
     name: Migrate production database
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     env:
