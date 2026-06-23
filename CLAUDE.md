@@ -18,9 +18,9 @@ Uses the same feature branch + PR model as all other services. **Never push dire
 
 Branch naming: `{type}/{feature-id}/models-{description}` (e.g. `feat/tier-billing/models-subscription`)
 
-GitHub Actions runs `alembic upgrade head` automatically:
-- On PR open/push to `develop` → migrates **development** database
-- On merge to `main` → migrates **production** database
+Database migrations:
+- **Development** is the LOCAL docker compose DB — the `migrate` compose service runs `alembic upgrade head` on every `docker compose up` (Railway dev was decommissioned)
+- **Production**: GitHub Actions runs `alembic upgrade head` automatically on merge to `main`
 
 ## Migration Workflow (Alembic)
 
@@ -31,9 +31,9 @@ Correct order:
 2. Edit model + schema + bump version in `pyproject.toml`
 3. Generate revision: `alembic revision --autogenerate -m "description"`
 4. Commit and push feature branch
-5. Open PR to `develop` — GitHub Actions migrates dev DB
+5. Compose into `develop` (erp-release); the local `migrate` compose service applies the revision on `docker compose up`
 6. Pin consuming services (`backend-erp`, `auth-erp`) to the feature branch SHA
-7. After E2E passes, merge PR to `main` — GitHub Actions migrates prod DB
+7. After E2E passes locally, merge PR to `main` — GitHub Actions migrates prod DB
 
 ## After Changing Models (local dev)
 
