@@ -23,4 +23,13 @@ jobs:
         run: ruff check .
         continue-on-error: true
       - name: Tests
+        env:
+          # database_utils.database builds the engine from these at import
+          # (lazy connect); tests use an in-memory SQLite session, so these
+          # are placeholders just to satisfy the import-time config check.
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: test
         run: pytest -v
