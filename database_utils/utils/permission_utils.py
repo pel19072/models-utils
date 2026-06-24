@@ -135,6 +135,19 @@ def require_permission(permission_name: str, get_db_func):
                 detail="Invalid token payload"
             )
 
+        # The JWT carries the user id as a string, but User.id is a SQLAlchemy
+        # Uuid column whose bind processor expects a uuid.UUID. Postgres tolerates
+        # the string via the driver; SQLite does not (raises "'str' object has no
+        # attribute 'hex'"). Coerce explicitly so the query works on both dialects.
+        if isinstance(user_id, str):
+            try:
+                user_id = UUID(user_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token payload"
+                )
+
         # Get user with permissions
         user = PermissionChecker.get_user_by_id_with_roles(db, user_id)
         logger.info(f"[permission_dependency] {user = }")
