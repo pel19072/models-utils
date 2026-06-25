@@ -11,17 +11,17 @@ def get_email_service() -> EmailService:
     if _email_service is None:
         email_provider = os.getenv("EMAIL_PROVIDER", "mock")
 
-        if email_provider == "mock":
-            _email_service = MockEmailService()
-        # Future Resend integration:
-        # elif email_provider == "resend":
-        #     from database_utils.services.email_service import ResendEmailService
-        #     api_key = os.getenv("RESEND_API_KEY")
-        #     if not api_key:
-        #         raise ValueError("RESEND_API_KEY environment variable is required for resend provider")
-        #     _email_service = ResendEmailService(api_key=api_key)
+        if email_provider == "smtp":
+            from database_utils.services.email_service import SMTPEmailService
+            _email_service = SMTPEmailService(
+                host=os.environ["SMTP_HOST"],
+                port=int(os.environ["SMTP_PORT"]),
+                username=os.environ["SMTP_USERNAME"],
+                password=os.environ["SMTP_PASSWORD"],
+                from_address=os.environ["SMTP_FROM_ADDRESS"],
+                use_tls=os.getenv("SMTP_USE_TLS", "true").lower() == "true",
+            )
         else:
-            # Fallback to mock if unknown provider
             _email_service = MockEmailService()
 
     return _email_service

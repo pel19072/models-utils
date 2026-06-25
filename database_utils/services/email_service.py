@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
+from email.message import EmailMessage
 from typing import Dict, Any
 from loguru import logger
+import aiosmtplib
+
+from database_utils.utils.email_templates import render_email
 
 
 class EmailService(ABC):
@@ -121,59 +125,98 @@ class MockEmailService(EmailService):
         return True
 
 
-# Future Resend implementation (commented for reference):
-# To enable Resend, uncomment and install resend: pip install resend
-#
-# from resend import Resend
-#
-# class ResendEmailService(EmailService):
-#     def __init__(self, api_key: str):
-#         self.client = Resend(api_key=api_key)
-#
-#     async def send_invitation_email(
-#         self, to_email: str, invitation_link: str, company_name: str, invited_by: str
-#     ) -> bool:
-#         try:
-#             self.client.emails.send({
-#                 "from": "noreply@yourdomain.com",
-#                 "to": to_email,
-#                 "subject": f"You've been invited to join {company_name}",
-#                 "html": f"<p>{invited_by} invited you to join {company_name}.</p><a href='{invitation_link}'>Accept Invitation</a>"
-#             })
-#             logger.info(f"Invitation email sent successfully to {to_email}")
-#             return True
-#         except Exception as e:
-#             logger.error(f"Failed to send invitation email to {to_email}: {e}")
-#             return False
-#
-#     async def send_welcome_email(self, to_email: str, user_name: str) -> bool:
-#         try:
-#             self.client.emails.send({
-#                 "from": "noreply@yourdomain.com",
-#                 "to": to_email,
-#                 "subject": "Welcome!",
-#                 "html": f"<p>Welcome {user_name}! Your account is now active.</p>"
-#             })
-#             logger.info(f"Welcome email sent successfully to {to_email}")
-#             return True
-#         except Exception as e:
-#             logger.error(f"Failed to send welcome email to {to_email}: {e}")
-#             return False
-#
-#     async def send_payment_receipt(
-#         self, to_email: str, invoice_data: Dict[str, Any]
-#     ) -> bool:
-#         try:
-#             invoice_number = invoice_data.get('invoice_number')
-#             total = invoice_data.get('total', 0) / 100
-#             self.client.emails.send({
-#                 "from": "billing@yourdomain.com",
-#                 "to": to_email,
-#                 "subject": f"Payment Receipt - {invoice_number}",
-#                 "html": f"<p>Thank you for your payment of ${total:.2f}.</p><p>Invoice: {invoice_number}</p>"
-#             })
-#             logger.info(f"Payment receipt sent successfully to {to_email}")
-#             return True
-#         except Exception as e:
-#             logger.error(f"Failed to send payment receipt to {to_email}: {e}")
-#             return False
+
+class SMTPEmailService(EmailService):
+    """Sends real email via direct SMTP (e.g. a Hostinger mailbox)."""
+
+    def __init__(
+        self, host: str, port: int, username: str, password: str,
+        from_address: str, use_tls: bool = True
+    ):
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.from_address = from_address
+        self.use_tls = use_tls
+
+    async def _send(self, to_email: str, subject: str, html_body: str) -> bool:
+        message = EmailMessage()
+        message["From"] = self.from_address
+        message["To"] = to_email
+        message["Subject"] = subject
+        message.set_content(html_body, subtype="html")
+
+        try:
+            await aiosmtplib.send(
+                message,
+                hostname=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                use_tls=self.use_tls,
+            )
+            logger.info(f"Email '{subject}' sent to {to_email}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email '{subject}' to {to_email}: {e}")
+            return False
+
+    async def send_invitation_email(
+        self, to_email: str, invitation_link: str, company_name: str, invited_by: str
+    ) -> bool:
+        html = render_email(
+            "invitation.html", invitation_link=invitation_link,
+            company_name=company_name, invited_by=invited_by,
+        )
+        return await self._send(to_email, f"You've been invited to join {company_name}", html)
+
+    async def send_welcome_email(self, to_email: str, user_name: str) -> bool:
+        html = render_email("welcome.html", user_name=user_name)
+        return await self._send(to_email, "Welcome!", html)
+
+    async def send_payment_receipt(
+        self, to_email: str, invoice_data: Dict[str, Any]
+    ) -> bool:
+        total_formatted = f"${invoice_data.get('total', 0) / 100:.2f}"
+        html = render_email(
+            "payment_receipt.html",
+            company_name=invoice_data.get("company_name", "your company"),
+            invoice_number=invoice_data.get("invoice_number"),
+            total_formatted=total_formatted,
+        )
+        return await self._send(to_email, "Payment Receipt", html)
+
+    async def send_confirmation_email(
+        self, to_email: str, confirmation_link: str, user_name: str
+    ) -> bool:
+        html = render_email(
+            "confirmation.html", user_name=user_name, confirmation_link=confirmation_link
+        )
+        return await self._send(to_email, "Confirm your account", html)
+
+    async def send_password_reset_email(
+        self, to_email: str, reset_link: str, user_name: str
+    ) -> bool:
+        html = render_email("password_reset.html", user_name=user_name, reset_link=reset_link)
+        return await self._send(to_email, "Reset your password", html)
+
+    async def send_payment_failed_email(
+        self, to_email: str, company_name: str, invoice_data: Dict[str, Any]
+    ) -> bool:
+        total_formatted = f"${invoice_data.get('total', 0) / 100:.2f}"
+        html = render_email(
+            "payment_failed.html", company_name=company_name,
+            invoice_number=invoice_data.get("invoice_number"), total_formatted=total_formatted,
+        )
+        return await self._send(to_email, "Payment failed", html)
+
+    async def send_join_request_decision_email(
+        self, to_email: str, user_name: str, company_name: str, approved: bool
+    ) -> bool:
+        html = render_email(
+            "join_request_decision.html", user_name=user_name,
+            company_name=company_name, approved=approved,
+        )
+        subject = "Join request approved" if approved else "Join request declined"
+        return await self._send(to_email, subject, html)
