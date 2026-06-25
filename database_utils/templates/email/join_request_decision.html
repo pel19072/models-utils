@@ -1,0 +1,12 @@
+{% extends "base_layout.html" %}
+{% block content %}
+{% if approved %}
+<h2>You're in!</h2>
+<p>Hi {{ user_name }},</p>
+<p>Your request to join <strong>{{ company_name }}</strong> has been approved. You can now log in.</p>
+{% else %}
+<h2>Request declined</h2>
+<p>Hi {{ user_name }},</p>
+<p>Your request to join <strong>{{ company_name }}</strong> was not approved. Contact the company admin for more information.</p>
+{% endif %}
+{% endblock %}

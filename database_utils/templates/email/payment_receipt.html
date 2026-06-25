@@ -1,0 +1,10 @@
+{% extends "base_layout.html" %}
+{% block content %}
+<h2>Payment received</h2>
+<p>Hi {{ company_name }} team,</p>
+<p>We've successfully processed your payment.</p>
+<table>
+  <tr><td>Invoice:</td><td>{{ invoice_number }}</td></tr>
+  <tr><td>Total:</td><td>{{ total_formatted }}</td></tr>
+</table>
+{% endblock %}
