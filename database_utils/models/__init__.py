@@ -1,7 +1,9 @@
 from .auth import (
     Company,
     User,
-    Notification
+    Notification,
+    EmailVerificationToken,
+    PasswordResetToken,
 )
 
 from .crm import (
@@ -40,6 +42,8 @@ __all__ = [
     "Company",
     "User",
     "Notification",
+    "EmailVerificationToken",
+    "PasswordResetToken",
     # CRM
     "Client",
     "Product",
