@@ -545,6 +545,14 @@ def _execute_http_request(
     path = config.get("path", "")
     url = integration.base_url.rstrip("/") + path
 
+    # SEC-6: block SSRF to internal / cloud-metadata / private addresses BEFORE
+    # attaching stored credentials or making any request.
+    from database_utils.utils.ssrf import validate_url_no_ssrf, SSRFValidationError
+    try:
+        validate_url_no_ssrf(url)
+    except SSRFValidationError as e:
+        raise ValueError(f"HTTP_REQUEST step blocked (SSRF guard): {e}")
+
     # Build headers: start with configured extra headers, then inject auth
     headers: dict = dict(config.get("headers", {}))
     creds: dict = integration.credentials or {}
