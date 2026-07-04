@@ -300,10 +300,12 @@ def execute_workflow(
     # Kahn's algorithm: start with nodes that have no incoming edges
     queue = deque([sid for sid, deg in in_degree.items() if deg == 0])
     execution_context: Dict[str, Any] = {"trigger": trigger_event}
+    processed_count = 0
 
     try:
         while queue:
             step_id = queue.popleft()
+            processed_count += 1
             step = steps_by_id[step_id]
 
             step_execution = WorkflowStepExecution(
@@ -332,6 +334,15 @@ def execute_workflow(
                 in_degree[neighbor_id] -= 1
                 if in_degree[neighbor_id] == 0:
                     queue.append(neighbor_id)
+
+        # WF-4: if Kahn's algorithm didn't reach every step, the graph has a
+        # cycle (or unreachable steps). Fail explicitly instead of falling
+        # through to COMPLETED with a partially-executed graph.
+        if processed_count < len(steps_by_id):
+            raise ValueError(
+                f"Workflow graph has a cycle or unreachable steps: "
+                f"{processed_count}/{len(steps_by_id)} steps executed"
+            )
 
         execution.status = ExecutionStatus.COMPLETED
         execution.completed_at = now_gt()
