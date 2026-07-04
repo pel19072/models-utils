@@ -160,7 +160,7 @@ class Notification(Base):
     pending_role_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # --- [END] Possible User data: Add User Fields ---
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=True)
 
     # Relationships
@@ -198,7 +198,7 @@ class UserInvitation(Base):
     name = Column(String, nullable=True)  # Optional pre-fill by admin
 
     # Foreign keys
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     accepted_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
@@ -291,7 +291,7 @@ class PaymentMethod(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Foreign keys
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Stripe integration
     stripe_payment_method_id = Column(String, nullable=True, unique=True)
@@ -354,7 +354,7 @@ class TierChangeRequest(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
 
     # Who is requesting and for which company
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     requested_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
 
     # Tier details
