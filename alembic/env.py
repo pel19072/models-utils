@@ -26,6 +26,8 @@ if config.config_file_name:
 from database_utils import database
 import database_utils.models.auth
 import database_utils.models.crm
+import database_utils.models.workflow
+import database_utils.models.isp
 
 # --- 5. Target metadata ---
 target_metadata = database.Base.metadata
@@ -82,6 +84,18 @@ def run_migrations_online() -> None:
             # Automatically seed tier data after migrations
             from seeds.tier_seed import seed_tier_data
             seed_tier_data(connection)
+
+            # Automatically seed ISP data (permissions, roles, node types,
+            # workflow templates) — idempotent; skipped until the isp-platform
+            # revision has created its tables.
+            from sqlalchemy import text as _text
+            isp_tables = connection.execute(_text(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                "WHERE table_name IN ('workflow_template', 'network_node_type')"
+            )).scalar()
+            if isp_tables == 2:
+                from seeds.isp_seed import seed_isp_data
+                seed_isp_data(connection)
 
 
 if context.is_offline_mode():

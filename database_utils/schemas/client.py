@@ -2,6 +2,9 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from uuid import UUID
+from datetime import datetime
+
+from database_utils.models.crm import ServiceAvailability, InstallationStatus
 
 from .user import UserOut
 
@@ -14,11 +17,20 @@ class ClientBase(BaseModel):
     email: Optional[EmailStr]
     contact: Optional[str]
     observations: Optional[str]
+    # ISP fields (ADR-004)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    gps_precision_m: Optional[float] = None
+    installation_address: Optional[str] = None
+    service_availability: ServiceAvailability = ServiceAvailability.UNKNOWN
+    installation_status: InstallationStatus = InstallationStatus.NOT_INSTALLED
+    installation_date: Optional[datetime] = None
 
 
 class ClientCreate(ClientBase):
     company_id: Optional[UUID] = None  # Optional - will be set from authenticated user context
     advisor_id: Optional[UUID] = None
+    assigned_technician_id: Optional[UUID] = None
     custom_field_values: Optional[List["ClientCustomFieldValueInput"]] = None
 
 
@@ -32,6 +44,14 @@ class ClientUpdate(BaseModel):
     observations: Optional[str] = None
     company_id: Optional[UUID] = None
     advisor_id: Optional[UUID] = None
+    assigned_technician_id: Optional[UUID] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    gps_precision_m: Optional[float] = None
+    installation_address: Optional[str] = None
+    service_availability: Optional[ServiceAvailability] = None
+    installation_status: Optional[InstallationStatus] = None
+    installation_date: Optional[datetime] = None
     custom_field_values: Optional[List["ClientCustomFieldValueInput"]] = None
 
 
@@ -40,6 +60,8 @@ class ClientOut(ClientBase):
     company_id: UUID
     advisor_id: Optional[UUID]
     advisor: Optional[UserOut] = None
+    assigned_technician_id: Optional[UUID] = None
+    assigned_technician: Optional[UserOut] = None
     custom_field_values: Optional[List["ClientCustomFieldValueOut"]] = None
 
     model_config = ConfigDict(from_attributes=True)

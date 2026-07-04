@@ -51,6 +51,10 @@ def _get_model_map():
             Order, Client, Product, Task, TaskState,
             RecurringOrder, Invoice, OrderItem,
         )
+        from database_utils.models.isp import (
+            ServicePlan, ClientService, ServiceSuspension,
+            InventoryItem, NetworkNode, ProvisioningJob,
+        )
         _MODEL_MAP = {
             "order": Order,
             "client": Client,
@@ -60,6 +64,13 @@ def _get_model_map():
             "recurring_order": RecurringOrder,
             "invoice": Invoice,
             "order_item": OrderItem,
+            # ISP resources
+            "service_plan": ServicePlan,
+            "client_service": ClientService,
+            "service_suspension": ServiceSuspension,
+            "inventory_item": InventoryItem,
+            "network_node": NetworkNode,
+            "provisioning_job": ProvisioningJob,
         }
     return _MODEL_MAP
 
@@ -364,7 +375,10 @@ def execute_step(
     company_id: UUID,
 ) -> dict:
     """Execute a single workflow step based on its action_type."""
-    config = step.action_config
+    # Resolve {{trigger.*}} / {{steps.*}} templates across the whole config so
+    # dynamic resource_ids and entity data work in every action type.
+    # (HTTP_REQUEST re-resolves its body internally — idempotent.)
+    config = _resolve_template(step.action_config, context)
 
     if step.action_type == StepActionType.UPDATE_FIELD:
         return _execute_update_field(db, config, context, company_id)
@@ -372,6 +386,8 @@ def execute_step(
         return _execute_create_entity(db, config, context, company_id)
     elif step.action_type == StepActionType.HTTP_REQUEST:
         return _execute_http_request(db, step, context, company_id)
+    elif step.action_type == StepActionType.ENQUEUE_PROVISIONING:
+        return _execute_enqueue_provisioning(db, config, context, company_id)
     else:
         raise ValueError(f"Unsupported action type: {step.action_type}")
 
@@ -477,6 +493,97 @@ def _execute_create_entity(
     db.flush()
 
     return {"created_resource_type": resource_type, "resource_id": str(entity.id)}
+
+
+def _execute_enqueue_provisioning(
+    db: Session,
+    config: dict,
+    context: dict,
+    company_id: UUID,
+) -> dict:
+    """
+    Insert a durable provisioning_job row (ADR-005). The workflow engine never
+    talks to devices — the provisioning worker claims and executes the job.
+
+    action_config format:
+    {
+      "playbook_id": "uuid",
+      "variables": {"onu_serial": "{{trigger.after.serial_number}}"},  # template-enabled
+      "client_service_id": "{{trigger.resource_id}}",   # optional target refs
+      "network_node_id": null,
+      "inventory_item_id": null,
+      "integration_id": null,
+      "idempotency_key": "install-{{trigger.resource_id}}",  # optional dedupe
+      "max_attempts": 3
+    }
+    """
+    from database_utils.models.isp import Playbook, ProvisioningJob, ProvisioningTrigger
+
+    playbook_id = config.get("playbook_id")
+    if not playbook_id:
+        raise ValueError("ENQUEUE_PROVISIONING step requires 'playbook_id' in action_config")
+
+    playbook = db.query(Playbook).filter(
+        Playbook.id == playbook_id,
+        Playbook.company_id == company_id,
+        Playbook.is_active == True,
+    ).first()
+    if not playbook:
+        raise ValueError(f"Active playbook {playbook_id} not found for company {company_id}")
+
+    resolved = _resolve_template(
+        {
+            "variables": config.get("variables") or {},
+            "client_service_id": config.get("client_service_id"),
+            "network_node_id": config.get("network_node_id"),
+            "inventory_item_id": config.get("inventory_item_id"),
+            "idempotency_key": config.get("idempotency_key"),
+        },
+        context,
+    )
+
+    def _uuid_or_none(value):
+        if not value:
+            return None
+        try:
+            return UUID(str(value))
+        except (ValueError, TypeError):
+            return None
+
+    idempotency_key = resolved.get("idempotency_key") or None
+    if idempotency_key:
+        # Duplicate enqueue (e.g. a retriggered workflow) is a no-op success.
+        # Pre-check instead of catching the unique violation: a mid-workflow
+        # rollback would discard this run's execution audit rows. A genuine
+        # race still trips uq_provisioning_job_company_idem and fails the step.
+        from database_utils.models.isp import ProvisioningJobStatus
+        existing = db.query(ProvisioningJob).filter(
+            ProvisioningJob.company_id == company_id,
+            ProvisioningJob.idempotency_key == idempotency_key,
+            ProvisioningJob.status.in_(
+                [ProvisioningJobStatus.QUEUED, ProvisioningJobStatus.RUNNING]
+            ),
+        ).first()
+        if existing:
+            return {"enqueued": False, "deduped": True,
+                    "job_id": str(existing.id), "idempotency_key": idempotency_key}
+
+    job = ProvisioningJob(
+        company_id=company_id,
+        playbook_id=playbook.id,
+        variables=resolved["variables"],
+        client_service_id=_uuid_or_none(resolved.get("client_service_id")),
+        network_node_id=_uuid_or_none(resolved.get("network_node_id")),
+        inventory_item_id=_uuid_or_none(resolved.get("inventory_item_id")),
+        integration_id=_uuid_or_none(config.get("integration_id")),
+        idempotency_key=idempotency_key,
+        max_attempts=int(config.get("max_attempts", 3)),
+        triggered_by=ProvisioningTrigger.WORKFLOW,
+    )
+    db.add(job)
+    db.flush()
+
+    return {"enqueued": True, "job_id": str(job.id), "playbook_id": str(playbook.id)}
 
 
 def _resolve_template(value: Any, context: dict) -> Any:

@@ -54,6 +54,24 @@ class TaskLinkedObjectType(str, enum.Enum):
     CLIENT = "CLIENT"
     ORDER = "ORDER"
     RECURRING_ORDER = "RECURRING_ORDER"
+    CLIENT_SERVICE = "CLIENT_SERVICE"
+    INVENTORY_ITEM = "INVENTORY_ITEM"
+    NETWORK_NODE = "NETWORK_NODE"
+
+
+class ServiceAvailability(str, enum.Enum):
+    UNKNOWN = "UNKNOWN"
+    SERVICEABLE = "SERVICEABLE"
+    NOT_SERVICEABLE = "NOT_SERVICEABLE"
+    SURVEY_REQUIRED = "SURVEY_REQUIRED"
+
+
+class InstallationStatus(str, enum.Enum):
+    NOT_INSTALLED = "NOT_INSTALLED"
+    SURVEY_SCHEDULED = "SURVEY_SCHEDULED"
+    INSTALL_SCHEDULED = "INSTALL_SCHEDULED"
+    INSTALLED = "INSTALLED"
+    CANCELLED = "CANCELLED"
 
 
 # Association table for many-to-many relationship between Task and User (assignees)
@@ -78,12 +96,31 @@ class Client(Base):
     contact = Column(String, nullable=True)
     observations = Column(String, nullable=True)
 
+    # ISP fields (ADR-004): queried subscriber data promoted to columns.
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    gps_precision_m = Column(Float, nullable=True)
+    installation_address = Column(String, nullable=True)  # distinct from billing address
+    service_availability = Column(
+        Enum(ServiceAvailability), nullable=False,
+        default=ServiceAvailability.UNKNOWN, server_default='UNKNOWN'
+    )
+    installation_status = Column(
+        Enum(InstallationStatus), nullable=False,
+        default=InstallationStatus.NOT_INSTALLED, server_default='NOT_INSTALLED'
+    )
+    installation_date = Column(DateTime(timezone=True), nullable=True)
+
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     advisor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    assigned_technician_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company", back_populates="clients")
-    advisor = relationship("User", back_populates="clients")
+    advisor = relationship("User", back_populates="clients", foreign_keys=[advisor_id])
+    assigned_technician = relationship("User", foreign_keys=[assigned_technician_id])
+    services = relationship("ClientService", back_populates="client", cascade="all, delete-orphan")
+    equipment = relationship("InventoryItem", back_populates="client")
     # DATA-1: NO delete-orphan cascade on orders/recurring_orders. The FK is
     # ondelete=SET NULL by design (an order/recurring order outlives its client),
     # and delete_client blocks deletion while orders exist. A delete-orphan cascade

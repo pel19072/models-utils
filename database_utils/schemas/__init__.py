@@ -16,6 +16,12 @@ from .task_template import *
 from .user import *
 from .workflow import *
 from .integration import *
+from .service_plan import *
+from .client_service import *
+from .inventory import *
+from .network import *
+from .playbook import *
+from .workflow_template import *
 
 # Rebuild models with forward references to resolve circular dependencies
 from .order import OrderOut
