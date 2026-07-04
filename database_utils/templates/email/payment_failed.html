@@ -1,0 +1,10 @@
+{% extends "base_layout.html" %}
+{% block content %}
+<h2>Payment failed</h2>
+<p>Hi {{ company_name }} team,</p>
+<p>We were unable to process your subscription payment. Please add or update a payment method to avoid service interruption.</p>
+<table>
+  <tr><td>Invoice:</td><td>{{ invoice_number }}</td></tr>
+  <tr><td>Amount due:</td><td>{{ total_formatted }}</td></tr>
+</table>
+{% endblock %}
