@@ -131,6 +131,7 @@ class User(Base):
     age = Column(Integer, nullable=False)
     password_hash = Column(String, nullable=False)
     active = Column(Boolean, default=True, nullable=False)  # User activation/deactivation
+    email_verified = Column(Boolean, default=False, nullable=False)  # Gates login until confirmed
 
     company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=True)
     is_super_admin = Column(Boolean, default=False, nullable=False)
@@ -206,6 +207,38 @@ class UserInvitation(Base):
     invited_by = relationship("User", foreign_keys=[invited_by_user_id])
     accepted_user = relationship("User", foreign_keys=[accepted_user_id])
     roles = relationship("Role", secondary=user_invitation_role)
+
+
+class EmailVerificationToken(Base):
+    """One-time token sent by email to confirm a newly-created account before it can log in."""
+    __tablename__ = "email_verification_token"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    token = Column(String, nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    last_sent_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User")
+
+
+class PasswordResetToken(Base):
+    """One-time token sent by email to authorize a password change."""
+    __tablename__ = "password_reset_token"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    token = Column(String, nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    last_sent_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User")
 
 
 class Subscription(Base):
