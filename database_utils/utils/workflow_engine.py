@@ -34,6 +34,11 @@ from database_utils.utils.timezone_utils import now_gt
 _workflow_execution_depth = contextvars.ContextVar('workflow_depth', default=0)
 MAX_WORKFLOW_DEPTH = 3
 
+# Strong references to fire-and-forget workflow tasks. The event loop only keeps
+# a weak reference to a Task, so without this a scheduled workflow execution can
+# be garbage-collected mid-run (WF-3). Tasks discard themselves on completion.
+_background_tasks: set[asyncio.Task] = set()
+
 # Map resource types to their SQLAlchemy model classes
 _MODEL_MAP = None
 
@@ -112,7 +117,7 @@ async def check_workflow_triggers(
         })
 
         for workflow in matched:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 _execute_workflow_async(
                     workflow_id=workflow.id,
                     trigger_event=trigger_event,
@@ -120,6 +125,8 @@ async def check_workflow_triggers(
                     depth=depth,
                 )
             )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
 
     except Exception as e:
         logger.error(f"Error checking workflow triggers: {e}")
@@ -150,8 +157,14 @@ def find_matching_workflows(
         .all()
     )
 
+    # The filter join on WorkflowTrigger fans out one row per matching trigger,
+    # so `workflows` can contain the same Workflow multiple times. Dedupe by id
+    # so a workflow with >1 matching trigger executes exactly once (WF-2).
     matched = []
+    seen: set = set()
     for workflow in workflows:
+        if workflow.id in seen:
+            continue
         for trigger in workflow.triggers:
             if (
                 trigger.resource_type == resource_type
@@ -159,6 +172,7 @@ def find_matching_workflows(
                 and _matches_field_conditions(trigger.field_conditions, before_data, after_data)
             ):
                 matched.append(workflow)
+                seen.add(workflow.id)
                 break
 
     return matched
@@ -189,14 +203,20 @@ def _matches_field_conditions(
         return True
 
     elif operator == "changed_to":
-        if after_data:
-            return str(after_data.get(field)) == str(value)
-        return False
+        # True only on the transition INTO `value` — the field must not have
+        # already equalled `value` before (WF-1). Missing before_data (e.g. on
+        # CREATE) counts as "did not equal it before".
+        if not after_data:
+            return False
+        before_val = str(before_data.get(field)) if before_data else None
+        return before_val != str(value) and str(after_data.get(field)) == str(value)
 
     elif operator == "changed_from":
-        if before_data:
-            return str(before_data.get(field)) == str(value)
-        return False
+        # True only on the transition AWAY from `value`.
+        if not before_data:
+            return False
+        after_val = str(after_data.get(field)) if after_data else None
+        return str(before_data.get(field)) == str(value) and after_val != str(value)
 
     elif operator == "equals":
         if after_data:
