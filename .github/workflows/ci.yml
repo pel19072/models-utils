@@ -11,6 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a migration for model changes
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          MODELS=$(echo "$CHANGED" | grep -cE '^database_utils/models/.*\.py$' || true)
+          MIGR=$(echo "$CHANGED" | grep -cE '^alembic/versions/.*\.py$' || true)
+          if [ "$MODELS" -gt 0 ] && [ "$MIGR" -eq 0 ]; then
+            echo "::error::Model files changed but no alembic/versions migration was added. The prod DB migrate workflow is path-filtered to alembic/versions/**, so prod would NOT migrate."
+            exit 1
+          fi
+          echo "migration guard OK (models=$MODELS, migrations=$MIGR)"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
