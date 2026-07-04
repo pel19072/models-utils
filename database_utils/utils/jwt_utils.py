@@ -11,10 +11,20 @@ from loguru import logger
 
 load_dotenv()
 
-# Load environment variables with defaults to avoid errors during import
-access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "114400"))  # 1 day in minutes
+# Load environment variables with defaults to avoid errors during import.
+# NOTE: the env var is ACCESS_TOKEN_EXPIRE (minutes) — every service .env sets it.
+# The old name ACCESS_TOKEN_EXPIRE_MINUTES was never set anywhere, so the 114400
+# default (~79 days) was silently always in effect.
+access_expire = int(os.getenv("ACCESS_TOKEN_EXPIRE", "1440"))  # 1 day in minutes
 refresh_expire = int(os.getenv("REFRESH_TOKEN_EXPIRE", "604800"))  # 7 days in seconds
-secret_key = os.getenv("SECRET_KEY", "default-secret-key-for-development")
+
+# Signing key. Fail fast in production rather than silently falling back to a
+# well-known string (which would allow token forgery). Dev/test keep a fallback.
+secret_key = os.getenv("SECRET_KEY")
+if not secret_key:
+    if os.getenv("ENVIRONMENT") == "production":
+        raise RuntimeError("SECRET_KEY environment variable must be set in production")
+    secret_key = "default-secret-key-for-development"
 
 ALGORITHM = "HS256"
 
