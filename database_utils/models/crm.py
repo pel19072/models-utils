@@ -78,14 +78,18 @@ class Client(Base):
     contact = Column(String, nullable=True)
     observations = Column(String, nullable=True)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     advisor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     company = relationship("Company", back_populates="clients")
     advisor = relationship("User", back_populates="clients")
-    orders = relationship("Order", back_populates="client", cascade="all, delete-orphan")
-    recurring_orders = relationship("RecurringOrder", back_populates="client", cascade="all, delete-orphan")
+    # DATA-1: NO delete-orphan cascade on orders/recurring_orders. The FK is
+    # ondelete=SET NULL by design (an order/recurring order outlives its client),
+    # and delete_client blocks deletion while orders exist. A delete-orphan cascade
+    # here would silently destroy a client's entire order + invoice history.
+    orders = relationship("Order", back_populates="client")
+    recurring_orders = relationship("RecurringOrder", back_populates="client")
     custom_field_values = relationship("ClientCustomFieldValue", back_populates="client", cascade="all, delete-orphan")
 
 
@@ -99,7 +103,7 @@ class Product(Base):
     description = Column(String, nullable=False)
     stock = Column(Integer, nullable=False)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relationships
     company = relationship("Company", back_populates="products")
@@ -118,13 +122,18 @@ class RecurringOrder(Base):
     status = Column(Enum(RecurringOrderStatus), nullable=False, default=RecurringOrderStatus.ACTIVE, server_default='ACTIVE')
 
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relationships
     client = relationship("Client", back_populates="recurring_orders")
     company = relationship("Company", back_populates="recurring_orders")
     template_items = relationship("RecurringOrderItem", back_populates="recurring_order", cascade="all, delete-orphan")
     generated_orders = relationship("Order", back_populates="recurring_order")
+
+    # PERF-1: the cron "due recurring orders" scan filters by status (+ company_id).
+    __table_args__ = (
+        Index("ix_recurring_order_status_company", "status", "company_id"),
+    )
 
 
 class RecurringOrderItem(Base):
@@ -153,7 +162,7 @@ class Order(Base):
     paid = Column(Boolean, nullable=False)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.ACTIVE, server_default='ACTIVE')
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("client.id", ondelete="SET NULL"), nullable=True)
     recurring_order_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True)
 
@@ -173,6 +182,14 @@ class Order(Base):
             "due_date",
             unique=True,
             postgresql_where=text("status != 'CANCELLED' AND recurring_order_id IS NOT NULL"),
+        ),
+        # PERF-1: serves the hot "overdue / delayed-unpaid" dashboard query
+        # (company_id + paid=false + status=ACTIVE + due_date).
+        Index(
+            "ix_order_company_overdue",
+            "company_id",
+            "due_date",
+            postgresql_where=text("paid = false AND status = 'ACTIVE'"),
         ),
     )
 
@@ -203,7 +220,7 @@ class Invoice(Base):
     details = Column(JSON, nullable=False)
     is_valid = Column(Boolean, nullable=False, default=True)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships
@@ -223,7 +240,7 @@ class CustomFieldDefinition(Base):
     is_required = Column(Boolean, nullable=False, default=False)
     display_order = Column(Integer, nullable=False, default=0)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relationships
     company = relationship("Company", back_populates="custom_field_definitions")
@@ -256,7 +273,7 @@ class TaskState(Base):
     color = Column(Enum(TaskStateColor), nullable=False, default=TaskStateColor.GRAY, server_default='GRAY')
     position = Column(Integer, nullable=False, default=0)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relationships
     company = relationship("Company", back_populates="task_states")
@@ -277,7 +294,7 @@ class Task(Base):
     linked_object_type = Column(Enum(TaskLinkedObjectType), nullable=True)
     linked_object_id = Column(Uuid, nullable=True)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     task_state_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("task_state.id", ondelete="RESTRICT"), nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
@@ -301,7 +318,7 @@ class TaskTemplate(Base):
     default_assignee_ids = Column(JSON, nullable=True)
     linked_object_type = Column(Enum(TaskLinkedObjectType), nullable=True)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
@@ -333,7 +350,7 @@ class Integration(Base):
     # BASIC_AUTH:    {"username": "admin", "password": "..."}
 
     company_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Relationships
