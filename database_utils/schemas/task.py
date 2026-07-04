@@ -2,13 +2,10 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
-import enum
 
-
-class TaskLinkedObjectType(str, enum.Enum):
-    CLIENT = "CLIENT"
-    ORDER = "ORDER"
-    RECURRING_ORDER = "RECURRING_ORDER"
+# Single source of truth — the schema previously duplicated this enum and
+# silently drifted when CLIENT_SERVICE/INVENTORY_ITEM/NETWORK_NODE were added.
+from database_utils.models.crm import TaskLinkedObjectType
 
 
 class TaskAssigneeSimple(BaseModel):
