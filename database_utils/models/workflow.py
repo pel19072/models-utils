@@ -47,7 +47,7 @@ class Workflow(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Relationships
