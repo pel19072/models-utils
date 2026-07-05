@@ -399,6 +399,16 @@ def execute_step(
         raise ValueError(f"Unsupported action type: {step.action_type}")
 
 
+# Single-writer invariant (doc 16 §5.3/§6.6, MAJOR fix): payment/money state on
+# orders is written ONLY by backend-erp's PaymentService. Tenant automations
+# must never mutate these via UPDATE_FIELD — the step fails with an explicit
+# error instead of silently corrupting billing state. payment_status/order_type
+# remain readable in trigger conditions (evaluation uses before/after dicts).
+UPDATE_FIELD_DENYLIST: Dict[str, frozenset] = {
+    "order": frozenset({"paid", "payment_status", "payment_date", "total", "total_cents"}),
+}
+
+
 def _execute_update_field(
     db: Session,
     config: dict,
@@ -414,6 +424,14 @@ def _execute_update_field(
     model_class = model_map[resource_type]
 
     updates = config.get("updates", {})
+
+    denied = sorted(set(updates) & UPDATE_FIELD_DENYLIST.get(resource_type, frozenset()))
+    if denied:
+        raise ValueError(
+            f"UPDATE_FIELD may not write protected field(s) {', '.join(denied)} "
+            f"on '{resource_type}': payment/money state has a single writer "
+            f"(PaymentService)"
+        )
 
     # Determine which resource(s) to update
     resource_id_source = config.get("resource_id_source", "trigger")
