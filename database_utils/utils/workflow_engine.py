@@ -395,6 +395,10 @@ def execute_step(
         return _execute_http_request(db, step, context, company_id)
     elif step.action_type == StepActionType.ENQUEUE_PROVISIONING:
         return _execute_enqueue_provisioning(db, config, context, company_id)
+    elif step.action_type == StepActionType.CREATE_ORDER:
+        return _execute_create_order(db, config, context, company_id)
+    elif step.action_type == StepActionType.CREATE_TASK:
+        return _execute_create_task(db, config, context, company_id)
     else:
         raise ValueError(f"Unsupported action type: {step.action_type}")
 
@@ -500,6 +504,408 @@ def _execute_create_entity(
     db.flush()
 
     return {"created_resource_type": resource_type, "resource_id": str(entity.id)}
+
+
+def _required_uuid(value: Any, field: str, action: str) -> UUID:
+    """Parse a config value into a UUID or fail the step with a clear error
+    (an unresolved '{{...}}' template or empty string lands here)."""
+    try:
+        return UUID(str(value))
+    except (ValueError, TypeError):
+        raise ValueError(f"{action}: '{field}' did not resolve to a UUID (got {value!r})")
+
+
+def _fire_created_trigger(
+    company_id: UUID,
+    resource_type: str,
+    resource_id: UUID,
+    after_data: dict,
+) -> bool:
+    """
+    Fire follow-on CREATED triggers for an entity created inside a running
+    step (doc 16 §5.2). execute_step is sync, so the check is scheduled on the
+    running event loop; asyncio.create_task copies the current context, so the
+    depth contextvar (already depth+1 inside this execution) still enforces
+    MAX_WORKFLOW_DEPTH. The scheduled coroutine opens its own session — it
+    runs only after execute_workflow has committed and the step's session may
+    already be closed.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning(
+            f"No running event loop; skipping {resource_type}.CREATED workflow "
+            f"triggers for {resource_id}"
+        )
+        return False
+
+    async def _fire() -> None:
+        session = SessionLocal()
+        try:
+            await check_workflow_triggers(
+                db=session,
+                company_id=company_id,
+                resource_type=resource_type,
+                event_type="CREATED",
+                resource_id=resource_id,
+                before_data=None,
+                after_data=after_data,
+            )
+        finally:
+            session.close()
+
+    task = loop.create_task(_fire())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return True
+
+
+def _execute_create_order(
+    db: Session,
+    config: dict,
+    context: dict,
+    company_id: UUID,
+) -> dict:
+    """
+    CREATE_ORDER action (doc 16 §5.2, installation flow). Mirrors
+    backend-erp orders.py:create_order.
+
+    action_config format (templates already resolved by execute_step):
+    {
+      "order_type": "INSTALLATION",
+      "client_id": "<uuid>",              # {{trigger.after.client_id}}
+      "client_service_id": "<uuid>",      # {{trigger.resource_id}}
+      "items": [{"product_id": "<uuid>", "quantity": 1}],
+      "due_date_offset_days": 0,
+      "idempotency_key": "install-order-<uuid>"   # informational; dedupe below
+    }
+
+    Single-writer invariant (§5.3/§6.6): orders created by the engine ALWAYS
+    start payment_status=PENDING / paid=False. The engine never writes payment
+    or money state after creation — that is PaymentService's job.
+
+    Idempotency for INSTALLATION orders: (1) precheck — an existing
+    non-cancelled INSTALLATION order for the client_service dedupes the step;
+    (2) partial unique index uq_order_installation_per_service (revision
+    c1e_install_actions) backs it at the DB level, so a genuine race fails the
+    step instead of double-billing.
+
+    Requires the billing-rework models (OrderType, PaymentStatus, *_cents
+    columns) — the billing and installation models-utils branches always
+    compose into develop together (§2.6); imports are lazy so this module
+    stays importable on the installation branch alone.
+    """
+    from datetime import timedelta
+    from database_utils.models.crm import (
+        Client, Order, OrderItem, OrderStatus, OrderType, PaymentStatus, Product,
+    )
+    from database_utils.models.isp import ClientService
+    from database_utils.utils.audit_utils import serialize_for_audit
+
+    raw_type = config.get("order_type") or "ONE_SHOT"
+    try:
+        order_type = OrderType(raw_type)
+    except ValueError:
+        raise ValueError(f"CREATE_ORDER: invalid order_type {raw_type!r}")
+
+    # --- Company-scoped target resolution (config is tenant-editable: never
+    # trust a raw id — every referenced row must belong to THIS company) ---
+    client_service = None
+    client_service_id = None
+    if config.get("client_service_id") or order_type == OrderType.INSTALLATION:
+        client_service_id = _required_uuid(
+            config.get("client_service_id"), "client_service_id", "CREATE_ORDER"
+        )
+        client_service = db.query(ClientService).filter(
+            ClientService.id == client_service_id,
+            ClientService.company_id == company_id,
+        ).first()
+        if not client_service:
+            raise ValueError(
+                f"CREATE_ORDER: client_service {client_service_id} not found "
+                f"for company {company_id}"
+            )
+
+    if config.get("client_id"):
+        client_id = _required_uuid(config.get("client_id"), "client_id", "CREATE_ORDER")
+        owned = db.query(Client.id).filter(
+            Client.id == client_id, Client.company_id == company_id
+        ).first()
+        if not owned:
+            raise ValueError(
+                f"CREATE_ORDER: client {client_id} not found for company {company_id}"
+            )
+    elif client_service is not None:
+        client_id = client_service.client_id
+    else:
+        client_id = None
+
+    # --- Idempotency precheck (§5.2): one live INSTALLATION order per service ---
+    if order_type == OrderType.INSTALLATION:
+        existing = db.query(Order).filter(
+            Order.company_id == company_id,
+            Order.client_service_id == client_service_id,
+            Order.order_type == OrderType.INSTALLATION,
+            Order.status != OrderStatus.CANCELLED,
+        ).first()
+        if existing:
+            return {
+                "deduped": True,
+                "created_resource_type": "order",
+                "resource_id": str(existing.id),
+            }
+
+    # --- Items: company-scoped products, snapshots, totals in cents ---
+    items = config.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("CREATE_ORDER: 'items' must be a non-empty list")
+
+    product_ids = [
+        _required_uuid(item.get("product_id"), "items[].product_id", "CREATE_ORDER")
+        for item in items
+    ]
+    products = db.query(Product).filter(
+        Product.id.in_(product_ids), Product.company_id == company_id
+    ).all()
+    product_map = {p.id: p for p in products}
+    missing = [str(pid) for pid in product_ids if pid not in product_map]
+    if missing:
+        raise ValueError(
+            f"CREATE_ORDER: product(s) not found for company: {', '.join(missing)}"
+        )
+
+    total_cents = 0
+    order_items = []
+    for item, product_id in zip(items, product_ids):
+        try:
+            quantity = int(item.get("quantity", 1))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"CREATE_ORDER: invalid quantity {item.get('quantity')!r}"
+            )
+        if quantity <= 0:
+            raise ValueError("CREATE_ORDER: item quantity must be > 0")
+        product = product_map[product_id]
+        unit_price_cents = (
+            product.price_cents
+            if product.price_cents is not None
+            else int(round((product.price or 0) * 100))
+        )
+        total_cents += unit_price_cents * quantity
+        order_items.append(OrderItem(
+            product_id=product.id,
+            quantity=quantity,
+            # §2.2 snapshots: app-level required for all new rows
+            unit_price_cents=unit_price_cents,
+            product_name=product.name,
+        ))
+
+    try:
+        offset_days = int(config.get("due_date_offset_days") or 0)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"CREATE_ORDER: invalid due_date_offset_days "
+            f"{config.get('due_date_offset_days')!r}"
+        )
+
+    order = Order(
+        company_id=company_id,
+        client_id=client_id,
+        client_service_id=client_service_id,
+        order_type=order_type,
+        payment_status=PaymentStatus.PENDING,  # engine never writes payment state
+        paid=False,                            # dual-write kept through Cycle 1
+        status=OrderStatus.ACTIVE,
+        total=total_cents / 100,               # Float dual-write through Cycle 1
+        total_cents=total_cents,
+        due_date=now_gt() + timedelta(days=offset_days),
+    )
+    order.order_items = order_items
+    db.add(order)
+    db.flush()
+
+    after_data = serialize_for_audit(
+        {c.name: getattr(order, c.name) for c in order.__table__.columns}
+    )
+    _fire_created_trigger(company_id, "order", order.id, after_data)
+
+    return {
+        "deduped": False,
+        "created_resource_type": "order",
+        "resource_id": str(order.id),
+        "order_type": order_type.value,
+        "total_cents": total_cents,
+    }
+
+
+def _execute_create_task(
+    db: Session,
+    config: dict,
+    context: dict,
+    company_id: UUID,
+) -> dict:
+    """
+    CREATE_TASK action (doc 16 §5.2, installation flow). Replicates
+    backend-erp tasks.py:create_task invariants: company-scoped state
+    validation, position = max(position)+1 in the target column,
+    company-scoped assignees, created_by=NULL (system-created), fires
+    task CREATED triggers.
+
+    action_config format (templates already resolved):
+    {
+      "name": "...",
+      "description": "...",                      # may embed {{steps.s1.resource_id}}
+      "task_state_id": "<uuid>",                 # {{param:install_state_id}}
+      "linked_object_type": "CLIENT_SERVICE",    # Cycle-3 join key — ORDER linkage
+      "linked_object_id": "<uuid>",              #   is forbidden for installs (§5.2)
+      "assignee_source": "client_technician" | "fixed" | "none",   # default "none"
+      "assignee_ids": ["<uuid>", ...],           # for "fixed"; also the fallback
+                                                 #   list for "client_technician"
+      "client_id": "<uuid>",                     # for "client_technician"
+      "due_date_offset_days": 3                  # optional
+    }
+
+    Assignee resolution for "client_technician": the client's
+    assigned_technician_id; if the client has none, fall back to the
+    (optional) fixed assignee_ids list; else the task is left unassigned for
+    the dispatcher (round-robin rejected for Cycle 1 — assignee_source keeps
+    it schema-free later).
+    """
+    from datetime import timedelta
+    from sqlalchemy import func
+    from database_utils.models.auth import User
+    from database_utils.models.crm import Client, Task, TaskLinkedObjectType, TaskState
+    from database_utils.models.isp import ClientService
+    from database_utils.utils.audit_utils import serialize_for_audit
+
+    name = config.get("name")
+    if not name or not str(name).strip():
+        raise ValueError("CREATE_TASK: 'name' is required")
+
+    # --- Company-scoped state validation (tasks.py:create_task pattern) ---
+    task_state_id = _required_uuid(config.get("task_state_id"), "task_state_id", "CREATE_TASK")
+    state = db.query(TaskState).filter(
+        TaskState.id == task_state_id, TaskState.company_id == company_id
+    ).first()
+    if not state:
+        raise ValueError(
+            f"CREATE_TASK: task_state {task_state_id} not found for company {company_id}"
+        )
+
+    # --- Linked object ---
+    linked_object_type = None
+    linked_object_id = None
+    raw_linked_type = config.get("linked_object_type")
+    if raw_linked_type:
+        try:
+            linked_object_type = TaskLinkedObjectType(raw_linked_type)
+        except ValueError:
+            raise ValueError(
+                f"CREATE_TASK: invalid linked_object_type {raw_linked_type!r}"
+            )
+        linked_object_id = _required_uuid(
+            config.get("linked_object_id"), "linked_object_id", "CREATE_TASK"
+        )
+
+    # --- Position: end of the target column ---
+    max_pos = db.query(func.max(Task.position)).filter(
+        Task.task_state_id == task_state_id, Task.company_id == company_id
+    ).scalar()
+    position = (max_pos + 1) if max_pos is not None else 0
+
+    # --- Assignee resolution ---
+    assignee_source = config.get("assignee_source") or "none"
+    if assignee_source not in ("client_technician", "fixed", "none"):
+        raise ValueError(
+            f"CREATE_TASK: invalid assignee_source {assignee_source!r} "
+            f"(expected client_technician | fixed | none)"
+        )
+
+    # assignee_ids may arrive as an unresolved '{{param:...}}' string when the
+    # optional users param was not provided at install time — only a real list
+    # of parseable UUIDs counts.
+    raw_fixed = config.get("assignee_ids")
+    fixed_ids: List[UUID] = []
+    if isinstance(raw_fixed, list):
+        for value in raw_fixed:
+            try:
+                fixed_ids.append(UUID(str(value)))
+            except (ValueError, TypeError):
+                continue
+
+    wanted_ids: List[UUID] = []
+    if assignee_source == "client_technician":
+        client_id = None
+        if config.get("client_id"):
+            try:
+                client_id = UUID(str(config["client_id"]))
+            except (ValueError, TypeError):
+                client_id = None
+        if (
+            client_id is None
+            and linked_object_type == TaskLinkedObjectType.CLIENT_SERVICE
+            and linked_object_id is not None
+        ):
+            client_service = db.query(ClientService).filter(
+                ClientService.id == linked_object_id,
+                ClientService.company_id == company_id,
+            ).first()
+            client_id = client_service.client_id if client_service else None
+        technician_id = None
+        if client_id is not None:
+            client = db.query(Client).filter(
+                Client.id == client_id, Client.company_id == company_id
+            ).first()
+            technician_id = client.assigned_technician_id if client else None
+        # Technician first; fixed list as fallback; else unassigned (dispatcher).
+        wanted_ids = [technician_id] if technician_id else fixed_ids
+    elif assignee_source == "fixed":
+        wanted_ids = fixed_ids
+
+    assignees = []
+    if wanted_ids:
+        assignees = db.query(User).filter(
+            User.id.in_(wanted_ids), User.company_id == company_id
+        ).all()
+
+    # --- Optional due date ---
+    due_date = None
+    if config.get("due_date_offset_days") is not None:
+        try:
+            due_date = now_gt() + timedelta(days=int(config["due_date_offset_days"]))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"CREATE_TASK: invalid due_date_offset_days "
+                f"{config.get('due_date_offset_days')!r}"
+            )
+
+    task = Task(
+        name=str(name),
+        description=config.get("description"),
+        position=position,
+        due_date=due_date,
+        linked_object_type=linked_object_type,
+        linked_object_id=linked_object_id,
+        company_id=company_id,
+        task_state_id=task_state_id,
+        created_by=None,  # system-created (workflow engine), not a user
+    )
+    if assignees:
+        task.assignees = assignees
+    db.add(task)
+    db.flush()
+
+    after_data = serialize_for_audit(
+        {c.name: getattr(task, c.name) for c in task.__table__.columns}
+    )
+    _fire_created_trigger(company_id, "task", task.id, after_data)
+
+    return {
+        "created_resource_type": "task",
+        "resource_id": str(task.id),
+        "task_state_id": str(task_state_id),
+        "assignee_ids": [str(u.id) for u in assignees],
+    }
 
 
 def _execute_enqueue_provisioning(
@@ -622,6 +1028,7 @@ def _resolve_template(value: Any, context: dict) -> Any:
       {{trigger.after.FIELD}}         — from context["trigger"]["after"][FIELD]
       {{trigger.before.FIELD}}        — from context["trigger"]["before"][FIELD]
       {{steps.STEP_UUID.FIELD}}       — from context[STEP_UUID][FIELD]
+      {{now}}                         — current Guatemala-tz timestamp (ISO 8601)
     """
     import re
     if isinstance(value, str):
@@ -629,6 +1036,8 @@ def _resolve_template(value: Any, context: dict) -> Any:
             expr = match.group(1).strip()
             parts = expr.split(".")
             try:
+                if expr == "now":
+                    return now_gt().isoformat()
                 if parts[0] == "trigger":
                     trigger = context.get("trigger", {})
                     if len(parts) == 2:

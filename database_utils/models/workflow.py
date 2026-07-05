@@ -27,6 +27,10 @@ class StepActionType(str, enum.Enum):
     CREATE_ENTITY = "CREATE_ENTITY"
     HTTP_REQUEST = "HTTP_REQUEST"
     ENQUEUE_PROVISIONING = "ENQUEUE_PROVISIONING"
+    # Installation flow (doc 16 §5.2): DB enum values added by revision
+    # c1e_install_actions (ALTER TYPE ... ADD VALUE, irreversible).
+    CREATE_ORDER = "CREATE_ORDER"
+    CREATE_TASK = "CREATE_TASK"
 
 
 class ExecutionStatus(str, enum.Enum):
