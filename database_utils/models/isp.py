@@ -15,7 +15,7 @@ from sqlalchemy import (
     Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text,
     Uuid, Float, Index, UniqueConstraint
 )
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import relationship, Mapped, mapped_column, validates
 
 from database_utils.database import Base
 from ..utils.timezone_utils import now_gt
@@ -202,6 +202,18 @@ class ClientService(Base):
     __table_args__ = (
         Index("ix_client_service_company_status", "company_id", "status"),
     )
+
+    @validates("status")
+    def _stamp_status_dates(self, key, value):
+        """Domain rule enforced at the model so every writer (router, workflow
+        engine UPDATE_FIELD, worker) behaves identically: first transition to
+        ACTIVE stamps activation_date; CANCELLED stamps cancelled_at."""
+        new_status = value.value if isinstance(value, ClientServiceStatus) else value
+        if new_status == ClientServiceStatus.ACTIVE.value and self.activation_date is None:
+            self.activation_date = now_gt()
+        elif new_status == ClientServiceStatus.CANCELLED.value and self.cancelled_at is None:
+            self.cancelled_at = now_gt()
+        return value
 
 
 class ServiceSuspension(Base):
