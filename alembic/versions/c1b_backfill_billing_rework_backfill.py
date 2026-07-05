@@ -137,6 +137,19 @@ def upgrade() -> None:
                 WHERE paid AND payment_status <> 'PAID' LIMIT :batch
             )
         """)
+        # Symmetric direction: the OLD backend can flip paid true->false
+        # (revert-payment) between a committed batch and the assertions.
+        # Without this block that row would fail the paid<>PAID assertion
+        # forever — re-running would NOT converge. At this revision the
+        # ledger does not exist yet, so PENDING is the only correct reverse
+        # mapping (PARTIAL/REFUNDED cannot occur).
+        _batched(connection, """
+            UPDATE "order" SET payment_status = 'PENDING'
+            WHERE id IN (
+                SELECT id FROM "order"
+                WHERE NOT paid AND payment_status = 'PAID' LIMIT :batch
+            )
+        """)
         _batched(connection, """
             UPDATE "order" SET order_type = 'RECURRING'
             WHERE id IN (

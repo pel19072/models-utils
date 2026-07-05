@@ -65,8 +65,13 @@ def _synthesize_legacy_rows(connection) -> int:
             WHERE o.paid
               AND o.total_cents > 0
               AND NOT EXISTS (
+                  -- ANY prior PAYMENT row disqualifies, not just a LEGACY one:
+                  -- if this revision is ever re-executed after cutover (stamp
+                  -- rollback, restored alembic_version), orders paid through
+                  -- the live ledger must NOT receive an extra full-amount
+                  -- LEGACY row (that would double their ledger sum).
                   SELECT 1 FROM payment p
-                  WHERE p.order_id = o.id AND p.reference = 'LEGACY_BACKFILL'
+                  WHERE p.order_id = o.id AND p.kind = 'PAYMENT'
               )
             LIMIT :batch
         """), {"batch": BATCH})
