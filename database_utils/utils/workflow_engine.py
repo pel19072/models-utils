@@ -372,6 +372,15 @@ def execute_workflow(
         logger.error(f"Workflow execution {execution.id} failed: {e}")
 
     db.commit()
+
+    # Follow-on CREATED triggers queued by CREATE_ORDER/CREATE_TASK fire only
+    # now, after the commit above — a follow-on workflow's fresh session is
+    # guaranteed to see the created entities. Steps that completed before a
+    # later step failed are committed (existing semantics), so their queued
+    # triggers fire too.
+    for pending in execution_context.get(_PENDING_TRIGGERS_KEY, []):
+        _fire_created_trigger(*pending)
+
     return execution
 
 
@@ -515,6 +524,32 @@ def _required_uuid(value: Any, field: str, action: str) -> UUID:
         raise ValueError(f"{action}: '{field}' did not resolve to a UUID (got {value!r})")
 
 
+# execution_context key holding (company_id, resource_type, resource_id,
+# after_data) tuples queued by CREATE_ORDER/CREATE_TASK. Cannot collide with
+# step results (stored under str(step_uuid)) or "trigger".
+_PENDING_TRIGGERS_KEY = "_pending_created_triggers"
+
+
+def _queue_created_trigger(
+    context: dict,
+    company_id: UUID,
+    resource_type: str,
+    resource_id: UUID,
+    after_data: dict,
+) -> None:
+    """
+    Queue a follow-on CREATED trigger for an entity created inside a running
+    step (doc 16 §5.2). execute_workflow schedules the queued triggers AFTER
+    its db.commit(), guaranteeing the follow-on workflow's fresh session sees
+    the committed entity (and that nothing fires for a run whose commit
+    fails). Scheduling directly from the step handler would rely on the
+    engine's call graph staying await-free between handler and commit.
+    """
+    context.setdefault(_PENDING_TRIGGERS_KEY, []).append(
+        (company_id, resource_type, resource_id, after_data)
+    )
+
+
 def _fire_created_trigger(
     company_id: UUID,
     resource_type: str,
@@ -522,13 +557,12 @@ def _fire_created_trigger(
     after_data: dict,
 ) -> bool:
     """
-    Fire follow-on CREATED triggers for an entity created inside a running
-    step (doc 16 §5.2). execute_step is sync, so the check is scheduled on the
-    running event loop; asyncio.create_task copies the current context, so the
-    depth contextvar (already depth+1 inside this execution) still enforces
-    MAX_WORKFLOW_DEPTH. The scheduled coroutine opens its own session — it
-    runs only after execute_workflow has committed and the step's session may
-    already be closed.
+    Fire follow-on CREATED triggers for a committed entity. Called by
+    execute_workflow after its db.commit() (see _queue_created_trigger).
+    execute_workflow is sync, so the check is scheduled on the running event
+    loop; asyncio.create_task copies the current context, so the depth
+    contextvar (already depth+1 inside this execution) still enforces
+    MAX_WORKFLOW_DEPTH. The scheduled coroutine opens its own session.
     """
     try:
         loop = asyncio.get_running_loop()
@@ -686,11 +720,18 @@ def _execute_create_order(
         if quantity <= 0:
             raise ValueError("CREATE_ORDER: item quantity must be > 0")
         product = product_map[product_id]
-        unit_price_cents = (
-            product.price_cents
-            if product.price_cents is not None
-            else int(round((product.price or 0) * 100))
-        )
+        if product.price_cents is not None:
+            unit_price_cents = product.price_cents
+        else:
+            # Dual-window fallback (product written by an old backend before
+            # its price_cents backfill). Half-away-from-zero to match the
+            # canonical ROUND(x::numeric*100)::bigint rule (doc 16 §2.5) —
+            # Python's round() is banker's rounding and would diverge.
+            from decimal import Decimal, ROUND_HALF_UP
+            unit_price_cents = int(
+                (Decimal(str(product.price or 0)) * 100)
+                .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            )
         total_cents += unit_price_cents * quantity
         order_items.append(OrderItem(
             product_id=product.id,
@@ -727,7 +768,7 @@ def _execute_create_order(
     after_data = serialize_for_audit(
         {c.name: getattr(order, c.name) for c in order.__table__.columns}
     )
-    _fire_created_trigger(company_id, "order", order.id, after_data)
+    _queue_created_trigger(context, company_id, "order", order.id, after_data)
 
     return {
         "deduped": False,
@@ -898,7 +939,7 @@ def _execute_create_task(
     after_data = serialize_for_audit(
         {c.name: getattr(task, c.name) for c in task.__table__.columns}
     )
-    _fire_created_trigger(company_id, "task", task.id, after_data)
+    _queue_created_trigger(context, company_id, "task", task.id, after_data)
 
     return {
         "created_resource_type": "task",
