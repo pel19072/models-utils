@@ -169,7 +169,7 @@ def seed_tier_data(connection: Connection) -> None:
 
                 if tier_name in tiers_data_map:
                     tier_data = tiers_data_map[tier_name]
-                    connection.execute(
+                    result = connection.execute(
                         text(
                             "UPDATE tier SET "
                             "price = :price, "
@@ -177,7 +177,15 @@ def seed_tier_data(connection: Connection) -> None:
                             "features = :features, "
                             "stripe_price_id = :stripe_price_id, "
                             "is_active = :is_active "
-                            "WHERE id = :tier_id"
+                            "WHERE id = :tier_id "
+                            # Per-row guard: only bootstrap rows that have NO
+                            # billing data yet. Without it, any state where no
+                            # tier has price>0 (e.g. a future pricing change)
+                            # would bulk-overwrite customized price/features/
+                            # is_active with these hardcoded values on every
+                            # migrate until some tier regains a price.
+                            "AND (price IS NULL OR price = 0) "
+                            "AND stripe_price_id IS NULL"
                         ),
                         {
                             'tier_id': tier_id,
@@ -188,7 +196,7 @@ def seed_tier_data(connection: Connection) -> None:
                             'is_active': tier_data['is_active']
                         }
                     )
-                    updated_count += 1
+                    updated_count += result.rowcount
                 else:
                     logger.warning(f"Unknown tier '{tier_name}' found - leaving unchanged")
 
