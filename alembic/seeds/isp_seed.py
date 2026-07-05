@@ -479,7 +479,34 @@ def _seed_workflow_templates(connection: Connection) -> None:
     # workflows are materialized copies, so DO UPDATE is safe and lets template
     # revisions (e.g. new-installation v2) ship without a new key. Release
     # note: tenants reinstall to pick up a new version.
+    #
+    # Migration-position gate: seeds run after ANY alembic command (including
+    # partial upgrades and downgrades), but a template definition may use step
+    # action types added by a LATER revision (e.g. CREATE_ORDER/CREATE_TASK
+    # from c1e_install_actions). Publishing such a blueprint while the enum
+    # lacks the value makes install 500 — skip templates whose action types
+    # the database cannot represent yet.
+    supported_actions = {
+        row[0]
+        for row in connection.execute(text(
+            "SELECT e.enumlabel FROM pg_enum e "
+            "JOIN pg_type t ON t.oid = e.enumtypid "
+            "WHERE t.typname = 'stepactiontype'"
+        ))
+    }
     for tpl in WORKFLOW_TEMPLATES:
+        required = {
+            step.get("action_type")
+            for step in tpl["definition"].get("steps", [])
+            if step.get("action_type")
+        }
+        missing = required - supported_actions
+        if missing:
+            logger.warning(
+                f"Skipping template '{tpl['key']}': stepactiontype enum lacks "
+                f"{sorted(missing)} at this migration position"
+            )
+            continue
         connection.execute(
             text(
                 "INSERT INTO workflow_template (id, created_at, key, name, description, category, definition, is_active) "
