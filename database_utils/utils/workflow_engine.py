@@ -208,9 +208,16 @@ def _matches_field_conditions(
     if not field or not operator:
         return True
 
+    def _norm(v) -> str:
+        # Enum members stringify as "ClassName.MEMBER"; compare by value.
+        import enum as _enum
+        if isinstance(v, _enum.Enum):
+            v = v.value
+        return str(v)
+
     if operator == "changed":
         if before_data and after_data:
-            return str(before_data.get(field)) != str(after_data.get(field))
+            return _norm(before_data.get(field)) != _norm(after_data.get(field))
         return True
 
     elif operator == "changed_to":
@@ -219,19 +226,19 @@ def _matches_field_conditions(
         # CREATE) counts as "did not equal it before".
         if not after_data:
             return False
-        before_val = str(before_data.get(field)) if before_data else None
-        return before_val != str(value) and str(after_data.get(field)) == str(value)
+        before_val = _norm(before_data.get(field)) if before_data else None
+        return before_val != _norm(value) and _norm(after_data.get(field)) == _norm(value)
 
     elif operator == "changed_from":
         # True only on the transition AWAY from `value`.
         if not before_data:
             return False
-        after_val = str(after_data.get(field)) if after_data else None
-        return str(before_data.get(field)) == str(value) and after_val != str(value)
+        after_val = _norm(after_data.get(field)) if after_data else None
+        return _norm(before_data.get(field)) == _norm(value) and after_val != _norm(value)
 
     elif operator == "equals":
         if after_data:
-            return str(after_data.get(field)) == str(value)
+            return _norm(after_data.get(field)) == _norm(value)
         return False
 
     return True
