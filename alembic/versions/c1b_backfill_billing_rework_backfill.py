@@ -18,6 +18,13 @@ Downgrade: intentional no-op. The backfill only fills additive columns that
 R1's downgrade drops entirely; un-invalidating duplicate invoices or deleting
 copied grants would destroy information with no consumer benefit (doc 16 §7:
 "forward re-runnable").
+
+Concurrency note: prod migrates while the OLD backend serves traffic. A write
+landing between the last backfill batch and the assertions (e.g. an order
+INSERT with total_cents NULL, or a legacy pay-order flipping `paid`) can trip
+an assertion. That is safe by design: every block here is idempotent, so the
+documented remedy is simply re-running `alembic upgrade head` — the second
+pass converges and the assertions pass (doc 16 §6.h retry-from-Rn).
 """
 from typing import Sequence, Union
 
@@ -56,10 +63,14 @@ def upgrade() -> None:
     with op.get_context().autocommit_block():
         # §2.5.1 order.total_cents — copied from the Float, never recomputed
         # from items (order.total is historical truth).
+        # (total IS NOT NULL is redundant today — the column is NOT NULL — but
+        # keeps the loop provably convergent: a NULL source would otherwise
+        # re-select the same rows forever.)
         _batched(connection, """
             UPDATE "order" SET total_cents = ROUND(total::numeric * 100)::bigint
             WHERE id IN (
-                SELECT id FROM "order" WHERE total_cents IS NULL LIMIT :batch
+                SELECT id FROM "order"
+                WHERE total_cents IS NULL AND total IS NOT NULL LIMIT :batch
             )
         """)
 
@@ -73,7 +84,9 @@ def upgrade() -> None:
                 subtotal_cents = ROUND(total::numeric * 100)::bigint
                                  - ROUND(tax::numeric * 100)::bigint
             WHERE id IN (
-                SELECT id FROM invoice WHERE total_cents IS NULL LIMIT :batch
+                SELECT id FROM invoice
+                WHERE total_cents IS NULL
+                  AND total IS NOT NULL AND tax IS NOT NULL LIMIT :batch
             )
         """)
 
@@ -269,6 +282,15 @@ def upgrade() -> None:
         """,
         "paid orders without payment_date": """
             SELECT COUNT(*) FROM "order" WHERE paid AND payment_date IS NULL
+        """,
+        "unambiguous-bridge orders left without client_service_id (§2.5.6)": """
+            SELECT COUNT(*) FROM "order" o
+            JOIN (
+                SELECT recurring_order_id AS ro_id FROM client_service
+                WHERE recurring_order_id IS NOT NULL
+                GROUP BY recurring_order_id HAVING COUNT(*) = 1
+            ) b ON o.recurring_order_id = b.ro_id
+            WHERE o.client_service_id IS NULL
         """,
         "orders with >1 valid invoice": """
             SELECT COUNT(*) FROM (

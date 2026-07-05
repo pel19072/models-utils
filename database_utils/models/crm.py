@@ -288,6 +288,17 @@ class Order(Base):
             "due_date",
             postgresql_where=text("paid = false AND status = 'ACTIVE'"),
         ),
+        # At most one live INSTALLATION order per client_service (workflow
+        # CREATE_ORDER dedupe backstop). Created by revision R-I1
+        # (c1e_install_actions, installation-flow branch) — declared here so
+        # the model matches the DB post-compose and autogenerate never
+        # proposes dropping it.
+        Index(
+            "uq_order_installation_per_service",
+            "client_service_id",
+            unique=True,
+            postgresql_where=text("order_type = 'INSTALLATION' AND status <> 'CANCELLED'"),
+        ),
     )
 
 
