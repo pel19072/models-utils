@@ -73,6 +73,12 @@ def seed_rbac_data(connection: Connection) -> None:
             {"name": "orders.revert_payment", "resource": "orders", "action": "revert_payment", "description": "Revert order payment and invalidate invoice (ADMIN only)"},
             {"name": "orders.change_status", "resource": "orders", "action": "change_status", "description": "Change order status (cancel/activate) - ADMIN only"},
 
+            # Payment ledger permissions (doc 16 §1; also inserted by migration
+            # c1b_backfill with grant-copy from the orders.* equivalents)
+            {"name": "payments.record", "resource": "payments", "action": "record", "description": "Record payments against orders"},
+            {"name": "payments.read", "resource": "payments", "action": "read", "description": "View order payment ledgers"},
+            {"name": "payments.refund", "resource": "payments", "action": "refund", "description": "Refund recorded payments (ADMIN only)"},
+
             # Product permissions
             {"name": "products.create", "resource": "products", "action": "create", "description": "Create new products"},
             {"name": "products.read", "resource": "products", "action": "read", "description": "View product information"},
@@ -199,11 +205,13 @@ def seed_rbac_data(connection: Connection) -> None:
 
         logger.info(f"✓ ADMIN role assigned {len(admin_permissions)} permissions")
 
-        # MANAGER: All permissions except roles, permissions, company settings, and revert_payment
+        # MANAGER: All permissions except roles, permissions, company settings,
+        # and the ADMIN-only payment reversal keys (orders.revert_payment and its
+        # ledger successor payments.refund — mirrors the migration grant-copy).
         manager_permissions = connection.execute(
             text(
                 "SELECT id FROM permission WHERE resource NOT IN ('roles', 'permissions', 'company') "
-                "AND name != 'orders.revert_payment'"
+                "AND name NOT IN ('orders.revert_payment', 'payments.refund')"
             )
         ).fetchall()
 
@@ -225,6 +233,7 @@ def seed_rbac_data(connection: Connection) -> None:
         sales_permission_names = [
             'clients.create', 'clients.read', 'clients.update',
             'orders.create', 'orders.read', 'orders.update',
+            'payments.record', 'payments.read',
             'recurring_orders.create', 'recurring_orders.read', 'recurring_orders.update',
             'products.read',
             'dashboard.read',
@@ -256,7 +265,7 @@ def seed_rbac_data(connection: Connection) -> None:
 
         # USER: Read-only permissions
         user_permission_names = [
-            'clients.read', 'orders.read', 'products.read', 'recurring_orders.read', 'dashboard.read',
+            'clients.read', 'orders.read', 'payments.read', 'products.read', 'recurring_orders.read', 'dashboard.read',
             'tasks.read', 'task_states.read',
         ]
 

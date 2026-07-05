@@ -12,7 +12,7 @@ Design rationale: docs/isp-platform/00-architecture-decisions.md (repo root).
   the worker via SELECT ... FOR UPDATE SKIP LOCKED.
 """
 from sqlalchemy import (
-    Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Enum, text,
+    Column, String, Integer, BigInteger, Boolean, JSON, DateTime, ForeignKey, Enum, text,
     Uuid, Float, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column, validates
@@ -135,6 +135,9 @@ class ServicePlan(Base):
     upload_mbps = Column(Integer, nullable=True)
     data_cap_gb = Column(Integer, nullable=True)  # NULL = unlimited
     price = Column(Float, nullable=False, default=0.0)
+    # Money-in-cents shadow column (Cycle 1 dual-write; Float `price` drops in
+    # Cycle 2). Nullable, no server_default — doc 16 §1/§2.2.
+    price_cents = Column(BigInteger, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     # Vendor-agnostic provisioning intent consumed as playbook variables,
     # e.g. {"speed_profile": "HOME_50M", "vlan": 110, "qos_class": "residential"}
@@ -311,6 +314,9 @@ class InventoryItem(Base):
     purchase_date = Column(DateTime(timezone=True), nullable=True)
     warranty_until = Column(DateTime(timezone=True), nullable=True)
     cost = Column(Float, nullable=True)
+    # Money-in-cents shadow column (Cycle 1 dual-write; Float `cost` drops in
+    # Cycle 2). NULL stays NULL in the backfill — doc 16 §2.5.3.
+    cost_cents = Column(BigInteger, nullable=True)
     notes = Column(String, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(

@@ -5,6 +5,7 @@ from .invoice import *
 from .notification import *
 from .order import *
 from .order_item import *
+from .payment import *
 from .permission import *
 from .product import *
 from .recurring_order import *

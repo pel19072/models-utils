@@ -10,11 +10,16 @@ from typing import List, Dict, Any, Optional
 # Each entry: {"name": "<column_name>", "type": "<field_type>", "fk_to": "<resource_type>" | None}
 # type values: "string", "number", "boolean", "date", "uuid", "json"
 RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
+    # NOTE (doc 16 §2.2/§5.3): `paid` removed — payment state is written only by
+    # backend-erp's PaymentService (single-writer invariant). payment_status and
+    # order_type are exposed for TRIGGER CONDITIONS only; the engine's
+    # UPDATE_FIELD denylist (workflow_engine.py) blocks writing them.
     "order": [
         {"name": "due_date", "type": "date", "fk_to": None},
         {"name": "total", "type": "number", "fk_to": None},
-        {"name": "paid", "type": "boolean", "fk_to": None},
         {"name": "status", "type": "string", "fk_to": None},
+        {"name": "payment_status", "type": "string", "fk_to": None},
+        {"name": "order_type", "type": "string", "fk_to": None},
         {"name": "client_id", "type": "uuid", "fk_to": "client"},
         {"name": "recurring_order_id", "type": "uuid", "fk_to": "recurring_order"},
     ],

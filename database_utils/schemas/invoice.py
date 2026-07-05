@@ -3,6 +3,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from uuid import UUID
 
+from database_utils.models.crm import PaymentStatus
+
 
 class InvoiceBase(BaseModel):
     issue_date: datetime
@@ -30,6 +32,12 @@ class InvoiceOut(InvoiceBase):
     company_id: UUID
     order_id: UUID
     is_valid: bool = True
+    # --- Cycle 1 billing additions (doc 16 §3.5, additive) ---
+    subtotal_cents: Optional[int] = None
+    tax_cents: Optional[int] = None
+    total_cents: Optional[int] = None
+    # Order payment_status passthrough; populated by the backend.
+    payment_status: Optional[PaymentStatus] = None
 
     model_config = ConfigDict(from_attributes=True)
 

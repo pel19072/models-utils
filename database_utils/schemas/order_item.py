@@ -17,8 +17,15 @@ class OrderItemUpdate(BaseModel):
     product_id: Optional[UUID]
     quantity: Optional[int]
 
-class OrderItemOut(OrderItemBase):
+class OrderItemOut(BaseModel):
     id: UUID
-    product: Optional[ProductOut]
+    # Nullable since Cycle 1: product_id is SET NULL on product deletion; the
+    # snapshot columns below keep the line meaningful (doc 16 §2.2).
+    product_id: Optional[UUID] = None
+    quantity: int
+    product: Optional[ProductOut] = None
+    # Order-time snapshots (nullable for pre-backfill history).
+    unit_price_cents: Optional[int] = None
+    product_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
