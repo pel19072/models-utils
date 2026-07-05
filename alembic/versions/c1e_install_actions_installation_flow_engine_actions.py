@@ -11,6 +11,13 @@ rehearsal asserts `alembic heads` returns exactly 1). The c1c file lives on
 feat/billing-rework/models-schema; both branches are always composed into
 develop together, billing first.
 
+RENAME COUPLING (verifier note): if the billing branch's R3 revision id
+'c1c_payment_ledger' is ever renamed, this file's down_revision MUST be
+updated in the same pass — nothing catches the mismatch until compose, where
+any alembic command fails with a KeyError on the missing revision. For the
+same reason this branch alone cannot run `alembic upgrade` (the c1c file is
+absent pre-compose); that is expected.
+
 Seed note (§2.0 rule: every seed change ships with a revision): this branch
 also revises alembic/seeds/isp_seed.py (new-installation template v2 +
 template upsert). Seeds are applied by env.py after every upgrade, so no seed
@@ -31,6 +38,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # Doc 16 §6.h: lock_timeout set in every revision. The CREATE UNIQUE INDEX
+    # below (non-CONCURRENTLY) takes a SHARE lock on "order" and would
+    # otherwise queue indefinitely behind long transactions during the prod
+    # migration.
+    op.execute("SET lock_timeout = '5s'")
+
     # Native-enum ADD VALUE always runs in an autocommit_block (doc 16 §2.0):
     # with transaction_per_migration the new values must be committed before
     # any later statement/seed can reference them, and PG < 12 forbids
