@@ -50,6 +50,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        transaction_per_migration=True,
     )
 
     with context.begin_transaction():
@@ -71,31 +72,50 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # Each revision commits in its own transaction (doc 16 §2.0, BLOCKER fix):
+            # - a failed revision no longer rolls back previously applied ones
+            #   (documented retry-from-Rn procedure becomes valid),
+            # - ADD-COLUMN locks are released before long data backfills,
+            # - NOT VALID -> VALIDATE and using enum values added by an earlier
+            #   revision become possible.
+            transaction_per_migration=True,
         )
 
         with context.begin_transaction():
             context.run_migrations()
 
-            # Automatically seed RBAC data after migrations
-            from seeds.rbac_seed import seed_rbac_data
-            seed_rbac_data(connection)
+    # --- Seeds: run AFTER all migrations, in their own transaction ---
+    # (Previously they ran inside the single migration transaction: one seed
+    # failure rolled back every revision. Doc 16 §2.0.)
+    with connectable.connect() as connection:
+        _run_seeds(connection)
 
-            # Automatically seed tier data after migrations
-            from seeds.tier_seed import seed_tier_data
-            seed_tier_data(connection)
 
-            # Automatically seed ISP data (permissions, roles, node types,
-            # workflow templates) — idempotent; skipped until the isp-platform
-            # revision has created its tables.
-            from sqlalchemy import text as _text
-            isp_tables = connection.execute(_text(
-                "SELECT COUNT(*) FROM information_schema.tables "
-                "WHERE table_name IN ('workflow_template', 'network_node_type')"
-            )).scalar()
-            if isp_tables == 2:
-                from seeds.isp_seed import seed_isp_data
-                seed_isp_data(connection)
+def _run_seeds(connection) -> None:
+    """Seed RBAC / tier / ISP data. Idempotent; called after every upgrade."""
+    # Automatically seed RBAC data after migrations (commits internally)
+    from seeds.rbac_seed import seed_rbac_data
+    seed_rbac_data(connection)
+
+    # Automatically seed tier data after migrations (commits internally)
+    from seeds.tier_seed import seed_tier_data
+    seed_tier_data(connection)
+
+    # Automatically seed ISP data (permissions, roles, node types,
+    # workflow templates) — idempotent; skipped until the isp-platform
+    # revision has created its tables.
+    from sqlalchemy import text as _text
+    isp_tables = connection.execute(_text(
+        "SELECT COUNT(*) FROM information_schema.tables "
+        "WHERE table_name IN ('workflow_template', 'network_node_type')"
+    )).scalar()
+    if isp_tables == 2:
+        from seeds.isp_seed import seed_isp_data
+        seed_isp_data(connection)
+        # isp_seed does not commit internally (rbac/tier seeds do).
+        connection.commit()
 
 
 if context.is_offline_mode():
