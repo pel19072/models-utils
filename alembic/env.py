@@ -117,6 +117,14 @@ def _run_seeds(connection) -> None:
         # isp_seed does not commit internally (rbac/tier seeds do).
         connection.commit()
 
+        # Final convergence pass: isp_seed may have just created roles
+        # (BILLING, SUPPORT, TECHNICIAN, ...) AFTER the RBAC reconcile ran,
+        # so derived grants (orders.* -> payments.*) would otherwise only
+        # land on the NEXT migrate. Re-reconcile so a single run converges.
+        from seeds.rbac_seed import _ensure_convergent_rbac
+        _ensure_convergent_rbac(connection)
+        connection.commit()
+
 
 if context.is_offline_mode():
     run_migrations_offline()
