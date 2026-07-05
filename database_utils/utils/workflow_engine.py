@@ -575,14 +575,34 @@ def _execute_enqueue_provisioning(
             return {"enqueued": False, "deduped": True,
                     "job_id": str(existing.id), "idempotency_key": idempotency_key}
 
+    # Every target FK must belong to THIS company. action_config is
+    # tenant-editable (a crafted step could name another tenant's integration_id
+    # to make the worker execute with their stored device credentials), so scope
+    # each id to company_id and fail the step if a referenced row isn't ours.
+    from database_utils.models.isp import ClientService, NetworkNode, InventoryItem
+    from database_utils.models.crm import Integration
+
+    def _owned_or_none(model, value):
+        rid = _uuid_or_none(value)
+        if rid is None:
+            return None
+        exists = db.query(model.id).filter(
+            model.id == rid, model.company_id == company_id
+        ).first()
+        if not exists:
+            raise ValueError(
+                f"{model.__name__} {rid} does not belong to company {company_id}"
+            )
+        return rid
+
     job = ProvisioningJob(
         company_id=company_id,
         playbook_id=playbook.id,
         variables=resolved["variables"],
-        client_service_id=_uuid_or_none(resolved.get("client_service_id")),
-        network_node_id=_uuid_or_none(resolved.get("network_node_id")),
-        inventory_item_id=_uuid_or_none(resolved.get("inventory_item_id")),
-        integration_id=_uuid_or_none(config.get("integration_id")),
+        client_service_id=_owned_or_none(ClientService, resolved.get("client_service_id")),
+        network_node_id=_owned_or_none(NetworkNode, resolved.get("network_node_id")),
+        inventory_item_id=_owned_or_none(InventoryItem, resolved.get("inventory_item_id")),
+        integration_id=_owned_or_none(Integration, config.get("integration_id")),
         idempotency_key=idempotency_key,
         max_attempts=int(config.get("max_attempts", 3)),
         triggered_by=ProvisioningTrigger.WORKFLOW,
