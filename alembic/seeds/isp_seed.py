@@ -2,7 +2,8 @@
 ISP module seed: permissions, base roles, tier modules, default topology node
 types, and installable workflow templates (ADR-007/008).
 
-Idempotent — every insert is ON CONFLICT DO NOTHING or existence-checked, so it
+Idempotent — every insert is ON CONFLICT DO NOTHING / DO UPDATE (workflow
+templates upsert so blueprint revisions propagate) or existence-checked, so it
 is safe on both fresh databases (called after rbac_seed) and existing tenants
 (called from the isp-platform Alembic revision).
 """
@@ -170,22 +171,53 @@ def _wt(key, name, description, category, parameters, triggers, steps, edges):
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
 # resolved at install time; "{{trigger.*}}" placeholders stay for runtime.
 WORKFLOW_TEMPLATES = [
+    # v2 (doc 16 §5.4, installation-flow): PENDING_INSTALL-gated trigger so
+    # imports/backfills creating ACTIVE services never spawn install orders;
+    # s1 bills the installation fee (CREATE_ORDER), s2 opens the dispatch task
+    # (CREATE_TASK, linked CLIENT_SERVICE — the Cycle-3 join key; ORDER linkage
+    # is forbidden), s3 syncs the client's installation_status display cache.
+    # Free installs = a Q0 fee product; the order still exists as history and
+    # is settled via settle-zero. Tenants must reinstall to pick up v2.
     _wt(
         "new-installation", "New Installation",
-        "When a subscriber service is created, open an installation task on the dispatch board.",
+        "When a subscriber service is created pending installation, bill the installation fee, "
+        "open an installation task on the dispatch board and mark the client as scheduled.",
         "installation",
         [
             {"key": "install_state_id", "label": "Board column for new installations", "type": "task_state", "required": True},
+            {"key": "installation_fee_product_id", "label": "Installation fee product (use a Q0 product for free installs)", "type": "product", "required": True},
+            {"key": "fixed_assignee_ids", "label": "Fallback technicians when the client has no assigned technician", "type": "users", "required": False},
         ],
-        [{"resource_type": "client_service", "event_type": "CREATED", "field_conditions": None}],
-        [{"ref": "create_task", "name": "Create installation task", "action_type": "CREATE_ENTITY",
-          "action_config": {"resource_type": "task", "data": {
-              "name": "New installation — service {{trigger.resource_id}}",
-              "description": "Install subscriber service. Client: {{trigger.after.client_id}}",
-              "task_state_id": "{{param:install_state_id}}",
-              "linked_object_type": "CLIENT_SERVICE",
-              "linked_object_id": "{{trigger.resource_id}}"}}}],
-        [],
+        [{"resource_type": "client_service", "event_type": "CREATED",
+          "field_conditions": {"field": "status", "operator": "equals", "value": "PENDING_INSTALL"}}],
+        [
+            {"ref": "s1", "name": "Create installation order", "action_type": "CREATE_ORDER",
+             "action_config": {
+                 "order_type": "INSTALLATION",
+                 "client_id": "{{trigger.after.client_id}}",
+                 "client_service_id": "{{trigger.resource_id}}",
+                 "items": [{"product_id": "{{param:installation_fee_product_id}}", "quantity": 1}],
+                 "due_date_offset_days": 0,
+                 "idempotency_key": "install-order-{{trigger.resource_id}}"}},
+            {"ref": "s2", "name": "Create installation task", "action_type": "CREATE_TASK",
+             "action_config": {
+                 "name": "New installation — service {{trigger.resource_id}}",
+                 "description": "Install subscriber service. Client: {{trigger.after.client_id}}. "
+                                "Installation order: {{steps.s1.resource_id}}",
+                 "task_state_id": "{{param:install_state_id}}",
+                 "linked_object_type": "CLIENT_SERVICE",
+                 "linked_object_id": "{{trigger.resource_id}}",
+                 "assignee_source": "client_technician",
+                 "assignee_ids": "{{param:fixed_assignee_ids}}",
+                 "client_id": "{{trigger.after.client_id}}"}},
+            {"ref": "s3", "name": "Mark client install scheduled", "action_type": "UPDATE_FIELD",
+             "action_config": {
+                 "resource_type": "client",
+                 "resource_id_source": "custom",
+                 "resource_id": "{{trigger.after.client_id}}",
+                 "updates": {"installation_status": "INSTALL_SCHEDULED"}}},
+        ],
+        [{"from": "s1", "to": "s2"}, {"from": "s2", "to": "s3"}],
     ),
     _wt(
         "installation-provisioning", "Installation → Provisioning",
@@ -443,12 +475,19 @@ def _seed_default_node_types(connection: Connection) -> None:
 
 
 def _seed_workflow_templates(connection: Connection) -> None:
+    # Upsert (doc 16 §5.4): templates are global blueprints; installed
+    # workflows are materialized copies, so DO UPDATE is safe and lets template
+    # revisions (e.g. new-installation v2) ship without a new key. Release
+    # note: tenants reinstall to pick up a new version.
     for tpl in WORKFLOW_TEMPLATES:
         connection.execute(
             text(
                 "INSERT INTO workflow_template (id, created_at, key, name, description, category, definition, is_active) "
                 "VALUES (gen_random_uuid(), :created_at, :key, :name, :description, :category, :definition, TRUE) "
-                "ON CONFLICT (key) DO NOTHING"
+                "ON CONFLICT (key) DO UPDATE SET "
+                "name = EXCLUDED.name, description = EXCLUDED.description, "
+                "category = EXCLUDED.category, definition = EXCLUDED.definition, "
+                "is_active = TRUE"
             ),
             {
                 "created_at": now_gt(),
