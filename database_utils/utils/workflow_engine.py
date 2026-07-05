@@ -406,6 +406,20 @@ def execute_step(
 # remain readable in trigger conditions (evaluation uses before/after dicts).
 UPDATE_FIELD_DENYLIST: Dict[str, frozenset] = {
     "order": frozenset({"paid", "payment_status", "payment_date", "total", "total_cents"}),
+    # Invoices are created/invalidated ONLY by PaymentService (doc 16 §1):
+    # automations must not flip validity or rewrite invoice money.
+    "invoice": frozenset(
+        {"is_valid", "subtotal", "tax", "total",
+         "subtotal_cents", "tax_cents", "total_cents"}
+    ),
+}
+
+# CREATE_ENTITY guards for the same invariant: the engine must never create
+# invoices at all, and orders it creates must never be born with payment/money
+# state (that is PaymentService's exclusive domain).
+CREATE_ENTITY_FORBIDDEN_TYPES: frozenset = frozenset({"invoice"})
+CREATE_ENTITY_FIELD_DENYLIST: Dict[str, frozenset] = {
+    "order": frozenset({"paid", "payment_status", "payment_date", "total", "total_cents"}),
 }
 
 
@@ -509,8 +523,23 @@ def _execute_create_entity(
     if not resource_type or resource_type not in model_map:
         raise ValueError(f"Unknown resource_type: {resource_type}")
 
+    if resource_type in CREATE_ENTITY_FORBIDDEN_TYPES:
+        raise ValueError(
+            f"CREATE_ENTITY may not create '{resource_type}': invoices are "
+            f"created/invalidated only by PaymentService (single-writer invariant)"
+        )
+
     model_class = model_map[resource_type]
     data = dict(config.get("data", {}))
+
+    denied = sorted(set(data) & CREATE_ENTITY_FIELD_DENYLIST.get(resource_type, frozenset()))
+    if denied:
+        raise ValueError(
+            f"CREATE_ENTITY may not set protected field(s) {', '.join(denied)} "
+            f"on '{resource_type}': payment/money state has a single writer "
+            f"(PaymentService)"
+        )
+
     data["company_id"] = company_id
 
     entity = model_class(**data)

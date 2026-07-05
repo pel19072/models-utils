@@ -9,6 +9,10 @@ from typing import List, Dict, Any, Optional
 
 # Each entry: {"name": "<column_name>", "type": "<field_type>", "fk_to": "<resource_type>" | None}
 # type values: "string", "number", "boolean", "date", "uuid", "json"
+# Optional key `"writable": False` marks TRIGGER-CONDITION-ONLY fields: they may
+# appear in trigger field_conditions but are rejected by the engine's
+# UPDATE_FIELD denylist — UI field pickers for UPDATE_FIELD steps must filter
+# them out (doc 16 §2.2/§5.3). Absent key means writable.
 RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
     # NOTE (doc 16 §2.2/§5.3): `paid` removed — payment state is written only by
     # backend-erp's PaymentService (single-writer invariant). payment_status and
@@ -16,10 +20,10 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
     # UPDATE_FIELD denylist (workflow_engine.py) blocks writing them.
     "order": [
         {"name": "due_date", "type": "date", "fk_to": None},
-        {"name": "total", "type": "number", "fk_to": None},
+        {"name": "total", "type": "number", "fk_to": None, "writable": False},
         {"name": "status", "type": "string", "fk_to": None},
-        {"name": "payment_status", "type": "string", "fk_to": None},
-        {"name": "order_type", "type": "string", "fk_to": None},
+        {"name": "payment_status", "type": "string", "fk_to": None, "writable": False},
+        {"name": "order_type", "type": "string", "fk_to": None, "writable": False},
         {"name": "client_id", "type": "uuid", "fk_to": "client"},
         {"name": "recurring_order_id", "type": "uuid", "fk_to": "recurring_order"},
     ],
@@ -64,13 +68,15 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "status", "type": "string", "fk_to": None},
         {"name": "client_id", "type": "uuid", "fk_to": "client"},
     ],
+    # Invoice money/validity is written only by PaymentService (doc 16 §1);
+    # these stay visible for trigger conditions but are engine-denylisted.
     "invoice": [
         {"name": "issue_date", "type": "date", "fk_to": None},
-        {"name": "subtotal", "type": "number", "fk_to": None},
-        {"name": "tax", "type": "number", "fk_to": None},
-        {"name": "total", "type": "number", "fk_to": None},
+        {"name": "subtotal", "type": "number", "fk_to": None, "writable": False},
+        {"name": "tax", "type": "number", "fk_to": None, "writable": False},
+        {"name": "total", "type": "number", "fk_to": None, "writable": False},
         {"name": "details", "type": "json", "fk_to": None},
-        {"name": "is_valid", "type": "boolean", "fk_to": None},
+        {"name": "is_valid", "type": "boolean", "fk_to": None, "writable": False},
         {"name": "order_id", "type": "uuid", "fk_to": "order"},
     ],
     "order_item": [
@@ -133,6 +139,12 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
 def get_resource_fields(resource_type: str) -> List[Dict[str, Any]]:
     """Return all editable fields for a given resource type."""
     return RESOURCE_FIELDS.get(resource_type, [])
+
+
+def get_writable_fields(resource_type: str) -> List[Dict[str, Any]]:
+    """Return only fields valid as UPDATE_FIELD targets (excludes
+    trigger-condition-only fields marked writable=False)."""
+    return [f for f in get_resource_fields(resource_type) if f.get("writable", True)]
 
 
 def get_fk_fields(resource_type: str) -> List[Dict[str, Any]]:
