@@ -9,7 +9,7 @@ import calendar
 
 # Single source of truth — reuse the model enums (doc 16 §1 contract).
 from database_utils.models.crm import OrderType, PaymentStatus
-from database_utils.utils.timezone_utils import now_gt
+from database_utils.utils.timezone_utils import make_aware_gt, today_gt
 
 if TYPE_CHECKING:
     from .recurring_order import RecurringOrderOut
@@ -67,12 +67,17 @@ class OrderOut(OrderBase):
     @property
     def is_overdue(self) -> bool:
         """OVERDUE is never stored (doc 16 §1): computed as payment_status in
-        (PENDING, PARTIAL) AND due_date < now (Guatemala tz) AND status ACTIVE."""
+        (PENDING, PARTIAL) AND due_date < today_gt() (Guatemala calendar date)
+        AND status ACTIVE — matches the backend's server-side overdue filter
+        (Order.due_date < today_gt()) so badges and tab membership agree."""
         if self.status != OrderStatus.ACTIVE:
             return False
         if self.payment_status not in (PaymentStatus.PENDING, PaymentStatus.PARTIAL):
             return False
-        return bool(self.due_date is not None and self.due_date < now_gt())
+        return bool(
+            self.due_date is not None
+            and make_aware_gt(self.due_date).date() < today_gt()
+        )
 
     @computed_field
     @property
