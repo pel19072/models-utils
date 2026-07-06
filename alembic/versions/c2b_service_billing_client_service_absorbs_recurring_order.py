@@ -195,7 +195,7 @@ def upgrade() -> None:
         INSERT INTO client_service (
             id, created_at, updated_at, status, activation_date, cancelled_at,
             connection_params, notes, company_id, client_id, service_plan_id,
-            topology_id, recurring_order_id,
+            recurring_order_id,
             recurrence, recurrence_end, next_generation_date, last_generated_at,
             billing_status, quantity, migration_source
         )
@@ -207,7 +207,7 @@ def upgrade() -> None:
                  THEN COALESCE(ro.recurrence_end, ro.last_generated_at, ro.created_at)
                  ELSE NULL END,
             NULL, NULL, ro.company_id, ro.client_id, sp.id,
-            NULL, ro.id,
+            ro.id,
             ro.recurrence, ro.recurrence_end, ro.next_generation_date, ro.last_generated_at,
             ro.status, COALESCE(roi.quantity, 1), 'c2b'
         FROM recurring_order ro

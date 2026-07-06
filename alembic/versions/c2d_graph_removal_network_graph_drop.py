@@ -46,6 +46,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.sql import text
 
 
@@ -172,7 +173,11 @@ def downgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('key', sa.String(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
-        sa.Column('category', sa.Enum(
+        # postgresql.ENUM, not sa.Enum: only the PG dialect type honors
+        # create_type=False. devicecategory is NEVER dropped by this revision's
+        # upgrade (device_type still uses it), so recreating it here would
+        # raise DuplicateObject.
+        sa.Column('category', PGEnum(
             'ROUTER', 'SWITCH', 'OLT', 'ONU', 'SPLITTER', 'SPLICE_CLOSURE',
             'PATCH_PANEL', 'ACCESS_POINT', 'CPE_ROUTER', 'UPS', 'ANTENNA',
             'RADIO', 'OTHER', name='devicecategory', create_type=False,
@@ -193,7 +198,7 @@ def downgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
-        sa.Column('status', sa.Enum(name='networknodestatus', create_type=False),
+        sa.Column('status', PGEnum(name='networknodestatus', create_type=False),
                   server_default='ACTIVE', nullable=False),
         sa.Column('latitude', sa.Float(), nullable=True),
         sa.Column('longitude', sa.Float(), nullable=True),
