@@ -359,10 +359,34 @@ def _ensure_convergent_rbac(connection: Connection) -> None:
     # 4. Ledger grants derived from existing order grants (mirrors migration
     #    c1b's copy rule, but convergent: roles created AFTER c1b — e.g. by
     #    isp_seed — pick these up on the next migrate instead of never).
+    #
+    #    Cycle 2 (doc 18 amendment 7 / entity-merge verifier fix): the same
+    #    mechanism protects every prod role holding a legacy products.*/
+    #    recurring_orders.* grant from losing UI/API access once the
+    #    products/recurring-orders pages retire in favor of the merged
+    #    service_plans/client_services pages — every role that could act on
+    #    the legacy resource keeps the equivalent ability on its successor.
+    #    recurring_orders.generate has no legacy permission row today (the
+    #    join below is then simply a no-op) — kept so a future backend-erp
+    #    revision that adds it converges automatically with zero further
+    #    models-utils changes.
     for source, target in (
         ("orders.update", "payments.record"),
         ("orders.read", "payments.read"),
         ("orders.revert_payment", "payments.refund"),
+        ("products.create", "service_plans.create"),
+        ("products.read", "service_plans.read"),
+        ("products.update", "service_plans.update"),
+        ("products.delete", "service_plans.delete"),
+        ("recurring_orders.create", "client_services.create"),
+        ("recurring_orders.read", "client_services.read"),
+        ("recurring_orders.update", "client_services.update"),
+        # Closest legacy equivalents: RecurringOrder had no dedicated
+        # suspend/reactivate permissions, so update is the source for both.
+        ("recurring_orders.update", "client_services.suspend"),
+        ("recurring_orders.update", "client_services.reactivate"),
+        ("recurring_orders.delete", "client_services.delete"),
+        ("recurring_orders.generate", "client_services.generate"),
     ):
         connection.execute(
             text(

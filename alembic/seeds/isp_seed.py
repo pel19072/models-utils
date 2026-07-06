@@ -1,11 +1,21 @@
 """
-ISP module seed: permissions, base roles, tier modules, default topology node
-types, and installable workflow templates (ADR-007/008).
+ISP module seed: permissions, base roles, tier modules, and installable
+workflow templates (ADR-007/008).
 
 Idempotent — every insert is ON CONFLICT DO NOTHING / DO UPDATE (workflow
 templates upsert so blueprint revisions propagate) or existence-checked, so it
 is safe on both fresh databases (called after rbac_seed) and existing tenants
 (called from the isp-platform Alembic revision).
+
+Cycle 2 (doc 18-cycle2-design.md, D5/D6): the free-form network graph
+(network_node/network_node_type/network_link) is removed by revision
+c2d_graph_removal. This module no longer seeds node types (deleted along with
+DEFAULT_NODE_TYPES/_seed_default_node_types) and no longer grants network_*
+permissions (deleted from ISP_PERMISSIONS/ISP_ROLES) — topologies.* replaces
+them (D5's device-type-chain model). ISP_TIER_MODULES key 'network' is
+replaced by 'topologies' (amendment 14); the one-time rewrite of ALREADY
+SEEDED tier.modules rows ships in revision c2d_graph_removal itself (this
+seed is append-only going forward and cannot rewrite existing JSON values).
 """
 import json
 import logging
@@ -34,6 +44,9 @@ ISP_PERMISSIONS = [
     {"name": "client_services.delete", "resource": "client_services", "action": "delete", "description": "Delete subscriber services"},
     {"name": "client_services.suspend", "resource": "client_services", "action": "suspend", "description": "Suspend a subscriber service"},
     {"name": "client_services.reactivate", "resource": "client_services", "action": "reactivate", "description": "Reactivate a suspended service"},
+    # Cycle 2 D1: manual single-cycle billing generation (client_services
+    # absorbs recurring_order's billing engine).
+    {"name": "client_services.generate", "resource": "client_services", "action": "generate", "description": "Manually generate a billing cycle for a service"},
     # Inventory
     {"name": "device_types.create", "resource": "device_types", "action": "create", "description": "Create device catalog entries"},
     {"name": "device_types.read", "resource": "device_types", "action": "read", "description": "View device catalog"},
@@ -49,18 +62,13 @@ ISP_PERMISSIONS = [
     {"name": "inventory_items.delete", "resource": "inventory_items", "action": "delete", "description": "Delete inventory items"},
     {"name": "equipment_events.create", "resource": "equipment_events", "action": "create", "description": "Record equipment lifecycle events"},
     {"name": "equipment_events.read", "resource": "equipment_events", "action": "read", "description": "View equipment history"},
-    # Network / topology
-    {"name": "network_node_types.create", "resource": "network_node_types", "action": "create", "description": "Define topology node types"},
-    {"name": "network_node_types.read", "resource": "network_node_types", "action": "read", "description": "View topology node types"},
-    {"name": "network_node_types.update", "resource": "network_node_types", "action": "update", "description": "Update topology node types"},
-    {"name": "network_node_types.delete", "resource": "network_node_types", "action": "delete", "description": "Delete topology node types"},
-    {"name": "network_nodes.create", "resource": "network_nodes", "action": "create", "description": "Create network nodes"},
-    {"name": "network_nodes.read", "resource": "network_nodes", "action": "read", "description": "View network topology"},
-    {"name": "network_nodes.update", "resource": "network_nodes", "action": "update", "description": "Update network nodes"},
-    {"name": "network_nodes.delete", "resource": "network_nodes", "action": "delete", "description": "Delete network nodes"},
-    {"name": "network_links.create", "resource": "network_links", "action": "create", "description": "Create network links"},
-    {"name": "network_links.read", "resource": "network_links", "action": "read", "description": "View network links"},
-    {"name": "network_links.delete", "resource": "network_links", "action": "delete", "description": "Delete network links"},
+    # Topology (Cycle 2 D5) — replaces network_node_types/network_nodes/
+    # network_links (removed; revision c2d_graph_removal deletes the tables
+    # and the role_permission/permission rows naming them).
+    {"name": "topologies.create", "resource": "topologies", "action": "create", "description": "Create provisioning topologies"},
+    {"name": "topologies.read", "resource": "topologies", "action": "read", "description": "View provisioning topologies"},
+    {"name": "topologies.update", "resource": "topologies", "action": "update", "description": "Update provisioning topologies"},
+    {"name": "topologies.delete", "resource": "topologies", "action": "delete", "description": "Delete provisioning topologies"},
     # Provisioning automation
     {"name": "playbooks.create", "resource": "playbooks", "action": "create", "description": "Upload provisioning playbooks"},
     {"name": "playbooks.read", "resource": "playbooks", "action": "read", "description": "View provisioning playbooks"},
@@ -87,7 +95,9 @@ ISP_ROLES = {
             "inventory_items.read", "inventory_items.update",
             "equipment_events.create", "equipment_events.read",
             "warehouses.read", "device_types.read",
-            "network_nodes.read", "network_node_types.read", "network_links.read",
+            # Cycle 2 D5: replaces network_nodes.read/network_node_types.read/
+            # network_links.read (topology read is the analogous grant).
+            "topologies.read",
             "provisioning.read",
             "dashboard.read",
         ],
@@ -95,9 +105,9 @@ ISP_ROLES = {
     "NOC": {
         "description": "Network operations: topology, playbooks, provisioning jobs",
         "permissions": [
-            "network_node_types.create", "network_node_types.read", "network_node_types.update", "network_node_types.delete",
-            "network_nodes.create", "network_nodes.read", "network_nodes.update", "network_nodes.delete",
-            "network_links.create", "network_links.read", "network_links.delete",
+            # Cycle 2 D5: replaces network_node_types.*/network_nodes.*/
+            # network_links.* (full CRUD, same operational role).
+            "topologies.create", "topologies.read", "topologies.update", "topologies.delete",
             "playbooks.create", "playbooks.read", "playbooks.update", "playbooks.delete",
             "provisioning.read", "provisioning.create", "provisioning.execute", "provisioning.cancel",
             "client_services.read",
@@ -140,23 +150,19 @@ ISP_ROLES = {
             "recurring_orders.create", "recurring_orders.read", "recurring_orders.update",
             "products.read",
             "service_plans.read", "client_services.read",
+            # Cycle 2 D1: BILLING owns the manual billing-cycle generation
+            # action that replaces recurring_orders' equivalent.
+            "client_services.generate",
             "dashboard.read",
         ],
     },
 }
 
-ISP_TIER_MODULES = ["inventory", "network", "provisioning"]
-
-# Default per-company topology node types (config rows, ADR-003).
-DEFAULT_NODE_TYPES = [
-    {"key": "headend", "name": "Headend / POP", "category": None, "icon": "building", "allowed_parent_keys": []},
-    {"key": "olt", "name": "OLT", "category": "OLT", "icon": "server", "allowed_parent_keys": ["headend"]},
-    {"key": "pon_port", "name": "PON Port", "category": None, "icon": "plug", "allowed_parent_keys": ["olt"]},
-    {"key": "splitter", "name": "Splitter", "category": "SPLITTER", "icon": "git-branch", "allowed_parent_keys": ["pon_port", "splitter"]},
-    {"key": "splice_closure", "name": "Splice Closure (MUFA)", "category": "SPLICE_CLOSURE", "icon": "box", "allowed_parent_keys": ["pon_port", "splitter", "splice_closure"]},
-    {"key": "onu", "name": "ONU / ONT", "category": "ONU", "icon": "radio-receiver", "allowed_parent_keys": ["splitter", "splice_closure", "pon_port"]},
-    {"key": "cpe_router", "name": "Customer Router", "category": "CPE_ROUTER", "icon": "router", "allowed_parent_keys": ["onu"]},
-]
+# Cycle 2 amendment 14: 'network' -> 'topologies' (D5). The key 'network'
+# stays inert forever in ALREADY-SEEDED tier.modules JSON rows (the one-time
+# rewrite of those rows is a data migration, not this append-only seed) — see
+# revision c2d_graph_removal step 10.
+ISP_TIER_MODULES = ["inventory", "topologies", "provisioning"]
 
 
 def _wt(key, name, description, category, parameters, triggers, steps, edges):
@@ -167,6 +173,22 @@ def _wt(key, name, description, category, parameters, triggers, steps, edges):
         },
     }
 
+
+# Per-template column dependencies (doc 18 amendment 10 / topology-networking
+# verifier fix): the seed runs after EVERY alembic command, including stepped
+# partial upgrades, so a template whose steps reference a column from a LATER
+# revision must be skipped until that revision has actually applied — the
+# stepactiontype enum gate below already does this for step action types;
+# this dict extends the same idea to plain columns. Checked against
+# information_schema.columns in _seed_workflow_templates.
+TEMPLATE_REQUIRED_COLUMNS = {
+    # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these three templates now
+    # UPDATE_FIELD client_service.billing_status instead of
+    # recurring_order.status — the column only exists from c2b onward.
+    "suspension": [("client_service", "billing_status")],
+    "reactivation": [("client_service", "billing_status")],
+    "service-removal": [("client_service", "billing_status")],
+}
 
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
 # resolved at install time; "{{trigger.*}}" placeholders stay for runtime.
@@ -249,6 +271,15 @@ WORKFLOW_TEMPLATES = [
                             "updates": {"status": "ACTIVE"}}}],
         [],
     ),
+    # v3 (Cycle 2 D1 §1b, doc 18 amendment 8): rewritten from
+    # recurring_order.status (via {{trigger.after.recurring_order_id}}) to
+    # client_service.billing_status (via {{trigger.resource_id}} — the SAME
+    # resource that fired the trigger, so resource_id_source is simply
+    # "trigger"). This mirrors the data-migration rewrite pass c2b runs
+    # against already-INSTALLED tenant copies; the blueprint here is what
+    # NEW installs pick up going forward. Gated by TEMPLATE_REQUIRED_COLUMNS
+    # so the v3 definition never publishes before client_service.billing_status
+    # exists (c2b).
     _wt(
         "suspension", "Service Suspension",
         "When a service is suspended, record history, pause its billing and run the suspend playbook.",
@@ -258,9 +289,8 @@ WORKFLOW_TEMPLATES = [
           "field_conditions": {"field": "status", "operator": "changed_to", "value": "SUSPENDED"}}],
         [
             {"ref": "pause_billing", "name": "Pause recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "recurring_order", "resource_id_source": "custom",
-                               "resource_id": "{{trigger.after.recurring_order_id}}",
-                               "updates": {"status": "PAUSED"}}},
+             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
+                               "updates": {"billing_status": "PAUSED"}}},
             {"ref": "provision", "name": "Run suspend playbook", "action_type": "ENQUEUE_PROVISIONING",
              "action_config": {"playbook_id": "{{param:suspend_playbook_id}}",
                                "client_service_id": "{{trigger.resource_id}}",
@@ -278,9 +308,8 @@ WORKFLOW_TEMPLATES = [
           "field_conditions": {"field": "status", "operator": "changed_from", "value": "SUSPENDED"}}],
         [
             {"ref": "resume_billing", "name": "Resume recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "recurring_order", "resource_id_source": "custom",
-                               "resource_id": "{{trigger.after.recurring_order_id}}",
-                               "updates": {"status": "ACTIVE"}}},
+             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
+                               "updates": {"billing_status": "ACTIVE"}}},
             {"ref": "provision", "name": "Run reactivation playbook", "action_type": "ENQUEUE_PROVISIONING",
              "action_config": {"playbook_id": "{{param:reactivate_playbook_id}}",
                                "client_service_id": "{{trigger.resource_id}}",
@@ -303,6 +332,7 @@ WORKFLOW_TEMPLATES = [
                                           "service_plan_id": "{{trigger.after.service_plan_id}}"}}}],
         [],
     ),
+    # v3: see the 'suspension' comment above — same rewrite, same gate.
     _wt(
         "service-removal", "Service Removal",
         "When a service is cancelled, cancel billing and run the deprovision playbook.",
@@ -312,9 +342,8 @@ WORKFLOW_TEMPLATES = [
           "field_conditions": {"field": "status", "operator": "changed_to", "value": "CANCELLED"}}],
         [
             {"ref": "cancel_billing", "name": "Cancel recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "recurring_order", "resource_id_source": "custom",
-                               "resource_id": "{{trigger.after.recurring_order_id}}",
-                               "updates": {"status": "CANCELLED"}}},
+             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
+                               "updates": {"billing_status": "CANCELLED"}}},
             {"ref": "provision", "name": "Run deprovision playbook", "action_type": "ENQUEUE_PROVISIONING",
              "action_config": {"playbook_id": "{{param:deprovision_playbook_id}}",
                                "client_service_id": "{{trigger.resource_id}}",
@@ -337,46 +366,26 @@ WORKFLOW_TEMPLATES = [
                                           "mac_address": "{{trigger.after.mac_address}}"}}}],
         [],
     ),
-    _wt(
-        "fiber-cut", "Fiber Cut Response",
-        "When a network node goes DOWN, open a NOC incident task.",
-        "network",
-        [{"key": "noc_state_id", "label": "Board column for network incidents", "type": "task_state", "required": True}],
-        [{"resource_type": "network_node", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_to", "value": "DOWN"}}],
-        [{"ref": "incident", "name": "Open incident task", "action_type": "CREATE_ENTITY",
-          "action_config": {"resource_type": "task", "data": {
-              "name": "NETWORK DOWN: {{trigger.after.name}}",
-              "description": "Node {{trigger.after.name}} reported DOWN. Check impacted subscribers behind this node.",
-              "task_state_id": "{{param:noc_state_id}}",
-              "linked_object_type": "NETWORK_NODE",
-              "linked_object_id": "{{trigger.resource_id}}"}}}],
-        [],
-    ),
-    _wt(
-        "maintenance", "Scheduled Maintenance",
-        "When a network node enters MAINTENANCE, open a maintenance task.",
-        "network",
-        [{"key": "maintenance_state_id", "label": "Board column for maintenance", "type": "task_state", "required": True}],
-        [{"resource_type": "network_node", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_to", "value": "MAINTENANCE"}}],
-        [{"ref": "task", "name": "Open maintenance task", "action_type": "CREATE_ENTITY",
-          "action_config": {"resource_type": "task", "data": {
-              "name": "Maintenance: {{trigger.after.name}}",
-              "task_state_id": "{{param:maintenance_state_id}}",
-              "linked_object_type": "NETWORK_NODE",
-              "linked_object_id": "{{trigger.resource_id}}"}}}],
-        [],
-    ),
+    # 'fiber-cut' and 'maintenance' REMOVED (Cycle 2 D6): both triggered on
+    # resource_type='network_node', which no longer exists in
+    # workflow_engine.KNOWN_RESOURCE_TYPES once the graph is dropped
+    # (revision c2d_graph_removal). Retire-only per doc 18 D-- "fiber-cut/
+    # maintenance templates: retire only (deactivate; no replacement this
+    # cycle)" — the retirement pass below deactivates any already-seeded rows
+    # for keys no longer in this list.
 ]
+
+# Keys the retirement pass must never touch even though they are not (yet)
+# published at every migration position — kept explicit so a future template
+# add/remove doesn't need to touch the retirement logic itself.
+RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance"]
 
 
 def seed_isp_data(connection: Connection) -> None:
-    """Seed ISP permissions, roles, tier modules, node types and templates."""
+    """Seed ISP permissions, roles, tier modules and templates."""
     _seed_permissions(connection)
     _seed_roles(connection)
     _seed_tier_modules(connection)
-    _seed_default_node_types(connection)
     _seed_workflow_templates(connection)
     logger.info("ISP seed completed")
 
@@ -449,43 +458,38 @@ def _seed_tier_modules(connection: Connection) -> None:
     logger.info("Tier modules updated with ISP modules")
 
 
-def _seed_default_node_types(connection: Connection) -> None:
-    """Give every existing company the default GPON node-type set."""
-    companies = connection.execute(text("SELECT id FROM company")).fetchall()
-    for (company_id,) in companies:
-        for nt in DEFAULT_NODE_TYPES:
-            connection.execute(
-                text(
-                    "INSERT INTO network_node_type "
-                    "(id, created_at, key, name, category, icon, allowed_parent_keys, attribute_schema, company_id) "
-                    "VALUES (gen_random_uuid(), :created_at, :key, :name, :category, :icon, :parents, NULL, :company_id) "
-                    "ON CONFLICT (company_id, key) DO NOTHING"
-                ),
-                {
-                    "created_at": now_gt(),
-                    "key": nt["key"],
-                    "name": nt["name"],
-                    "category": nt["category"],
-                    "icon": nt["icon"],
-                    "parents": json.dumps(nt["allowed_parent_keys"]),
-                    "company_id": company_id,
-                },
-            )
-    logger.info(f"Seeded default node types for {len(companies)} companies")
+def _known_resource_types(connection: Connection) -> set:
+    """The engine's model map keys, as of the CURRENT models-utils code (not
+    migration-position-dependent — the Python module always reflects what
+    THIS worker/backend build can execute). Used to gate template triggers
+    referencing a resource type the engine no longer understands (e.g.
+    'network_node', removed in Cycle 2 D6)."""
+    from database_utils.utils.workflow_engine import KNOWN_RESOURCE_TYPES
+    return set(KNOWN_RESOURCE_TYPES)
 
 
 def _seed_workflow_templates(connection: Connection) -> None:
     # Upsert (doc 16 §5.4): templates are global blueprints; installed
     # workflows are materialized copies, so DO UPDATE is safe and lets template
-    # revisions (e.g. new-installation v2) ship without a new key. Release
-    # note: tenants reinstall to pick up a new version.
+    # revisions (e.g. new-installation v2, suspension/reactivation/
+    # service-removal v3) ship without a new key. Release note: tenants
+    # reinstall to pick up a new version.
     #
     # Migration-position gate: seeds run after ANY alembic command (including
     # partial upgrades and downgrades), but a template definition may use step
-    # action types added by a LATER revision (e.g. CREATE_ORDER/CREATE_TASK
-    # from c1e_install_actions). Publishing such a blueprint while the enum
-    # lacks the value makes install 500 — skip templates whose action types
-    # the database cannot represent yet.
+    # action types (or, per Cycle 2, columns) added by a LATER revision.
+    # Publishing such a blueprint before the DB can represent it makes install
+    # (or the first trigger fire) 500 — skip templates the database cannot
+    # support yet, at whatever granularity is needed:
+    #   1. stepactiontype enum membership (pre-existing, doc 16 §5.4/43c543c)
+    #   2. required columns (Cycle 2, doc 18 amendment 10) — e.g. v3
+    #      suspension/reactivation/service-removal need
+    #      client_service.billing_status, which only exists from c2b onward
+    #   3. trigger resource types must all be in the engine's KNOWN_RESOURCE_TYPES
+    #      (Cycle 2, topology-networking verifier fix) — catches a template
+    #      whose trigger references a resource the running engine build
+    #      cannot resolve at all (e.g. a template authored against a resource
+    #      type removed by a later revision, or not yet added by an earlier one)
     supported_actions = {
         row[0]
         for row in connection.execute(text(
@@ -494,19 +498,54 @@ def _seed_workflow_templates(connection: Connection) -> None:
             "WHERE t.typname = 'stepactiontype'"
         ))
     }
+    known_resource_types = _known_resource_types(connection)
+    seeded_keys = []
+
     for tpl in WORKFLOW_TEMPLATES:
-        required = {
+        required_actions = {
             step.get("action_type")
             for step in tpl["definition"].get("steps", [])
             if step.get("action_type")
         }
-        missing = required - supported_actions
-        if missing:
+        missing_actions = required_actions - supported_actions
+        if missing_actions:
             logger.warning(
                 f"Skipping template '{tpl['key']}': stepactiontype enum lacks "
-                f"{sorted(missing)} at this migration position"
+                f"{sorted(missing_actions)} at this migration position"
             )
             continue
+
+        missing_columns = []
+        for table, column in TEMPLATE_REQUIRED_COLUMNS.get(tpl["key"], []):
+            exists = connection.execute(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = :table AND column_name = :column"
+                ),
+                {"table": table, "column": column},
+            ).fetchone()
+            if not exists:
+                missing_columns.append(f"{table}.{column}")
+        if missing_columns:
+            logger.warning(
+                f"Skipping template '{tpl['key']}': missing column(s) "
+                f"{missing_columns} at this migration position"
+            )
+            continue
+
+        trigger_resource_types = {
+            trig.get("resource_type")
+            for trig in tpl["definition"].get("triggers", [])
+            if trig.get("resource_type")
+        }
+        unknown_resources = trigger_resource_types - known_resource_types
+        if unknown_resources:
+            logger.warning(
+                f"Skipping template '{tpl['key']}': trigger resource type(s) "
+                f"{sorted(unknown_resources)} are not in KNOWN_RESOURCE_TYPES"
+            )
+            continue
+
         connection.execute(
             text(
                 "INSERT INTO workflow_template (id, created_at, key, name, description, category, definition, is_active) "
@@ -525,4 +564,19 @@ def _seed_workflow_templates(connection: Connection) -> None:
                 "definition": json.dumps(tpl["definition"]),
             },
         )
-    logger.info(f"Seeded {len(WORKFLOW_TEMPLATES)} workflow templates")
+        seeded_keys.append(tpl["key"])
+
+    # Retirement pass (doc 18 amendment 10 / topology-networking verifier
+    # fix): templates are exclusively seed-owned (install is the only other
+    # write path and never touches workflow_template rows), so deactivating
+    # every key NOT in this run's seeded set is safe and convergent on every
+    # migrate — this is what actually retires 'fiber-cut'/'maintenance' (and
+    # any future removed key) without a destructive DELETE, and it also
+    # covers templates skipped above by the gates (they must not stay active
+    # with a stale pre-gate definition).
+    if seeded_keys:
+        connection.execute(
+            text("UPDATE workflow_template SET is_active = FALSE WHERE key <> ALL(:seeded_keys)"),
+            {"seeded_keys": seeded_keys},
+        )
+    logger.info(f"Seeded {len(seeded_keys)}/{len(WORKFLOW_TEMPLATES)} workflow templates")

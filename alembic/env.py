@@ -103,15 +103,25 @@ def _run_seeds(connection) -> None:
     from seeds.tier_seed import seed_tier_data
     seed_tier_data(connection)
 
-    # Automatically seed ISP data (permissions, roles, node types,
+    # Automatically seed ISP data (permissions, roles, tier modules,
     # workflow templates) — idempotent; skipped until the isp-platform
     # revision has created its tables.
+    #
+    # Cycle 2 (doc 18 amendment 10): the sentinel used to require BOTH
+    # workflow_template AND network_node_type to exist. c2d_graph_removal
+    # drops network_node_type entirely, which would make this permanently
+    # false on any DB migrated past c2d — the ISP seed (permissions, roles,
+    # tier modules, templates, the new client_services.generate permission)
+    # would silently stop converging forever. workflow_template alone is
+    # sufficient: it is created by cd2f and never dropped. Table-existence
+    # guards for individual sub-seeders that touch tables removed later in
+    # the chain (e.g. network_node_type) now live inside isp_seed.py itself.
     from sqlalchemy import text as _text
     isp_tables = connection.execute(_text(
         "SELECT COUNT(*) FROM information_schema.tables "
-        "WHERE table_name IN ('workflow_template', 'network_node_type')"
+        "WHERE table_name = 'workflow_template'"
     )).scalar()
-    if isp_tables == 2:
+    if isp_tables == 1:
         from seeds.isp_seed import seed_isp_data
         seed_isp_data(connection)
         # isp_seed does not commit internally (rbac/tier seeds do).
