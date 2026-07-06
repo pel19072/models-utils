@@ -92,6 +92,8 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "upload_mbps", "type": "number", "fk_to": None},
         {"name": "price", "type": "number", "fk_to": None},
         {"name": "is_active", "type": "boolean", "fk_to": None},
+        # Cycle 2 D1/D2: what this plan bills for (drives order_type derivation).
+        {"name": "kind", "type": "string", "fk_to": None},
     ],
     "client_service": [
         {"name": "status", "type": "string", "fk_to": None},
@@ -99,8 +101,26 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "notes", "type": "string", "fk_to": None},
         {"name": "client_id", "type": "uuid", "fk_to": "client"},
         {"name": "service_plan_id", "type": "uuid", "fk_to": "service_plan"},
-        {"name": "network_node_id", "type": "uuid", "fk_to": "network_node"},
-        {"name": "recurring_order_id", "type": "uuid", "fk_to": "recurring_order"},
+        # Cycle 2 D5: replaces network_node_id (removed, revision
+        # c2d_graph_removal).
+        {"name": "topology_id", "type": "uuid", "fk_to": "topology"},
+        # Cycle 2 D1 billing absorption (doc 18 amendment 8): writable — the
+        # rewritten suspension/reactivation/service-removal templates
+        # UPDATE_FIELD billing_status directly (replacing the pre-merge
+        # recurring_order.status step). quantity/recurrence/dates are exposed
+        # for completeness (e.g. a future "extend recurrence_end" automation).
+        {"name": "recurrence", "type": "string", "fk_to": None},
+        {"name": "recurrence_end", "type": "date", "fk_to": None},
+        {"name": "next_generation_date", "type": "date", "fk_to": None},
+        {"name": "last_generated_at", "type": "date", "fk_to": None},
+        {"name": "billing_status", "type": "string", "fk_to": None},
+        {"name": "quantity", "type": "number", "fk_to": None},
+        # migration-critical bridge state (doc 18 amendment 1) — visible for
+        # trigger conditions only; the engine's UPDATE_FIELD denylist
+        # (workflow_engine.py) blocks writing it. migration_source is
+        # intentionally NOT listed here at all: it is pure internal audit
+        # bookkeeping with no legitimate automation use, read or write.
+        {"name": "recurring_order_id", "type": "uuid", "fk_to": "recurring_order", "writable": False},
     ],
     "service_suspension": [
         {"name": "reason", "type": "string", "fk_to": None},
@@ -117,21 +137,13 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "warehouse_id", "type": "uuid", "fk_to": None},
         {"name": "client_id", "type": "uuid", "fk_to": "client"},
         {"name": "client_service_id", "type": "uuid", "fk_to": "client_service"},
-        {"name": "network_node_id", "type": "uuid", "fk_to": "network_node"},
     ],
-    "network_node": [
-        {"name": "name", "type": "string", "fk_to": None},
-        {"name": "status", "type": "string", "fk_to": None},
-        {"name": "latitude", "type": "number", "fk_to": None},
-        {"name": "longitude", "type": "number", "fk_to": None},
-        {"name": "capacity", "type": "number", "fk_to": None},
-        {"name": "parent_id", "type": "uuid", "fk_to": "network_node"},
-    ],
+    # 'network_node' resource REMOVED (Cycle 2 D6, revision
+    # c2d_graph_removal) — the free-form network graph no longer exists.
     "provisioning_job": [
         {"name": "status", "type": "string", "fk_to": None},
         {"name": "error", "type": "string", "fk_to": None},
         {"name": "client_service_id", "type": "uuid", "fk_to": "client_service"},
-        {"name": "network_node_id", "type": "uuid", "fk_to": "network_node"},
     ],
 }
 

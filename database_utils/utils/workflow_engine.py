@@ -42,6 +42,20 @@ _background_tasks: set[asyncio.Task] = set()
 # Map resource types to their SQLAlchemy model classes
 _MODEL_MAP = None
 
+# Static mirror of _get_model_map()'s keys (Cycle 2, doc 18 §5/D10):
+# importable WITHOUT triggering the lazy model load (avoids circular imports
+# for callers that only need the resource-type universe, e.g. isp_seed.py's
+# template trigger-resource-type gate and the workflow trigger 422 validation
+# on WorkflowTriggerCreate/Update). Kept in sync with _get_model_map() by
+# hand — there is no dynamic way to do this without importing the models.
+# 'network_node' REMOVED (Cycle 2 D6, revision c2d_graph_removal).
+KNOWN_RESOURCE_TYPES = frozenset({
+    "order", "client", "product", "task", "task_state",
+    "recurring_order", "invoice", "order_item",
+    "service_plan", "client_service", "service_suspension",
+    "inventory_item", "provisioning_job",
+})
+
 
 def _get_model_map():
     """Lazy-load model map to avoid circular imports."""
@@ -53,7 +67,7 @@ def _get_model_map():
         )
         from database_utils.models.isp import (
             ServicePlan, ClientService, ServiceSuspension,
-            InventoryItem, NetworkNode, ProvisioningJob,
+            InventoryItem, ProvisioningJob,
         )
         _MODEL_MAP = {
             "order": Order,
@@ -69,9 +83,13 @@ def _get_model_map():
             "client_service": ClientService,
             "service_suspension": ServiceSuspension,
             "inventory_item": InventoryItem,
-            "network_node": NetworkNode,
+            # 'network_node' REMOVED (Cycle 2 D6, revision c2d_graph_removal —
+            # the free-form network graph no longer exists).
             "provisioning_job": ProvisioningJob,
         }
+        assert set(_MODEL_MAP) == set(KNOWN_RESOURCE_TYPES), (
+            "KNOWN_RESOURCE_TYPES drifted from _get_model_map() — update both"
+        )
     return _MODEL_MAP
 
 
@@ -329,6 +347,11 @@ def execute_workflow(
             step_execution = WorkflowStepExecution(
                 execution_id=execution.id,
                 step_id=step_id,
+                # Snapshot (revision c2e_step_exec_snapshot): step_id is now
+                # nullable/SET NULL, so historical run views must be able to
+                # render from step_name alone once the step itself is deleted
+                # or renamed.
+                step_name=step.name,
                 status=ExecutionStatus.RUNNING,
                 started_at=now_gt(),
             )
@@ -425,6 +448,17 @@ UPDATE_FIELD_DENYLIST: Dict[str, frozenset] = {
         {"is_valid", "subtotal", "tax", "total",
          "subtotal_cents", "tax_cents", "total_cents"}
     ),
+    # Cycle 2 (doc 18 amendment 1): migration-critical bridge state — the
+    # rewritten suspension/reactivation/service-removal templates (and any
+    # future automation) may freely write billing_status/recurrence/
+    # recurrence_end/next_generation_date/last_generated_at/quantity, but
+    # migration_source and recurring_order_id are NOT payment-ledger data —
+    # they are the c2b rollback bridge, and UPDATE_FIELD bypasses the
+    # ClientServiceUpdate schema (which already excludes both) via plain
+    # setattr/hasattr, so the engine must deny them independently.
+    "client_service": frozenset({"migration_source", "recurring_order_id"}),
+    # Same rationale for the ServicePlan migration marker.
+    "service_plan": frozenset({"migration_source"}),
 }
 
 # CREATE_ENTITY guards for the same invariant: the engine must never create
@@ -433,6 +467,8 @@ UPDATE_FIELD_DENYLIST: Dict[str, frozenset] = {
 CREATE_ENTITY_FORBIDDEN_TYPES: frozenset = frozenset({"invoice"})
 CREATE_ENTITY_FIELD_DENYLIST: Dict[str, frozenset] = {
     "order": frozenset({"paid", "payment_status", "payment_date", "total", "total_cents"}),
+    "client_service": frozenset({"migration_source", "recurring_order_id"}),
+    "service_plan": frozenset({"migration_source"}),
 }
 
 
@@ -648,15 +684,17 @@ def _execute_create_order(
     company_id: UUID,
 ) -> dict:
     """
-    CREATE_ORDER action (doc 16 §5.2, installation flow). Mirrors
-    backend-erp orders.py:create_order.
+    CREATE_ORDER action (doc 16 §5.2, installation flow; doc 18 D1/D2/
+    amendment 9, Cycle 2). Mirrors backend-erp orders.py:create_order.
 
     action_config format (templates already resolved by execute_step):
     {
-      "order_type": "INSTALLATION",
-      "client_id": "<uuid>",              # {{trigger.after.client_id}}
-      "client_service_id": "<uuid>",      # {{trigger.resource_id}}
-      "items": [{"product_id": "<uuid>", "quantity": 1}],
+      "order_type": "INSTALLATION",        # optional explicit signal, see below
+      "client_id": "<uuid>",               # {{trigger.after.client_id}}
+      "client_service_id": "<uuid>",       # {{trigger.resource_id}}
+      "items": [{"service_plan_id": "<uuid>", "quantity": 1}],   # preferred
+      # or (deprecated, dual-write rollback window):
+      # "items": [{"product_id": "<uuid>", "quantity": 1}],
       "due_date_offset_days": 0,
       "idempotency_key": "install-order-<uuid>"   # informational; dedupe below
     }
@@ -665,35 +703,53 @@ def _execute_create_order(
     start payment_status=PENDING / paid=False. The engine never writes payment
     or money state after creation — that is PaymentService's job.
 
+    Cycle 2 item resolution (D1): each item resolves against EXACTLY ONE of
+    service_plan_id (preferred — price comes from service_plan.price_cents)
+    or product_id (deprecated but still honored during the rollback window —
+    price comes from product.price_cents, and its kind for order_type
+    derivation is resolved via the service_plan.product_id bridge; a
+    bridge-less legacy product counts as SERVICE, doc 18 §1c). order_item
+    rows dual-write both FKs when a bridge exists.
+
+    order_type is DERIVED (utils/order_typing.derive_order_type, amendment 9)
+    from the resolved items' CatalogKind, honoring this step's configured
+    order_type as an additional input (never silently dropped) — this is what
+    keeps the installed v2 new-installation template's INSTALLATION dedupe/DB
+    backstop working even when its configured fee catalog item doesn't itself
+    resolve to an INSTALLATION-kind plan/product.
+
     Idempotency for INSTALLATION orders: (1) precheck — an existing
     non-cancelled INSTALLATION order for the client_service dedupes the step;
     (2) partial unique index uq_order_installation_per_service (revision
     c1e_install_actions) backs it at the DB level, so a genuine race fails the
     step instead of double-billing.
-
-    Requires the billing-rework models (OrderType, PaymentStatus, *_cents
-    columns) — the billing and installation models-utils branches always
-    compose into develop together (§2.6); imports are lazy so this module
-    stays importable on the installation branch alone.
     """
     from datetime import timedelta
+    from decimal import Decimal, ROUND_HALF_UP
     from database_utils.models.crm import (
         Client, Order, OrderItem, OrderStatus, OrderType, PaymentStatus, Product,
     )
-    from database_utils.models.isp import ClientService
+    from database_utils.models.isp import ClientService, ServicePlan, CatalogKind
     from database_utils.utils.audit_utils import serialize_for_audit
+    from database_utils.utils.order_typing import derive_order_type
 
-    raw_type = config.get("order_type") or "ONE_SHOT"
-    try:
-        order_type = OrderType(raw_type)
-    except ValueError:
-        raise ValueError(f"CREATE_ORDER: invalid order_type {raw_type!r}")
+    def _cents_from_float(amount) -> int:
+        # Dual-window fallback (row written before its price_cents backfill).
+        # Half-away-from-zero to match the canonical
+        # ROUND(x::numeric*100)::bigint rule (doc 16 §2.5) — Python's round()
+        # is banker's rounding and would diverge.
+        return int((Decimal(str(amount or 0)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    def _kind_value(kind) -> str:
+        return kind.value if hasattr(kind, "value") else str(kind)
+
+    explicit_order_type = config.get("order_type")
 
     # --- Company-scoped target resolution (config is tenant-editable: never
     # trust a raw id — every referenced row must belong to THIS company) ---
     client_service = None
     client_service_id = None
-    if config.get("client_service_id") or order_type == OrderType.INSTALLATION:
+    if config.get("client_service_id") or explicit_order_type == OrderType.INSTALLATION.value:
         client_service_id = _required_uuid(
             config.get("client_service_id"), "client_service_id", "CREATE_ORDER"
         )
@@ -721,8 +777,100 @@ def _execute_create_order(
     else:
         client_id = None
 
+    # --- Items: company-scoped plans/products, snapshots, totals in cents,
+    # and the resolved kinds that feed order_type derivation ---
+    items = config.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("CREATE_ORDER: 'items' must be a non-empty list")
+
+    plan_ids = [
+        _required_uuid(item["service_plan_id"], "items[].service_plan_id", "CREATE_ORDER")
+        for item in items if item.get("service_plan_id")
+    ]
+    product_ids = [
+        _required_uuid(item["product_id"], "items[].product_id", "CREATE_ORDER")
+        for item in items if not item.get("service_plan_id") and item.get("product_id")
+    ]
+    if len(plan_ids) + len(product_ids) != len(items):
+        raise ValueError(
+            "CREATE_ORDER: every item needs exactly one of service_plan_id or product_id"
+        )
+
+    plan_map = {}
+    if plan_ids:
+        plans = db.query(ServicePlan).filter(
+            ServicePlan.id.in_(plan_ids), ServicePlan.company_id == company_id
+        ).all()
+        plan_map = {p.id: p for p in plans}
+        missing_plans = [str(pid) for pid in plan_ids if pid not in plan_map]
+        if missing_plans:
+            raise ValueError(
+                f"CREATE_ORDER: service_plan(s) not found for company: {', '.join(missing_plans)}"
+            )
+
+    product_map = {}
+    bridged_plans_by_product = {}
+    if product_ids:
+        products = db.query(Product).filter(
+            Product.id.in_(product_ids), Product.company_id == company_id
+        ).all()
+        product_map = {p.id: p for p in products}
+        missing_products = [str(pid) for pid in product_ids if pid not in product_map]
+        if missing_products:
+            raise ValueError(
+                f"CREATE_ORDER: product(s) not found for company: {', '.join(missing_products)}"
+            )
+        # Deprecated-path kind resolution via the c2a billing bridge;
+        # bridge-less legacy products count as SERVICE (doc 18 §1c).
+        bridged = db.query(ServicePlan).filter(
+            ServicePlan.product_id.in_(product_ids), ServicePlan.company_id == company_id
+        ).all()
+        bridged_plans_by_product = {p.product_id: p for p in bridged}
+
+    total_cents = 0
+    order_items = []
+    item_kinds: List[str] = []
+    for item in items:
+        try:
+            quantity = int(item.get("quantity", 1))
+        except (TypeError, ValueError):
+            raise ValueError(f"CREATE_ORDER: invalid quantity {item.get('quantity')!r}")
+        if quantity <= 0:
+            raise ValueError("CREATE_ORDER: item quantity must be > 0")
+
+        if item.get("service_plan_id"):
+            plan = plan_map[_required_uuid(item["service_plan_id"], "items[].service_plan_id", "CREATE_ORDER")]
+            unit_price_cents = plan.price_cents if plan.price_cents is not None else _cents_from_float(plan.price)
+            item_kinds.append(_kind_value(plan.kind))
+            total_cents += unit_price_cents * quantity
+            order_items.append(OrderItem(
+                service_plan_id=plan.id,
+                product_id=plan.product_id,  # dual-write, rollback window
+                quantity=quantity,
+                # §2.2 snapshots: app-level required for all new rows
+                unit_price_cents=unit_price_cents,
+                product_name=plan.name,
+            ))
+        else:
+            product = product_map[_required_uuid(item["product_id"], "items[].product_id", "CREATE_ORDER")]
+            unit_price_cents = product.price_cents if product.price_cents is not None else _cents_from_float(product.price)
+            bridged_plan = bridged_plans_by_product.get(product.id)
+            item_kinds.append(_kind_value(bridged_plan.kind) if bridged_plan else CatalogKind.SERVICE.value)
+            total_cents += unit_price_cents * quantity
+            order_items.append(OrderItem(
+                product_id=product.id,
+                service_plan_id=bridged_plan.id if bridged_plan else None,
+                quantity=quantity,
+                unit_price_cents=unit_price_cents,
+                product_name=product.name,
+            ))
+
+    order_type = derive_order_type(item_kinds, explicit_order_type=explicit_order_type)
+
     # --- Idempotency precheck (§5.2): one live INSTALLATION order per service ---
     if order_type == OrderType.INSTALLATION:
+        if client_service_id is None:
+            raise ValueError("CREATE_ORDER: INSTALLATION orders require client_service_id")
         existing = db.query(Order).filter(
             Order.company_id == company_id,
             Order.client_service_id == client_service_id,
@@ -735,58 +883,6 @@ def _execute_create_order(
                 "created_resource_type": "order",
                 "resource_id": str(existing.id),
             }
-
-    # --- Items: company-scoped products, snapshots, totals in cents ---
-    items = config.get("items")
-    if not isinstance(items, list) or not items:
-        raise ValueError("CREATE_ORDER: 'items' must be a non-empty list")
-
-    product_ids = [
-        _required_uuid(item.get("product_id"), "items[].product_id", "CREATE_ORDER")
-        for item in items
-    ]
-    products = db.query(Product).filter(
-        Product.id.in_(product_ids), Product.company_id == company_id
-    ).all()
-    product_map = {p.id: p for p in products}
-    missing = [str(pid) for pid in product_ids if pid not in product_map]
-    if missing:
-        raise ValueError(
-            f"CREATE_ORDER: product(s) not found for company: {', '.join(missing)}"
-        )
-
-    total_cents = 0
-    order_items = []
-    for item, product_id in zip(items, product_ids):
-        try:
-            quantity = int(item.get("quantity", 1))
-        except (TypeError, ValueError):
-            raise ValueError(
-                f"CREATE_ORDER: invalid quantity {item.get('quantity')!r}"
-            )
-        if quantity <= 0:
-            raise ValueError("CREATE_ORDER: item quantity must be > 0")
-        product = product_map[product_id]
-        if product.price_cents is not None:
-            unit_price_cents = product.price_cents
-        else:
-            # Dual-window fallback (product written by an old backend before
-            # its price_cents backfill). Half-away-from-zero to match the
-            # canonical ROUND(x::numeric*100)::bigint rule (doc 16 §2.5) —
-            # Python's round() is banker's rounding and would diverge.
-            from decimal import Decimal, ROUND_HALF_UP
-            unit_price_cents = int(
-                (Decimal(str(product.price or 0)) * 100)
-                .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-            )
-        total_cents += unit_price_cents * quantity
-        order_items.append(OrderItem(
-            product_id=product.id,
-            quantity=quantity,
-            # §2.2 snapshots: app-level required for all new rows
-            unit_price_cents=unit_price_cents,
-            product_name=product.name,
-        ))
 
     try:
         offset_days = int(config.get("due_date_offset_days") or 0)
@@ -1011,12 +1107,17 @@ def _execute_enqueue_provisioning(
       "playbook_id": "uuid",
       "variables": {"onu_serial": "{{trigger.after.serial_number}}"},  # template-enabled
       "client_service_id": "{{trigger.resource_id}}",   # optional target refs
-      "network_node_id": null,
       "inventory_item_id": null,
       "integration_id": null,
       "idempotency_key": "install-{{trigger.resource_id}}",  # optional dedupe
       "max_attempts": 3
     }
+
+    Cycle 2 D6: the 'network_node_id' config key is REMOVED along with the
+    network graph (revision c2d_graph_removal) — provisioning jobs target
+    client_service_id/inventory_item_id only; the topology chain resolved for
+    a job is recorded in `variables` instead (backend-erp
+    services/provisioning_resolution.py), giving auditability without a graph.
     """
     from database_utils.models.isp import Playbook, ProvisioningJob, ProvisioningTrigger
 
@@ -1036,7 +1137,6 @@ def _execute_enqueue_provisioning(
         {
             "variables": config.get("variables") or {},
             "client_service_id": config.get("client_service_id"),
-            "network_node_id": config.get("network_node_id"),
             "inventory_item_id": config.get("inventory_item_id"),
             "idempotency_key": config.get("idempotency_key"),
         },
@@ -1073,7 +1173,7 @@ def _execute_enqueue_provisioning(
     # tenant-editable (a crafted step could name another tenant's integration_id
     # to make the worker execute with their stored device credentials), so scope
     # each id to company_id and fail the step if a referenced row isn't ours.
-    from database_utils.models.isp import ClientService, NetworkNode, InventoryItem
+    from database_utils.models.isp import ClientService, InventoryItem
     from database_utils.models.crm import Integration
 
     def _owned_or_none(model, value):
@@ -1094,7 +1194,6 @@ def _execute_enqueue_provisioning(
         playbook_id=playbook.id,
         variables=resolved["variables"],
         client_service_id=_owned_or_none(ClientService, resolved.get("client_service_id")),
-        network_node_id=_owned_or_none(NetworkNode, resolved.get("network_node_id")),
         inventory_item_id=_owned_or_none(InventoryItem, resolved.get("inventory_item_id")),
         integration_id=_owned_or_none(Integration, config.get("integration_id")),
         idempotency_key=idempotency_key,
