@@ -92,7 +92,10 @@ class TaskLinkedObjectType(str, enum.Enum):
     RECURRING_ORDER = "RECURRING_ORDER"
     CLIENT_SERVICE = "CLIENT_SERVICE"
     INVENTORY_ITEM = "INVENTORY_ITEM"
-    NETWORK_NODE = "NETWORK_NODE"
+    # NETWORK_NODE removed (Cycle 2 D6, revision c2d_graph_removal): the PG enum
+    # VALUE is permanent (Postgres cannot DROP a enum label) but the Python
+    # member is gone — c2d nulls every task/task_template row referencing it
+    # BEFORE this member disappears, so no row is left unreadable.
 
 
 class ServiceAvailability(str, enum.Enum):
@@ -299,6 +302,21 @@ class Order(Base):
             unique=True,
             postgresql_where=text("order_type = 'INSTALLATION' AND status <> 'CANCELLED'"),
         ),
+        # At most one non-cancelled RECURRING order per (client_service_id,
+        # due_date) — the client_service-native dedupe backstop that
+        # replaces uq_order_active_recurring_due_date for the new billing
+        # engine. Created by revision c2b_service_billing; the OLD index
+        # STAYS (recurring_order_id keeps being dual-written through the
+        # rollback window) — both backstops are active simultaneously.
+        # Declared here so the model matches the DB post-compose and
+        # autogenerate never proposes dropping it.
+        Index(
+            "uq_order_recurring_service_due",
+            "client_service_id",
+            "due_date",
+            unique=True,
+            postgresql_where=text("status <> 'CANCELLED' AND order_type = 'RECURRING' AND client_service_id IS NOT NULL"),
+        ),
     )
 
 
@@ -311,6 +329,12 @@ class OrderItem(Base):
     # SET NULL (doc 16 §2.2): deleting a Product must never destroy billed
     # history — the snapshot columns below keep the line meaningful.
     product_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("product.id", ondelete="SET NULL"), nullable=True)
+    # Cycle 2 D1 (entity merge): the ServicePlan this line bills. SET NULL —
+    # deleting a plan must never destroy billed history (mirrors product_id).
+    # Dual-written alongside product_id through the rollback window.
+    service_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("service_plan.id", ondelete="SET NULL"), nullable=True
+    )
     quantity = Column(Integer, nullable=False)
     # Price/name snapshots at order time. Nullable so "missing snapshot"
     # (pre-backfill history) is distinguishable from "free item"; app-level
@@ -321,6 +345,11 @@ class OrderItem(Base):
     # Relationships
     order = relationship("Order", back_populates="order_items")
     product = relationship("Product", back_populates="order_items")
+    service_plan = relationship("ServicePlan")
+
+    __table_args__ = (
+        Index("ix_order_item_service_plan", "service_plan_id"),
+    )
 
 
 class Invoice(Base):

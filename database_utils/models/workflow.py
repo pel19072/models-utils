@@ -131,7 +131,15 @@ class WorkflowStep(Base):
 
     # Relationships
     workflow = relationship("Workflow", back_populates="steps")
-    step_executions = relationship("WorkflowStepExecution", back_populates="step", cascade="all, delete-orphan")
+    # Cycle 2 (run-history durability, doc 18 automations-ux §2 Fix B):
+    # deleting a step must NOT destroy its execution history — step_id is now
+    # nullable with ON DELETE SET NULL at the DB level (revision
+    # c2e_step_exec_snapshot). No ORM delete-orphan cascade here anymore;
+    # passive_deletes=True tells SQLAlchemy to let the DB's SET NULL handle it
+    # instead of emitting per-row UPDATE/DELETE statements on step deletion.
+    step_executions = relationship(
+        "WorkflowStepExecution", back_populates="step", passive_deletes=True,
+    )
 
 
 class WorkflowStepEdge(Base):
@@ -189,12 +197,20 @@ class WorkflowStepExecution(Base):
     status = Column(Enum(ExecutionStatus), nullable=False, default=ExecutionStatus.PENDING)
     result = Column(JSON, nullable=True)
     error = Column(String, nullable=True)
+    # Snapshot of step.name at execution time (revision c2e_step_exec_snapshot).
+    # Historical run views must render from this when the step itself has been
+    # deleted (step_id NULL) or renamed since — the run-detail view's
+    # degraded-mode fallback (doc 18 automations-ux §2 Fix B).
+    step_name = Column(String, nullable=True)
 
     execution_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("workflow_execution.id", ondelete="CASCADE"), nullable=False
     )
-    step_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("workflow_step.id", ondelete="CASCADE"), nullable=False
+    # Nullable + SET NULL (was NOT NULL/CASCADE): deleting a step must not
+    # erase its run history. step_name above is what historical views render
+    # once step_id is NULL.
+    step_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("workflow_step.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships

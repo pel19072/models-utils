@@ -2,12 +2,15 @@
 ISP vertical models: service plans, subscriber services, network inventory,
 topology, and provisioning automation.
 
-Design rationale: docs/isp-platform/00-architecture-decisions.md (repo root).
+Design rationale: docs/isp-platform/00-architecture-decisions.md (repo root),
+docs/isp-platform/18-cycle2-design.md (D1-D10, entity merge + topology rework).
 - Hybrid inventory (ADR-002): hot fields as columns, vendor long-tail in
   schema-validated JSONB (`attributes` validated against the catalog's
   `attribute_schema`).
-- Config-driven topology (ADR-003): node kinds are per-company rows
-  (network_node_type), not enums, so new technologies need no migration.
+- Topology as an ordered device-type chain (D5, Cycle 2): the free-form
+  network graph (network_node/network_node_type/network_link, ADR-003) was
+  removed in revision c2d_graph_removal — device kinds are resolved by TYPE
+  from a client's assigned inventory, not by a mapped node graph.
 - Durable provisioning queue (ADR-005): provisioning_job rows are claimed by
   the worker via SELECT ... FOR UPDATE SKIP LOCKED.
 """
@@ -19,6 +22,9 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column, validates
 
 from database_utils.database import Base
 from ..utils.timezone_utils import now_gt
+# Cycle 2 D1 (entity merge): client_service billing reuses these EXISTING PG
+# enum types owned by recurring_order — zero new-enum risk (doc 18 §1b).
+from .crm import RecurrenceEnum, RecurringOrderStatus
 
 import enum
 import uuid
@@ -34,6 +40,15 @@ class ServicePlanType(str, enum.Enum):
     WIRELESS = "WIRELESS"
     DSL = "DSL"
     OTHER = "OTHER"
+
+
+class CatalogKind(str, enum.Enum):
+    """Cycle 2 entity merge (D1/D2): what a ServicePlan bills FOR. Drives
+    Order.order_type derivation (utils/order_typing.py) — INSTALLATION-kind
+    items make an order an install work order regardless of plan_type."""
+    SERVICE = "SERVICE"
+    INSTALLATION = "INSTALLATION"
+    HARDWARE = "HARDWARE"
 
 
 class ClientServiceStatus(str, enum.Enum):
@@ -95,14 +110,6 @@ class EquipmentEventType(str, enum.Enum):
     MAINTENANCE = "MAINTENANCE"
 
 
-class NetworkNodeStatus(str, enum.Enum):
-    PLANNED = "PLANNED"
-    ACTIVE = "ACTIVE"
-    DEGRADED = "DEGRADED"
-    DOWN = "DOWN"
-    MAINTENANCE = "MAINTENANCE"
-
-
 class ProvisioningJobStatus(str, enum.Enum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
@@ -142,6 +149,20 @@ class ServicePlan(Base):
     # Vendor-agnostic provisioning intent consumed as playbook variables,
     # e.g. {"speed_profile": "HOME_50M", "vlan": 110, "qos_class": "residential"}
     provisioning_params = Column(JSON, nullable=True)
+    # Cycle 2 entity merge (D1/D2): what this plan bills for. NOT NULL with a
+    # server_default so the additive c2a migration never blocks on existing
+    # rows; drives Order.order_type derivation (utils/order_typing.py).
+    kind = Column(
+        Enum(CatalogKind), nullable=False,
+        default=CatalogKind.SERVICE, server_default='SERVICE'
+    )
+    # Absorbed from Product (Cycle 2 D1). NULL = not stock-tracked (SERVICE/
+    # INSTALLATION plans typically have no stock concept).
+    stock = Column(Integer, nullable=True)
+    # Dedicated migration marker (doc 18 amendment 1) — NEVER a JSON field,
+    # NEVER exposed on Update schemas. 'c2a' = inserted by the c2a backfill.
+    # Used by c2a's downgrade to delete ONLY rows it created.
+    migration_source = Column(String, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -150,10 +171,25 @@ class ServicePlan(Base):
     product_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("product.id", ondelete="SET NULL"), nullable=True
     )
+    # D5: pre-fills a new service's topology so the tech only picks on
+    # exceptions. SET NULL — a plan must never block deleting a topology.
+    default_topology_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("topology.id", ondelete="SET NULL"), nullable=True
+    )
 
     company = relationship("Company", back_populates="service_plans")
     product = relationship("Product")
+    default_topology = relationship("Topology", foreign_keys=[default_topology_id])
     client_services = relationship("ClientService", back_populates="service_plan")
+
+    __table_args__ = (
+        # Makes the c2a Product->ServicePlan billing bridge deterministic (one
+        # plan per product). Created by revision c2a_catalog_merge.
+        Index(
+            "uq_service_plan_product", "product_id",
+            unique=True, postgresql_where=text("product_id IS NOT NULL"),
+        ),
+    )
 
 
 class ClientService(Base):
@@ -173,6 +209,25 @@ class ClientService(Base):
     connection_params = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
 
+    # --- Cycle 2 D1 billing absorption (client_service absorbs recurring_order) ---
+    # NULL recurrence/billing_status = billing not configured on this service
+    # (legacy/unmigrated or a non-billed attachment). Reuses the EXISTING
+    # recurrenceenum/recurringorderstatus PG enum types owned by recurring_order
+    # — zero new-enum risk, values copied verbatim (doc 18 amendment, §1b).
+    recurrence = Column(Enum(RecurrenceEnum), nullable=True)
+    recurrence_end = Column(DateTime(timezone=True), nullable=True)
+    # The billing anchor: next charge date. Cycle arithmetic keys off this
+    # exactly as RecurringOrderService does today.
+    next_generation_date = Column(DateTime(timezone=True), nullable=True)
+    last_generated_at = Column(DateTime(timezone=True), nullable=True)
+    billing_status = Column(Enum(RecurringOrderStatus), nullable=True)
+    quantity = Column(Integer, nullable=False, default=1, server_default='1')
+    # Dedicated migration marker (doc 18 amendment 1) — NEVER JSON (the old
+    # connection_params-based marker was user-writable and got clobbered by
+    # whole-object PATCHes). NEVER exposed on Update schemas. 'c2b' = a
+    # client_service materialized by the c2b Pass-2 backfill.
+    migration_source = Column(String, nullable=True)
+
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -183,11 +238,15 @@ class ClientService(Base):
     service_plan_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("service_plan.id", ondelete="RESTRICT"), nullable=False
     )
-    # The subscriber's attachment point in the topology (usually their ONU/CPE node).
-    network_node_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="SET NULL"), nullable=True
+    # D5: named chain of device types + bound playbook. RESTRICT — deleting a
+    # topology in use is a 409, never a silent unlink (replaces network_node_id,
+    # dropped in c2d_graph_removal).
+    topology_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("topology.id", ondelete="RESTRICT"), nullable=True
     )
-    # Billing link into the existing recurring-order engine.
+    # Billing link into the legacy recurring-order engine. Still dual-written
+    # during the Cycle-2 rollback window (doc 18 amendment 1) but is NEVER
+    # PATCHable — it is migration-critical bridge state, not user data.
     recurring_order_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True
     )
@@ -195,7 +254,7 @@ class ClientService(Base):
     company = relationship("Company", back_populates="client_services")
     client = relationship("Client", back_populates="services")
     service_plan = relationship("ServicePlan", back_populates="client_services")
-    network_node = relationship("NetworkNode", back_populates="client_services")
+    topology = relationship("Topology", back_populates="client_services")
     recurring_order = relationship("RecurringOrder")
     suspensions = relationship(
         "ServiceSuspension", back_populates="client_service", cascade="all, delete-orphan"
@@ -204,6 +263,13 @@ class ClientService(Base):
 
     __table_args__ = (
         Index("ix_client_service_company_status", "company_id", "status"),
+        Index("ix_client_service_topology_id", "topology_id"),
+        # The cron due-scan replacement for ix_recurring_order_status_company
+        # (revision c2b_service_billing).
+        Index(
+            "ix_client_service_billing_due",
+            "billing_status", "company_id", "next_generation_date",
+        ),
     )
 
     @validates("status")
@@ -335,19 +401,12 @@ class InventoryItem(Base):
     client_service_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("client_service.id", ondelete="SET NULL"), nullable=True
     )
-    # Infrastructure placement: the topology node this asset fulfills.
-    network_node_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="SET NULL"), nullable=True
-    )
 
     company = relationship("Company", back_populates="inventory_items")
     device_type = relationship("DeviceType", back_populates="items")
     warehouse = relationship("Warehouse", back_populates="items")
     client = relationship("Client", back_populates="equipment")
     client_service = relationship("ClientService", back_populates="equipment")
-    network_node = relationship(
-        "NetworkNode", back_populates="inventory_items", foreign_keys=[network_node_id]
-    )
     events = relationship(
         "EquipmentEvent", back_populates="item",
         cascade="all, delete-orphan", foreign_keys="EquipmentEvent.item_id",
@@ -408,99 +467,75 @@ class EquipmentEvent(Base):
 
 
 # ---------------------------------------------------------------------------
-# Topology (ADR-003 config-driven)
+# Topology (Cycle 2 D5): named ordered chain of device types + bound playbook.
+# Replaces the free-form network graph (network_node/network_node_type/
+# network_link, removed in revision c2d_graph_removal). Concrete devices
+# resolve from the client's assigned inventory by TYPE at provisioning time
+# (backend-erp services/provisioning_resolution.py) — no coordinate/graph UI.
 # ---------------------------------------------------------------------------
 
-class NetworkNodeType(Base):
-    """Per-company node kind (OLT, PON port, splitter, ONU, ...) — configuration,
-    not code. `allowed_parent_keys` constrains tree shape per company convention."""
-    __tablename__ = "network_node_type"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    key = Column(String, nullable=False)     # "olt", "pon_port", "splitter", "onu"
-    name = Column(String, nullable=False)    # display label
-    category = Column(Enum(DeviceCategory), nullable=True)  # optional catalog hint
-    icon = Column(String, nullable=True)     # frontend icon key
-    allowed_parent_keys = Column(JSON, nullable=True)  # ["olt"] for pon_port, etc.
-    attribute_schema = Column(JSON, nullable=True)
-
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    company = relationship("Company", back_populates="network_node_types")
-    nodes = relationship("NetworkNode", back_populates="node_type")
-
-    __table_args__ = (
-        UniqueConstraint("company_id", "key", name="uq_network_node_type_company_key"),
-    )
-
-
-class NetworkNode(Base):
-    """Topology instance node. Containment tree via parent_id
-    (OLT -> PON port -> splitter -> ONU); non-tree overlays via NetworkLink."""
-    __tablename__ = "network_node"
+class Topology(Base):
+    """A named, ordered chain of device types (e.g. Router -> ONU -> Customer
+    Router) bound to the playbook that provisions it end to end."""
+    __tablename__ = "topology"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
     name = Column(String, nullable=False)
-    status = Column(
-        Enum(NetworkNodeStatus), nullable=False,
-        default=NetworkNodeStatus.ACTIVE, server_default='ACTIVE'
-    )
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    capacity = Column(Integer, nullable=True)  # e.g. splitter output count
-    attributes = Column(JSON, nullable=True)
-    notes = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default='true')
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    node_type_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("network_node_type.id", ondelete="RESTRICT"), nullable=False
-    )
-    parent_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    # The physical asset fulfilling this node (if serialized in inventory).
-    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True
+    # RESTRICT: a topology is bound to the playbook that provisions its chain;
+    # mirrors provisioning_job.playbook_id (playbooks.py DELETE already 409s on
+    # referencing jobs — the router guard extends to referencing topologies).
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False
     )
 
-    company = relationship("Company", back_populates="network_nodes")
-    node_type = relationship("NetworkNodeType", back_populates="nodes")
-    parent = relationship("NetworkNode", remote_side=[id], backref="children")
-    inventory_items = relationship(
-        "InventoryItem", back_populates="network_node",
-        foreign_keys="InventoryItem.network_node_id",
+    company = relationship("Company", back_populates="topologies")
+    playbook = relationship("Playbook")
+    device_types = relationship(
+        "TopologyDeviceType", back_populates="topology",
+        cascade="all, delete-orphan", order_by="TopologyDeviceType.position",
     )
-    client_services = relationship("ClientService", back_populates="network_node")
+    client_services = relationship("ClientService", back_populates="topology")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_topology_company_name"),
+    )
 
 
-class NetworkLink(Base):
-    """Non-tree edge overlay (rings, redundancy, logical links)."""
-    __tablename__ = "network_link"
+class TopologyDeviceType(Base):
+    """One position in a topology's device chain. `position` is 0-based
+    provisioning order (router first, CPE last)."""
+    __tablename__ = "topology_device_type"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    link_type = Column(String, nullable=False, default="fiber")  # fiber, wireless, logical
-    attributes = Column(JSON, nullable=True)
+    position = Column(Integer, nullable=False)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    topology_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=False
     )
-    from_node_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="CASCADE"), nullable=False
-    )
-    to_node_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="CASCADE"), nullable=False
+    # RESTRICT: a device type referenced by a topology chain cannot be deleted
+    # out from under it (matches inventory_item.device_type_id RESTRICT).
+    device_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("device_type.id", ondelete="RESTRICT"), nullable=False
     )
 
-    from_node = relationship("NetworkNode", foreign_keys=[from_node_id])
-    to_node = relationship("NetworkNode", foreign_keys=[to_node_id])
+    topology = relationship("Topology", back_populates="device_types")
+    device_type = relationship("DeviceType")
+
+    __table_args__ = (
+        UniqueConstraint("topology_id", "position", name="uq_topology_position"),
+        # One occurrence of a type per chain: match-by-type resolution (D5) is
+        # deterministic only if a type cannot appear twice in the same chain.
+        UniqueConstraint("topology_id", "device_type_id", name="uq_topology_device_type"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -571,9 +606,6 @@ class ProvisioningJob(Base):
     client_service_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("client_service.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    network_node_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("network_node.id", ondelete="SET NULL"), nullable=True
-    )
     inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True
     )
@@ -588,7 +620,6 @@ class ProvisioningJob(Base):
     company = relationship("Company", back_populates="provisioning_jobs")
     playbook = relationship("Playbook", back_populates="jobs")
     client_service = relationship("ClientService")
-    network_node = relationship("NetworkNode")
     inventory_item = relationship("InventoryItem")
     integration = relationship("Integration")
     triggered_by_user = relationship("User", foreign_keys=[triggered_by_user_id])

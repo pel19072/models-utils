@@ -94,8 +94,9 @@ class Company(Base):
     device_types = relationship("DeviceType", back_populates="company", cascade="all, delete-orphan")
     warehouses = relationship("Warehouse", back_populates="company", cascade="all, delete-orphan")
     inventory_items = relationship("InventoryItem", back_populates="company", cascade="all, delete-orphan")
-    network_node_types = relationship("NetworkNodeType", back_populates="company", cascade="all, delete-orphan")
-    network_nodes = relationship("NetworkNode", back_populates="company", cascade="all, delete-orphan")
+    # Cycle 2 D6: network_node_types/network_nodes rels removed with the graph
+    # (revision c2d_graph_removal); topologies (D5) is the replacement.
+    topologies = relationship("Topology", back_populates="company", cascade="all, delete-orphan")
     playbooks = relationship("Playbook", back_populates="company", cascade="all, delete-orphan")
     provisioning_jobs = relationship("ProvisioningJob", back_populates="company", cascade="all, delete-orphan")
 
