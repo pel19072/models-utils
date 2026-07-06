@@ -20,7 +20,9 @@ from .integration import *
 from .service_plan import *
 from .client_service import *
 from .inventory import *
-from .network import *
+# schemas/network.py deleted (Cycle 2 D6, revision c2d_graph_removal — the
+# network graph is gone); .topology (D5) is its replacement.
+from .topology import *
 from .playbook import *
 from .workflow_template import *
 

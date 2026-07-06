@@ -130,7 +130,6 @@ class InventoryItemUpdate(BaseModel):
     warehouse_id: Optional[UUID] = None
     client_id: Optional[UUID] = None
     client_service_id: Optional[UUID] = None
-    network_node_id: Optional[UUID] = None
     attributes: Optional[Dict[str, Any]] = None
     purchase_date: Optional[datetime] = None
     warranty_until: Optional[datetime] = None
@@ -144,7 +143,6 @@ class InventoryItemOut(InventoryItemBase):
     status: InventoryItemStatus
     client_id: Optional[UUID] = None
     client_service_id: Optional[UUID] = None
-    network_node_id: Optional[UUID] = None
     created_at: datetime
     device_type: Optional[DeviceTypeOut] = None
     warehouse: Optional[WarehouseOut] = None

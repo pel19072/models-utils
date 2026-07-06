@@ -17,6 +17,24 @@ class PaymentCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class FullPaymentCreate(BaseModel):
+    """Body of POST /orders/{order_id}/payments/full (doc 18 D3 / amendment 6).
+
+    Deliberately has NO amount field — the outstanding balance is computed
+    server-side under the same row lock that appends the payment, so a
+    frontend-computed amount can never race a concurrent partial payment into
+    a wrong charge. `PaymentCreate` above is intentionally UNTOUCHED (its
+    amount_cents stays required, Field(..., gt=0)) — the balance-mode branch
+    lives only in the service layer, keyed off `FullPaymentCreate` having no
+    such field at all, never off a schema-level Optional[int] on the shared
+    partial-payment body (that would let a client silently trigger a full
+    charge by omitting amount_cents on the public partial route)."""
+    method: PaymentMethodType
+    reference: Optional[str] = None
+    paid_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
 class PaymentRefundCreate(BaseModel):
     """Body of POST /orders/{order_id}/payments/{payment_id}/refund.
 

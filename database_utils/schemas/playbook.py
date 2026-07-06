@@ -147,7 +147,6 @@ class ProvisioningJobCreate(BaseModel):
     playbook_id: UUID
     variables: Optional[Dict[str, Any]] = None
     client_service_id: Optional[UUID] = None
-    network_node_id: Optional[UUID] = None
     inventory_item_id: Optional[UUID] = None
     integration_id: Optional[UUID] = None
     idempotency_key: Optional[str] = None
@@ -172,7 +171,6 @@ class ProvisioningJobOut(BaseModel):
     triggered_by: ProvisioningTrigger
     triggered_by_user_id: Optional[UUID] = None
     client_service_id: Optional[UUID] = None
-    network_node_id: Optional[UUID] = None
     inventory_item_id: Optional[UUID] = None
     integration_id: Optional[UUID] = None
     created_at: datetime
