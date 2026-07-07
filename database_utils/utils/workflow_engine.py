@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import json
 from collections import defaultdict, deque
 from typing import Optional, List, Dict, Any
 from uuid import UUID
@@ -1092,6 +1093,42 @@ def _execute_create_task(
     }
 
 
+def _uuid_or_none(value):
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _owned_or_none(db: Session, model, value, company_id: UUID):
+    """Every target FK must belong to THIS company. action_config is
+    tenant-editable (a crafted step could name another tenant's integration_id
+    to make the worker execute with their stored device credentials), so scope
+    each id to company_id and fail the step if a referenced row isn't ours."""
+    rid = _uuid_or_none(value)
+    if rid is None:
+        return None
+    exists = db.query(model.id).filter(model.id == rid, model.company_id == company_id).first()
+    if not exists:
+        raise ValueError(f"{model.__name__} {rid} does not belong to company {company_id}")
+    return rid
+
+
+def _find_queued_or_running_provisioning_job(db: Session, company_id: UUID, idempotency_key: str):
+    from database_utils.models.isp import ProvisioningJob, ProvisioningJobStatus
+    # Duplicate enqueue (e.g. a retriggered workflow) is a no-op success.
+    # Pre-check instead of catching the unique violation: a mid-workflow
+    # rollback would discard this run's execution audit rows. A genuine
+    # race still trips uq_provisioning_job_company_idem and fails the step.
+    return db.query(ProvisioningJob).filter(
+        ProvisioningJob.company_id == company_id,
+        ProvisioningJob.idempotency_key == idempotency_key,
+        ProvisioningJob.status.in_([ProvisioningJobStatus.QUEUED, ProvisioningJobStatus.RUNNING]),
+    ).first()
+
+
 def _execute_enqueue_provisioning(
     db: Session,
     config: dict,
@@ -1102,28 +1139,79 @@ def _execute_enqueue_provisioning(
     Insert a durable provisioning_job row (ADR-005). The workflow engine never
     talks to devices — the provisioning worker claims and executes the job.
 
-    action_config format:
+    Two mutually exclusive modes:
+
+    Mode A — topology purpose resolution (Cycle 3 E2, `use_topology`):
+    {
+      "use_topology": true,
+      "purpose": "ACTIVATION",              # default ACTIVATION; free-form E1
+                                             # custom purposes allowed
+      "client_service_id": "{{trigger.after.linked_object_id}}",  # REQUIRED
+      "variables": {...},                   # optional; overrides resolved vars
+      "idempotency_key": "activate-{{trigger.after.linked_object_id}}",
+      "max_attempts": 3
+    }
+    database_utils.utils.provisioning_resolution.resolve_provisioning picks
+    the playbook AND resolves the device chain from the client's assigned
+    inventory — MISSING_DEVICE/AMBIGUOUS_DEVICE/PURPOSE_NOT_CONFIGURED/
+    PLAYBOOK_INACTIVE/TOPOLOGY_NOT_SET/TOPOLOGY_INACTIVE all FAIL the step
+    visibly (founder hard requirement: resolution failures are never
+    silent). A task/event with no resolvable CLIENT_SERVICE target is NOT an
+    error — it is a non-matching event (see the skip rule below).
+
+    Mode B — explicit playbook (pre-Cycle-3 shape, unchanged):
     {
       "playbook_id": "uuid",
-      "variables": {"onu_serial": "{{trigger.after.serial_number}}"},  # template-enabled
-      "client_service_id": "{{trigger.resource_id}}",   # optional target refs
+      "variables": {"onu_serial": "{{trigger.after.serial_number}}"},
+      "client_service_id": "{{trigger.resource_id}}",
       "inventory_item_id": null,
       "integration_id": null,
-      "idempotency_key": "install-{{trigger.resource_id}}",  # optional dedupe
+      "idempotency_key": "install-{{trigger.resource_id}}",
       "max_attempts": 3
     }
 
     Cycle 2 D6: the 'network_node_id' config key is REMOVED along with the
     network graph (revision c2d_graph_removal) — provisioning jobs target
     client_service_id/inventory_item_id only; the topology chain resolved for
-    a job is recorded in `variables` instead (backend-erp
-    services/provisioning_resolution.py), giving auditability without a graph.
+    a job is recorded in `variables` instead (database_utils.utils.
+    provisioning_resolution), giving auditability without a graph.
+
+    NOTE: `config` here is ALREADY template-resolved — execute_step calls
+    _resolve_template(step.action_config, context) before dispatching to any
+    action handler, so use_topology/purpose/client_service_id/
+    idempotency_key arrive pre-resolved. Mode B keeps its own
+    `_resolve_template` subset-resolution below for its pre-Cycle-3 shape
+    (idempotent re-resolution of an already-resolved string is a no-op) but
+    it is not required for mode A.
     """
+    use_topology = bool(config.get("use_topology"))
+    if use_topology and config.get("playbook_id"):
+        raise ValueError(
+            "ENQUEUE_PROVISIONING: 'use_topology' and 'playbook_id' are mutually exclusive"
+        )
+
+    if use_topology:
+        return _execute_enqueue_provisioning_topology(db, config, company_id)
+    return _execute_enqueue_provisioning_explicit(db, config, context, company_id)
+
+
+def _execute_enqueue_provisioning_explicit(
+    db: Session,
+    config: dict,
+    context: dict,
+    company_id: UUID,
+) -> dict:
+    """Mode B: explicit playbook_id (pre-Cycle-3 shape, unchanged behavior)."""
     from database_utils.models.isp import Playbook, ProvisioningJob, ProvisioningTrigger
+    from database_utils.models.isp import ClientService, InventoryItem
+    from database_utils.models.crm import Integration
 
     playbook_id = config.get("playbook_id")
     if not playbook_id:
-        raise ValueError("ENQUEUE_PROVISIONING step requires 'playbook_id' in action_config")
+        raise ValueError(
+            "ENQUEUE_PROVISIONING step requires 'playbook_id' in action_config "
+            "(or 'use_topology': true)"
+        )
 
     playbook = db.query(Playbook).filter(
         Playbook.id == playbook_id,
@@ -1143,59 +1231,20 @@ def _execute_enqueue_provisioning(
         context,
     )
 
-    def _uuid_or_none(value):
-        if not value:
-            return None
-        try:
-            return UUID(str(value))
-        except (ValueError, TypeError):
-            return None
-
     idempotency_key = resolved.get("idempotency_key") or None
     if idempotency_key:
-        # Duplicate enqueue (e.g. a retriggered workflow) is a no-op success.
-        # Pre-check instead of catching the unique violation: a mid-workflow
-        # rollback would discard this run's execution audit rows. A genuine
-        # race still trips uq_provisioning_job_company_idem and fails the step.
-        from database_utils.models.isp import ProvisioningJobStatus
-        existing = db.query(ProvisioningJob).filter(
-            ProvisioningJob.company_id == company_id,
-            ProvisioningJob.idempotency_key == idempotency_key,
-            ProvisioningJob.status.in_(
-                [ProvisioningJobStatus.QUEUED, ProvisioningJobStatus.RUNNING]
-            ),
-        ).first()
+        existing = _find_queued_or_running_provisioning_job(db, company_id, idempotency_key)
         if existing:
             return {"enqueued": False, "deduped": True,
                     "job_id": str(existing.id), "idempotency_key": idempotency_key}
-
-    # Every target FK must belong to THIS company. action_config is
-    # tenant-editable (a crafted step could name another tenant's integration_id
-    # to make the worker execute with their stored device credentials), so scope
-    # each id to company_id and fail the step if a referenced row isn't ours.
-    from database_utils.models.isp import ClientService, InventoryItem
-    from database_utils.models.crm import Integration
-
-    def _owned_or_none(model, value):
-        rid = _uuid_or_none(value)
-        if rid is None:
-            return None
-        exists = db.query(model.id).filter(
-            model.id == rid, model.company_id == company_id
-        ).first()
-        if not exists:
-            raise ValueError(
-                f"{model.__name__} {rid} does not belong to company {company_id}"
-            )
-        return rid
 
     job = ProvisioningJob(
         company_id=company_id,
         playbook_id=playbook.id,
         variables=resolved["variables"],
-        client_service_id=_owned_or_none(ClientService, resolved.get("client_service_id")),
-        inventory_item_id=_owned_or_none(InventoryItem, resolved.get("inventory_item_id")),
-        integration_id=_owned_or_none(Integration, config.get("integration_id")),
+        client_service_id=_owned_or_none(db, ClientService, resolved.get("client_service_id"), company_id),
+        inventory_item_id=_owned_or_none(db, InventoryItem, resolved.get("inventory_item_id"), company_id),
+        integration_id=_owned_or_none(db, Integration, config.get("integration_id"), company_id),
         idempotency_key=idempotency_key,
         max_attempts=int(config.get("max_attempts", 3)),
         triggered_by=ProvisioningTrigger.WORKFLOW,
@@ -1204,6 +1253,101 @@ def _execute_enqueue_provisioning(
     db.flush()
 
     return {"enqueued": True, "job_id": str(job.id), "playbook_id": str(playbook.id)}
+
+
+def _execute_enqueue_provisioning_topology(
+    db: Session,
+    config: dict,
+    company_id: UUID,
+) -> dict:
+    """Mode A: use_topology resolution (Cycle 3 E2 §1). `config` is already
+    template-resolved by execute_step (see the docstring above) — no second
+    _resolve_template pass is needed here.
+
+    Ordering (doc 20a workflow-provisioning verifier fix on step ordering):
+    skip rule -> idempotency dedupe -> resolve_provisioning -> insert. The
+    idempotency key never depends on resolution output, so a re-fire while a
+    job is already QUEUED/RUNNING must dedupe even if inventory drifted in
+    between (e.g. a second candidate device was added) — resolving first
+    would turn a harmless dedupe into a spurious FAILED execution.
+    """
+    from database_utils.models.isp import (
+        ClientService, InventoryItem, ProvisioningJob, ProvisioningTrigger, Topology, TopologyDeviceType,
+    )
+    from database_utils.models.crm import Integration
+    from database_utils.utils.provisioning_resolution import resolve_provisioning, ResolutionError
+
+    rid = _uuid_or_none(config.get("client_service_id"))
+    if rid is None:
+        # D-E2-1: the trigger is "any task moved into column X" -- tasks with
+        # no CLIENT_SERVICE linkage are non-matching events, not resolution
+        # errors. A visible skip (not FAILED) avoids flooding operator-visible
+        # failures for ordinary drags on a shared done-column.
+        return {"enqueued": False, "skipped": True, "reason": "NO_CLIENT_SERVICE_TARGET"}
+
+    purpose = str(config.get("purpose") or "ACTIVATION").strip().upper()
+
+    idempotency_key = config.get("idempotency_key") or None
+    if idempotency_key:
+        existing = _find_queued_or_running_provisioning_job(db, company_id, idempotency_key)
+        if existing:
+            return {"enqueued": False, "deduped": True,
+                    "job_id": str(existing.id), "idempotency_key": idempotency_key}
+
+    svc = (
+        db.query(ClientService)
+        .options(
+            joinedload(ClientService.topology).joinedload(Topology.device_types)
+            .joinedload(TopologyDeviceType.device_type),
+            joinedload(ClientService.topology).joinedload(Topology.playbooks),
+            joinedload(ClientService.service_plan),
+        )
+        .filter(ClientService.id == rid, ClientService.company_id == company_id)
+        .first()
+    )
+    if svc is None:
+        # A CLIENT-linked task's UUID won't exist in client_service (ownership
+        # + type guard); a forged cross-tenant id -- also not found -- so
+        # also a skip, never a data leak.
+        return {"enqueued": False, "skipped": True, "reason": "NO_CLIENT_SERVICE_TARGET"}
+
+    try:
+        resolution = resolve_provisioning(db, svc, purpose=purpose)
+    except ResolutionError as e:
+        raise ValueError(
+            f"Provisioning resolution failed for service {rid} (purpose={purpose}): "
+            f"{e.code} — {e.detail}. Errors: {json.dumps(e.errors)}"
+        )
+
+    config_variables = config.get("variables") or {}
+    variables_final = {**resolution.variables, **config_variables}
+
+    inventory_item_id_final = _owned_or_none(db, InventoryItem, config.get("inventory_item_id"), company_id)
+    if inventory_item_id_final is None and resolution.resolved_items:
+        # Mirrors the manual /provision endpoint: the LAST chain item (the CPE).
+        inventory_item_id_final = resolution.resolved_items[-1].inventory_item_id
+
+    job = ProvisioningJob(
+        company_id=company_id,
+        playbook_id=resolution.playbook_id,
+        variables=variables_final,
+        client_service_id=svc.id,
+        inventory_item_id=inventory_item_id_final,
+        integration_id=_owned_or_none(db, Integration, config.get("integration_id"), company_id),
+        idempotency_key=idempotency_key,
+        max_attempts=int(config.get("max_attempts", 3)),
+        triggered_by=ProvisioningTrigger.WORKFLOW,
+    )
+    db.add(job)
+    db.flush()
+
+    return {
+        "enqueued": True,
+        "job_id": str(job.id),
+        "playbook_id": str(resolution.playbook_id),
+        "purpose": purpose,
+        "topology_id": str(svc.topology_id),
+    }
 
 
 def _resolve_template(value: Any, context: dict) -> Any:
