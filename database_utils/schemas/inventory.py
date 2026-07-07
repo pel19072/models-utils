@@ -5,7 +5,6 @@ from uuid import UUID
 from datetime import datetime
 
 from database_utils.models.isp import (
-    DeviceCategory,
     InventoryItemStatus,
     InventoryItemCondition,
     EquipmentEventType,
@@ -45,7 +44,12 @@ class AttributeDefinition(BaseModel):
 
 class DeviceTypeBase(BaseModel):
     name: str
-    category: DeviceCategory = DeviceCategory.OTHER
+    # Cycle 3 E4: device_category.key (a plain string, server-resolved and
+    # validated against the device_category table) — replaces the
+    # `devicecategory` PG enum (dropped in revision c3b_device_categories).
+    # Unknown keys previously 422'd via FastAPI enum coercion; the router
+    # must now resolve the key -> id explicitly and 422 on unknown/inactive.
+    category: str = 'OTHER'
     vendor: Optional[str] = None
     model: Optional[str] = None
     description: Optional[str] = None
@@ -59,7 +63,7 @@ class DeviceTypeCreate(DeviceTypeBase):
 
 class DeviceTypeUpdate(BaseModel):
     name: Optional[str] = None
-    category: Optional[DeviceCategory] = None
+    category: Optional[str] = None
     vendor: Optional[str] = None
     model: Optional[str] = None
     description: Optional[str] = None
@@ -70,6 +74,9 @@ class DeviceTypeUpdate(BaseModel):
 class DeviceTypeOut(DeviceTypeBase):
     id: UUID
     company_id: UUID
+    # Cycle 3 E4: the resolved FK id, alongside the string `category` key
+    # (inherited from DeviceTypeBase, populated from the model's @property).
+    category_id: UUID
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

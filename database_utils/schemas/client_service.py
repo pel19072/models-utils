@@ -8,14 +8,15 @@ readable only via direct DB inspection or a future admin-only export).
 `recurring_order_id` is dropped from ClientServiceUpdate: it is
 migration-critical bridge state, not user-editable data (amendment 1).
 """
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
-from database_utils.models.isp import ClientServiceStatus, SuspensionReason
+from database_utils.models.isp import ClientServiceStatus, PURPOSE_ACTIVATION, SuspensionReason
 from database_utils.models.crm import RecurrenceEnum, RecurringOrderStatus
 from .service_plan import ServicePlanOut
+from .topology import normalize_purpose
 
 
 class ClientServiceBase(BaseModel):
@@ -88,6 +89,19 @@ class ClientServiceOut(ClientServiceBase):
     recurring_order_id: Optional[UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ClientServiceProvisionIn(BaseModel):
+    """Cycle 3 E1 (doc 20a D-E1.3): POST /client-services/{id}/provision body.
+    Optional — no body (or omitting purpose) defaults to ACTIVATION, so
+    pre-Cycle-3 callers are unaffected. `purpose` selects the topology's
+    purpose-map entry (see database_utils.utils.provisioning_resolution)."""
+    purpose: str = PURPOSE_ACTIVATION
+
+    @field_validator('purpose')
+    @classmethod
+    def _normalize(cls, v: str) -> str:
+        return normalize_purpose(v)
 
 
 class ServiceSuspensionCreate(BaseModel):

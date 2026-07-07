@@ -30,7 +30,6 @@ from uuid import UUID
 from datetime import datetime
 
 from database_utils.models.isp import (
-    DeviceCategory,
     ProvisioningJobStatus,
     ProvisioningTrigger,
 )
@@ -114,7 +113,9 @@ class PlaybookBase(BaseModel):
     name: str
     description: Optional[str] = None
     target_vendor: Optional[str] = None
-    target_category: Optional[DeviceCategory] = None
+    # Cycle 3 E4: device_category.key (a plain string) — replaces the
+    # `devicecategory` PG enum (dropped in revision c3b_device_categories).
+    target_category: Optional[str] = None
     is_active: bool = True
     definition: PlaybookDefinition
 
@@ -127,7 +128,7 @@ class PlaybookUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     target_vendor: Optional[str] = None
-    target_category: Optional[DeviceCategory] = None
+    target_category: Optional[str] = None
     is_active: Optional[bool] = None
     definition: Optional[PlaybookDefinition] = None
 
@@ -137,6 +138,9 @@ class PlaybookOut(PlaybookBase):
     company_id: UUID
     version: int
     created_at: datetime
+    # Cycle 3 E4: the resolved FK id, alongside the string `target_category`
+    # key (inherited from PlaybookBase, populated from the model's @property).
+    target_category_id: Optional[UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 
