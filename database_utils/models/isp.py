@@ -16,7 +16,7 @@ docs/isp-platform/18-cycle2-design.md (D1-D10, entity merge + topology rework).
 """
 from sqlalchemy import (
     Column, String, Integer, BigInteger, Boolean, JSON, DateTime, ForeignKey, Enum, text,
-    Uuid, Float, Index, UniqueConstraint
+    Uuid, Float, Index, UniqueConstraint, CheckConstraint
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column, validates
 
@@ -28,6 +28,7 @@ from .crm import RecurrenceEnum, RecurringOrderStatus
 
 import enum
 import uuid
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -66,20 +67,28 @@ class SuspensionReason(str, enum.Enum):
     OTHER = "OTHER"
 
 
-class DeviceCategory(str, enum.Enum):
-    ROUTER = "ROUTER"
-    SWITCH = "SWITCH"
-    OLT = "OLT"
-    ONU = "ONU"
-    SPLITTER = "SPLITTER"
-    SPLICE_CLOSURE = "SPLICE_CLOSURE"
-    PATCH_PANEL = "PATCH_PANEL"
-    ACCESS_POINT = "ACCESS_POINT"
-    CPE_ROUTER = "CPE_ROUTER"
-    UPS = "UPS"
-    ANTENNA = "ANTENNA"
-    RADIO = "RADIO"
-    OTHER = "OTHER"
+# Cycle 3 E4 (revision c3b_device_categories): the `devicecategory` PG enum
+# that used to live here is GONE — DeviceCategory is now a table-backed model
+# (see the "Inventory" section below, right before DeviceType, which is its
+# first consumer). The class name is deliberately reused so any stray
+# pre-Cycle-3 usage (e.g. `DeviceCategory.OTHER`) fails loudly at import/
+# attribute-access time instead of silently degrading.
+
+# Cycle 3 E1 (revision c3a_topology_purpose): canonical topology-playbook
+# purposes. Plain strings, NOT a PG enum — tenants may define custom purposes
+# (uppercase snake, CHECK-enforced in the topology_playbook table). Integrity
+# is enforced instead by a DB CHECK constraint, UNIQUE(topology_id, purpose),
+# and the shared Pydantic normalizer (schemas/topology.py: strip -> upper ->
+# regex). These constants are the single source of truth shared by models,
+# the workflow engine (ENQUEUE_PROVISIONING use_topology mode), and seeds.
+PURPOSE_ACTIVATION = 'ACTIVATION'
+PURPOSE_SUSPENSION = 'SUSPENSION'
+PURPOSE_REACTIVATION = 'REACTIVATION'
+PURPOSE_DEPROVISION = 'DEPROVISION'
+CANONICAL_TOPOLOGY_PURPOSES = (
+    PURPOSE_ACTIVATION, PURPOSE_SUSPENSION, PURPOSE_REACTIVATION, PURPOSE_DEPROVISION
+)
+TOPOLOGY_PURPOSE_PATTERN = r'^[A-Z][A-Z0-9_]{0,49}$'
 
 
 class InventoryItemStatus(str, enum.Enum):
@@ -314,6 +323,30 @@ class ServiceSuspension(Base):
 # Inventory (ADR-002 hybrid)
 # ---------------------------------------------------------------------------
 
+class DeviceCategory(Base):
+    """Platform-global device category (Cycle 3 E4, revision
+    c3b_device_categories). Replaces the `devicecategory` PG enum with a
+    super-admin-managed table (no company_id — SaaS staff own this list,
+    tenants read it) so adding a category never requires a migration. `key`
+    is the byte-identical successor to the old enum member names (ROUTER,
+    SWITCH, ... OTHER) and is immutable after creation (enforced in
+    schemas/device_category.py, not here — PG can't cheaply enforce
+    immutability). `device_type.category` / `playbook.target_category` keep
+    serializing this string via a model @property, so API response shapes
+    barely change across the enum->FK migration."""
+    __tablename__ = "device_category"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    key = Column(String(50), nullable=False, unique=True)
+    name = Column(String(100), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0, server_default='0')
+    icon = Column(String(50), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default='true')
+    is_system = Column(Boolean, nullable=False, default=False, server_default='false')
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+
+
 class DeviceType(Base):
     """Per-company equipment catalog entry (vendor/model + typed attribute schema)."""
     __tablename__ = "device_type"
@@ -322,7 +355,12 @@ class DeviceType(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
     name = Column(String, nullable=False)
-    category = Column(Enum(DeviceCategory), nullable=False, default=DeviceCategory.OTHER)
+    # Cycle 3 E4: FK replacing the `devicecategory` enum (revision
+    # c3b_device_categories, enum -> FK backfill by key match). NOT NULL —
+    # every device_type had a (possibly OTHER) category under the enum.
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("device_category.id", ondelete="RESTRICT"), nullable=False
+    )
     vendor = Column(String, nullable=True)   # "Huawei", "ZTE", "MikroTik", ...
     model = Column(String, nullable=True)    # "MA5800-X7", "F660", ...
     description = Column(String, nullable=True)
@@ -338,6 +376,16 @@ class DeviceType(Base):
 
     company = relationship("Company", back_populates="device_types")
     items = relationship("InventoryItem", back_populates="device_type")
+    # lazy='joined': keeps list endpoints, topology chain reads, and
+    # provisioning resolution free of N+1 while preserving the `.category`
+    # string surface below (doc 20a E4 §2).
+    category_ref = relationship("DeviceCategory", lazy="joined")
+
+    @property
+    def category(self) -> Optional[str]:
+        """String key surface preserved across the enum->FK migration (Cycle
+        3 E4) — routers/resolution keep reading a plain string."""
+        return self.category_ref.key if self.category_ref else None
 
 
 class Warehouse(Base):
@@ -467,16 +515,25 @@ class EquipmentEvent(Base):
 
 
 # ---------------------------------------------------------------------------
-# Topology (Cycle 2 D5): named ordered chain of device types + bound playbook.
+# Topology (Cycle 2 D5, purpose-keyed playbooks added Cycle 3 E1): named
+# ordered chain of device types + purpose -> playbook map (TopologyPlaybook).
 # Replaces the free-form network graph (network_node/network_node_type/
 # network_link, removed in revision c2d_graph_removal). Concrete devices
 # resolve from the client's assigned inventory by TYPE at provisioning time
-# (backend-erp services/provisioning_resolution.py) — no coordinate/graph UI.
+# (database_utils/utils/provisioning_resolution.py — moved in from backend-erp
+# services/provisioning_resolution.py, Cycle 3 E2) — no coordinate/graph UI.
 # ---------------------------------------------------------------------------
 
 class Topology(Base):
     """A named, ordered chain of device types (e.g. Router -> ONU -> Customer
-    Router) bound to the playbook that provisions it end to end."""
+    Router) with purpose-keyed playbooks (Cycle 3 E1, revision
+    c3a_topology_purpose — replaces the single playbook_id/playbook shape;
+    the pre-c3a playbook_id migrates as this topology's ACTIVATION entry).
+
+    Invariant: every topology has an ACTIVATION entry (enforced in
+    schemas/router, not the DB — relied on by the c3a downgrade, which is
+    total only when every topology has exactly one to restore playbook_id
+    from)."""
     __tablename__ = "topology"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -489,18 +546,18 @@ class Topology(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # RESTRICT: a topology is bound to the playbook that provisions its chain;
-    # mirrors provisioning_job.playbook_id (playbooks.py DELETE already 409s on
-    # referencing jobs — the router guard extends to referencing topologies).
-    playbook_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False
-    )
 
     company = relationship("Company", back_populates="topologies")
-    playbook = relationship("Playbook")
     device_types = relationship(
         "TopologyDeviceType", back_populates="topology",
         cascade="all, delete-orphan", order_by="TopologyDeviceType.position",
+    )
+    # Cycle 3 E1: purpose -> playbook map (topology_playbook). Ordered by
+    # purpose so ACTIVATION (alphabetically first among the canonical set)
+    # renders first in list contexts.
+    playbooks = relationship(
+        "TopologyPlaybook", back_populates="topology",
+        cascade="all, delete-orphan", order_by="TopologyPlaybook.purpose",
     )
     client_services = relationship("ClientService", back_populates="topology")
 
@@ -538,6 +595,38 @@ class TopologyDeviceType(Base):
     )
 
 
+class TopologyPlaybook(Base):
+    """One purpose -> playbook binding for a topology (Cycle 3 E1, revision
+    c3a_topology_purpose). A single Playbook may serve as e.g. ACTIVATION for
+    topology A and REACTIVATION for topology B — purpose is a property of the
+    binding, not of the Playbook itself (Playbook is unchanged)."""
+    __tablename__ = "topology_playbook"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+
+    topology_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Uppercase snake; canonical set in CANONICAL_TOPOLOGY_PURPOSES, but
+    # tenants may define custom purposes (CHECK-enforced, not enum-enforced).
+    purpose = Column(String(50), nullable=False)
+    # RESTRICT mirrors provisioning_job.playbook_id; playbooks.py's DELETE
+    # guard counts these rows (distinct topology_id) alongside jobs.
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    topology = relationship("Topology", back_populates="playbooks")
+    playbook = relationship("Playbook")
+
+    __table_args__ = (
+        UniqueConstraint("topology_id", "purpose", name="uq_topology_playbook_purpose"),
+        CheckConstraint("purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'", name="ck_topology_playbook_purpose_format"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Provisioning automation (ADR-005/006)
 # ---------------------------------------------------------------------------
@@ -555,7 +644,13 @@ class Playbook(Base):
     description = Column(String, nullable=True)
     version = Column(Integer, nullable=False, default=1)
     target_vendor = Column(String, nullable=True)    # "huawei", "zte", "mikrotik", ...
-    target_category = Column(Enum(DeviceCategory), nullable=True)
+    # Cycle 3 E4: FK replacing the `devicecategory` enum (revision
+    # c3b_device_categories, enum -> FK backfill by key match). Stays
+    # nullable — a playbook need not target a specific category. RESTRICT:
+    # categories carry referential meaning (per doc 20a admin-categories §1).
+    target_category_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("device_category.id", ondelete="RESTRICT"), nullable=True
+    )
     is_active = Column(Boolean, nullable=False, default=True)
     definition = Column(JSON, nullable=False)
 
@@ -569,6 +664,13 @@ class Playbook(Base):
     company = relationship("Company", back_populates="playbooks")
     creator = relationship("User", foreign_keys=[created_by])
     jobs = relationship("ProvisioningJob", back_populates="playbook")
+    target_category_ref = relationship("DeviceCategory", lazy="joined")
+
+    @property
+    def target_category(self) -> Optional[str]:
+        """String key surface preserved across the enum->FK migration (Cycle
+        3 E4)."""
+        return self.target_category_ref.key if self.target_category_ref else None
 
 
 class ProvisioningJob(Base):
