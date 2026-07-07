@@ -16,6 +16,15 @@ them (D5's device-type-chain model). ISP_TIER_MODULES key 'network' is
 replaced by 'topologies' (amendment 14); the one-time rewrite of ALREADY
 SEEDED tier.modules rows ships in revision c2d_graph_removal itself (this
 seed is append-only going forward and cannot rewrite existing JSON values).
+
+Cycle 3 (doc 20-cycle3-design.md, E1/E2/E4): 'installation-provisioning' is
+revised to v2 and 'suspension'/'reactivation'/'service-removal' to v4 —
+all four now resolve their playbook via the topology's purpose map
+(ENQUEUE_PROVISIONING use_topology) instead of an explicit *_playbook_id
+param (revision c3a_topology_purpose). `_seed_device_categories` (E4,
+revision c3b_device_categories) is INSERT-ONLY convergent (ON CONFLICT key DO
+NOTHING) — never DO UPDATE, so super-admin edits to the 13 baseline rows
+survive every re-seed.
 """
 import json
 import logging
@@ -27,6 +36,13 @@ from sqlalchemy.engine import Connection
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from database_utils.utils.timezone_utils import now_gt
+# Cycle 3 E4: env.py imports every model module before calling seed_isp_data,
+# so this top-level import is safe (no circular import — models never import
+# seeds). Used to derive TEMPLATE_REQUIRED_COLUMNS from the model instead of
+# a hand-typed string literal (doc 20a workflow-provisioning verifier fix —
+# a typo'd table/column name silently deactivates the gated templates
+# forever via the retirement pass, with no test catching it at head).
+from database_utils.models.isp import TopologyPlaybook
 
 logger = logging.getLogger(__name__)
 
@@ -182,12 +198,19 @@ def _wt(key, name, description, category, parameters, triggers, steps, edges):
 # this dict extends the same idea to plain columns. Checked against
 # information_schema.columns in _seed_workflow_templates.
 TEMPLATE_REQUIRED_COLUMNS = {
+    # Cycle 3 E2 (doc 20a workflow-provisioning §3): 'installation-provisioning'
+    # v2 and the v4 suspension/reactivation/service-removal rewrites all use
+    # ENQUEUE_PROVISIONING's use_topology mode, which resolves through the
+    # topology_playbook table (revision c3a_topology_purpose) — never publish
+    # before it exists.
+    "installation-provisioning": [(TopologyPlaybook.__tablename__, "purpose")],
     # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these three templates now
     # UPDATE_FIELD client_service.billing_status instead of
-    # recurring_order.status — the column only exists from c2b onward.
-    "suspension": [("client_service", "billing_status")],
-    "reactivation": [("client_service", "billing_status")],
-    "service-removal": [("client_service", "billing_status")],
+    # recurring_order.status — the column only exists from c2b onward. v4
+    # (Cycle 3 E2) adds the same topology_playbook.purpose gate as above.
+    "suspension": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
+    "reactivation": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
+    "service-removal": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
 }
 
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
@@ -241,21 +264,35 @@ WORKFLOW_TEMPLATES = [
         ],
         [{"from": "s1", "to": "s2"}, {"from": "s2", "to": "s3"}],
     ),
+    # v2 (Cycle 3 E2, doc 20a workflow-provisioning §3): rewritten from an
+    # explicit `activation_playbook_id` param to topology purpose resolution
+    # (ENQUEUE_PROVISIONING use_topology). The task's linked_object_id (set by
+    # new-installation's s2 to the client_service that fired new-installation)
+    # is the resolution target; `purpose` is fixed to ACTIVATION (not a
+    # param — the founder flow is specifically install -> activate; purpose
+    # flexibility lives in the workflow editor for hand-built automations).
+    # Tenants with v1 installed keep running mode B (explicit playbook_id)
+    # until they reinstall — mode B is unchanged and stays supported.
     _wt(
         "installation-provisioning", "Installation → Provisioning",
-        "When an installation task is moved to the 'installed' column, run the activation playbook for the linked service.",
+        "When an installation task is moved to the 'installed' column, resolve the "
+        "linked service's topology and run its ACTIVATION playbook.",
         "installation",
         [
-            {"key": "installed_state_id", "label": "Board column meaning 'installation done'", "type": "task_state", "required": True},
-            {"key": "activation_playbook_id", "label": "Activation playbook", "type": "playbook", "required": True},
+            {"key": "installed_state_id", "label": "Board column meaning 'installation done'",
+             "type": "task_state", "required": True},
         ],
         [{"resource_type": "task", "event_type": "UPDATED",
-          "field_conditions": {"field": "task_state_id", "operator": "changed_to", "value": "{{param:installed_state_id}}"}}],
-        [{"ref": "provision", "name": "Run activation playbook", "action_type": "ENQUEUE_PROVISIONING",
-          "action_config": {"playbook_id": "{{param:activation_playbook_id}}",
-                            "client_service_id": "{{trigger.after.linked_object_id}}",
-                            "idempotency_key": "activate-{{trigger.after.linked_object_id}}",
-                            "variables": {"client_service_id": "{{trigger.after.linked_object_id}}"}}}],
+          "field_conditions": {"field": "task_state_id", "operator": "changed_to",
+                                "value": "{{param:installed_state_id}}"}}],
+        [{"ref": "provision", "name": "Provision service from topology",
+          "action_type": "ENQUEUE_PROVISIONING",
+          "action_config": {
+              "use_topology": True,
+              "purpose": "ACTIVATION",
+              "client_service_id": "{{trigger.after.linked_object_id}}",
+              "idempotency_key": "activate-{{trigger.after.linked_object_id}}",
+              "max_attempts": 3}}],
         [],
     ),
     _wt(
@@ -280,30 +317,45 @@ WORKFLOW_TEMPLATES = [
     # NEW installs pick up going forward. Gated by TEMPLATE_REQUIRED_COLUMNS
     # so the v3 definition never publishes before client_service.billing_status
     # exists (c2b).
+    # v4 (Cycle 3 E2, doc 20a workflow-provisioning §1/§3, amendment 4):
+    # rewritten from an explicit `suspend_playbook_id` param to topology
+    # purpose resolution (SUSPENSION). The trigger resource IS the
+    # client_service, so targeting is trivial ({{trigger.resource_id}}).
+    # Amendment 4: a device-chain resolution error (MISSING_DEVICE/
+    # AMBIGUOUS_DEVICE) is fatal only when the SUSPENSION playbook's own
+    # template references a device variable — a device-free suspend playbook
+    # (e.g. one that only calls an integration by client_service_id) still
+    # succeeds even with ambiguous/missing CPE inventory.
     _wt(
         "suspension", "Service Suspension",
-        "When a service is suspended, record history, pause its billing and run the suspend playbook.",
+        "When a service is suspended, record history, pause its billing and run the "
+        "topology's SUSPENSION playbook.",
         "billing",
-        [{"key": "suspend_playbook_id", "label": "Suspension playbook", "type": "playbook", "required": True}],
+        [],
         [{"resource_type": "client_service", "event_type": "UPDATED",
           "field_conditions": {"field": "status", "operator": "changed_to", "value": "SUSPENDED"}}],
         [
             {"ref": "pause_billing", "name": "Pause recurring billing", "action_type": "UPDATE_FIELD",
              "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
                                "updates": {"billing_status": "PAUSED"}}},
-            {"ref": "provision", "name": "Run suspend playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {"playbook_id": "{{param:suspend_playbook_id}}",
-                               "client_service_id": "{{trigger.resource_id}}",
-                               "idempotency_key": "suspend-{{trigger.resource_id}}",
-                               "variables": {"client_service_id": "{{trigger.resource_id}}"}}},
+            {"ref": "provision", "name": "Run suspension playbook", "action_type": "ENQUEUE_PROVISIONING",
+             "action_config": {
+                 "use_topology": True,
+                 "purpose": "SUSPENSION",
+                 "client_service_id": "{{trigger.resource_id}}",
+                 "idempotency_key": "suspend-{{trigger.resource_id}}",
+                 "max_attempts": 3}},
         ],
         [{"from": "pause_billing", "to": "provision"}],
     ),
+    # v4: see the 'suspension' comment above — same rewrite (REACTIVATION),
+    # same gate, same amendment 4 device-free-playbook leniency.
     _wt(
         "reactivation", "Service Reactivation",
-        "When a suspended service is reactivated, resume billing and run the reactivation playbook.",
+        "When a suspended service is reactivated, resume billing and run the "
+        "topology's REACTIVATION playbook.",
         "billing",
-        [{"key": "reactivate_playbook_id", "label": "Reactivation playbook", "type": "playbook", "required": True}],
+        [],
         [{"resource_type": "client_service", "event_type": "UPDATED",
           "field_conditions": {"field": "status", "operator": "changed_from", "value": "SUSPENDED"}}],
         [
@@ -311,10 +363,12 @@ WORKFLOW_TEMPLATES = [
              "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
                                "updates": {"billing_status": "ACTIVE"}}},
             {"ref": "provision", "name": "Run reactivation playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {"playbook_id": "{{param:reactivate_playbook_id}}",
-                               "client_service_id": "{{trigger.resource_id}}",
-                               "idempotency_key": "reactivate-{{trigger.resource_id}}",
-                               "variables": {"client_service_id": "{{trigger.resource_id}}"}}},
+             "action_config": {
+                 "use_topology": True,
+                 "purpose": "REACTIVATION",
+                 "client_service_id": "{{trigger.resource_id}}",
+                 "idempotency_key": "reactivate-{{trigger.resource_id}}",
+                 "max_attempts": 3}},
         ],
         [{"from": "resume_billing", "to": "provision"}],
     ),
@@ -332,12 +386,15 @@ WORKFLOW_TEMPLATES = [
                                           "service_plan_id": "{{trigger.after.service_plan_id}}"}}}],
         [],
     ),
-    # v3: see the 'suspension' comment above — same rewrite, same gate.
+    # v4: see the 'suspension' comment above — same rewrite (DEPROVISION),
+    # same gate, same amendment 4 device-free-playbook leniency. Also gains
+    # an idempotency key (v3 had none).
     _wt(
         "service-removal", "Service Removal",
-        "When a service is cancelled, cancel billing and run the deprovision playbook.",
+        "When a service is cancelled, cancel billing and run the topology's "
+        "DEPROVISION playbook.",
         "billing",
-        [{"key": "deprovision_playbook_id", "label": "Deprovision playbook", "type": "playbook", "required": True}],
+        [],
         [{"resource_type": "client_service", "event_type": "UPDATED",
           "field_conditions": {"field": "status", "operator": "changed_to", "value": "CANCELLED"}}],
         [
@@ -345,9 +402,12 @@ WORKFLOW_TEMPLATES = [
              "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
                                "updates": {"billing_status": "CANCELLED"}}},
             {"ref": "provision", "name": "Run deprovision playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {"playbook_id": "{{param:deprovision_playbook_id}}",
-                               "client_service_id": "{{trigger.resource_id}}",
-                               "variables": {"client_service_id": "{{trigger.resource_id}}"}}},
+             "action_config": {
+                 "use_topology": True,
+                 "purpose": "DEPROVISION",
+                 "client_service_id": "{{trigger.resource_id}}",
+                 "idempotency_key": "deprovision-{{trigger.resource_id}}",
+                 "max_attempts": 3}},
         ],
         [{"from": "cancel_billing", "to": "provision"}],
     ),
@@ -380,13 +440,27 @@ WORKFLOW_TEMPLATES = [
 # add/remove doesn't need to touch the retirement logic itself.
 RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance"]
 
+# Cycle 3 E4 (doc 20a admin-categories-sidebar §6): the 13 baseline device
+# categories, duplicated (not imported) from revision
+# c3b_device_categories_global_table.py's CATEGORIES literal — revisions are
+# immutable forever; this list may grow independently in later cycles
+# without a new migration (a future baseline category is added here only).
+DEVICE_CATEGORIES = [
+    ('ROUTER', 'Router', 10), ('SWITCH', 'Switch', 20), ('OLT', 'OLT', 30),
+    ('ONU', 'ONU', 40), ('SPLITTER', 'Splitter', 50), ('SPLICE_CLOSURE', 'Splice Closure', 60),
+    ('PATCH_PANEL', 'Patch Panel', 70), ('ACCESS_POINT', 'Access Point', 80),
+    ('CPE_ROUTER', 'CPE Router', 90), ('UPS', 'UPS', 100), ('ANTENNA', 'Antenna', 110),
+    ('RADIO', 'Radio', 120), ('OTHER', 'Other', 130),
+]
+
 
 def seed_isp_data(connection: Connection) -> None:
-    """Seed ISP permissions, roles, tier modules and templates."""
+    """Seed ISP permissions, roles, tier modules, templates and device categories."""
     _seed_permissions(connection)
     _seed_roles(connection)
     _seed_tier_modules(connection)
     _seed_workflow_templates(connection)
+    _seed_device_categories(connection)
     logger.info("ISP seed completed")
 
 
@@ -580,3 +654,37 @@ def _seed_workflow_templates(connection: Connection) -> None:
             {"seeded_keys": seeded_keys},
         )
     logger.info(f"Seeded {len(seeded_keys)}/{len(WORKFLOW_TEMPLATES)} workflow templates")
+
+
+def _seed_device_categories(connection: Connection) -> None:
+    """Cycle 3 E4 (doc 20a admin-categories-sidebar §6): INSERT-ONLY,
+    ON CONFLICT (key) DO NOTHING — NEVER DO UPDATE. Super-admins own
+    name/sort_order/icon/is_active for these rows once created (auth-erp
+    admin_device_categories.py); a convergent DO UPDATE seed would silently
+    revert their edits on every migrate. This seed guarantees exactly one
+    thing forever: the baseline keys EXIST — a super-admin cannot
+    permanently delete a system key (blocked at the router anyway), but can
+    deactivate it, and that survives every re-seed.
+
+    Table-existence-guarded (network_node_type precedent noted in env.py)
+    so a pre-c3b DB at this migration position skips cleanly instead of
+    erroring."""
+    exists = connection.execute(text(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'device_category'"
+    )).scalar()
+    if not exists:
+        logger.warning(
+            "Skipping device_category seed: table does not exist at this migration position"
+        )
+        return
+
+    for key, name, sort_order in DEVICE_CATEGORIES:
+        connection.execute(
+            text(
+                "INSERT INTO device_category (id, key, name, sort_order, is_active, is_system, created_at, updated_at) "
+                "VALUES (gen_random_uuid(), :key, :name, :sort_order, TRUE, TRUE, :created_at, :created_at) "
+                "ON CONFLICT (key) DO NOTHING"
+            ),
+            {"key": key, "name": name, "sort_order": sort_order, "created_at": now_gt()},
+        )
+    logger.info(f"Seeded {len(DEVICE_CATEGORIES)} baseline device categories (insert-only, convergent)")
