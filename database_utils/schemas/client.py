@@ -21,7 +21,6 @@ class ClientBase(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     gps_precision_m: Optional[float] = None
-    installation_address: Optional[str] = None
     service_availability: ServiceAvailability = ServiceAvailability.UNKNOWN
     installation_status: InstallationStatus = InstallationStatus.NOT_INSTALLED
     installation_date: Optional[datetime] = None
@@ -48,7 +47,6 @@ class ClientUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     gps_precision_m: Optional[float] = None
-    installation_address: Optional[str] = None
     service_availability: Optional[ServiceAvailability] = None
     installation_status: Optional[InstallationStatus] = None
     installation_date: Optional[datetime] = None

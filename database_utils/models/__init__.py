@@ -57,6 +57,9 @@ from .isp import (
     ProvisioningJob,
     ProvisioningJobStatus,
     ProvisioningTrigger,
+    InsightDashboard,
+    InsightChart,
+    InsightChartType,
 )
 
 from .workflow import (
@@ -130,6 +133,9 @@ __all__ = [
     "ProvisioningJob",
     "ProvisioningJobStatus",
     "ProvisioningTrigger",
+    "InsightDashboard",
+    "InsightChart",
+    "InsightChartType",
     # Workflows
     "WorkflowTemplate",
     "Workflow",

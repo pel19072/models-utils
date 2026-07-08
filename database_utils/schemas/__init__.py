@@ -25,6 +25,7 @@ from .inventory import *
 from .topology import *
 from .playbook import *
 from .workflow_template import *
+from .insight import *
 
 # Rebuild models with forward references to resolve circular dependencies
 from .order import OrderOut

@@ -38,7 +38,6 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "advisor_id", "type": "uuid", "fk_to": None},
         {"name": "latitude", "type": "number", "fk_to": None},
         {"name": "longitude", "type": "number", "fk_to": None},
-        {"name": "installation_address", "type": "string", "fk_to": None},
         {"name": "service_availability", "type": "string", "fk_to": None},
         {"name": "installation_status", "type": "string", "fk_to": None},
         {"name": "installation_date", "type": "date", "fk_to": None},

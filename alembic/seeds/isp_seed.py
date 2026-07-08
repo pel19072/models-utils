@@ -97,6 +97,11 @@ ISP_PERMISSIONS = [
     # Workflow templates
     {"name": "workflow_templates.read", "resource": "workflow_templates", "action": "read", "description": "Browse workflow template catalog"},
     {"name": "workflow_templates.install", "resource": "workflow_templates", "action": "install", "description": "Install a workflow template"},
+    # Insights (Cycle 4) — available to every tenant, no tier module gate.
+    {"name": "insights.create", "resource": "insights", "action": "create", "description": "Create insight dashboards/charts"},
+    {"name": "insights.read", "resource": "insights", "action": "read", "description": "View insight dashboards"},
+    {"name": "insights.update", "resource": "insights", "action": "update", "description": "Update insight dashboards/charts"},
+    {"name": "insights.delete", "resource": "insights", "action": "delete", "description": "Delete insight dashboards/charts"},
 ]
 
 # New ISP base roles (global: company_id NULL) and their permission grants.
@@ -116,6 +121,10 @@ ISP_ROLES = {
             "topologies.read",
             "provisioning.read",
             "dashboard.read",
+            # Cycle 4: insights are available to every tenant/role that has
+            # the dashboard — read-only for base roles, full CRUD is
+            # ADMIN/MANAGER-only (granted automatically in _seed_permissions).
+            "insights.read",
         ],
     },
     "NOC": {
@@ -132,6 +141,7 @@ ISP_ROLES = {
             "tasks.create", "tasks.read", "tasks.update",
             "task_states.read",
             "dashboard.read",
+            "insights.read",
         ],
     },
     "WAREHOUSE": {
@@ -142,6 +152,7 @@ ISP_ROLES = {
             "inventory_items.create", "inventory_items.read", "inventory_items.update", "inventory_items.delete",
             "equipment_events.create", "equipment_events.read",
             "dashboard.read",
+            "insights.read",
         ],
     },
     "SUPPORT": {
@@ -156,6 +167,7 @@ ISP_ROLES = {
             "task_states.read",
             "provisioning.read",
             "dashboard.read",
+            "insights.read",
         ],
     },
     "BILLING": {
@@ -170,6 +182,7 @@ ISP_ROLES = {
             # action that replaces recurring_orders' equivalent.
             "client_services.generate",
             "dashboard.read",
+            "insights.read",
         ],
     },
 }

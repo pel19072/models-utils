@@ -134,6 +134,12 @@ class ProvisioningTrigger(str, enum.Enum):
     API = "API"
 
 
+class InsightChartType(str, enum.Enum):
+    NUMBER = "NUMBER"
+    BAR = "BAR"
+    PIE = "PIE"
+
+
 # ---------------------------------------------------------------------------
 # Service catalog & subscriptions
 # ---------------------------------------------------------------------------
@@ -741,3 +747,60 @@ class ProvisioningJob(Base):
             postgresql_where=text("idempotency_key IS NOT NULL AND status IN ('QUEUED','RUNNING')"),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Insights (Cycle 4): tenant-defined dashboards of simple charts driven off
+# existing entities (clients, orders, client_services, ...). No new
+# analytics engine — `spec` names an entity/measure/dimension resolved by
+# backend-erp's insights service against existing tables. Available to every
+# tenant (no tier module gate).
+# ---------------------------------------------------------------------------
+
+class InsightDashboard(Base):
+    """A named collection of charts (insight_chart), scoped to a company."""
+    __tablename__ = "insight_dashboard"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    ordering = Column(Integer, nullable=False, default=0, server_default='0')
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    company = relationship("Company", back_populates="insight_dashboards")
+    charts = relationship(
+        "InsightChart", back_populates="dashboard",
+        cascade="all, delete-orphan", order_by="InsightChart.ordering",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_insight_dashboard_company_name"),
+    )
+
+
+class InsightChart(Base):
+    """One chart within a dashboard. `spec` (entity/measure/dimension/filters)
+    is resolved server-side against the existing schema — no company_id here,
+    tenant scope derives via dashboard_id (matches topology_device_type's
+    scoping-through-parent pattern)."""
+    __tablename__ = "insight_chart"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    title = Column(String, nullable=False)
+    chart_type = Column(Enum(InsightChartType), nullable=False)
+    # {"entity": "client_service", "measure": "count", "dimension": "status",
+    #  "filters": {...}}
+    spec = Column(JSON, nullable=False)
+    ordering = Column(Integer, nullable=False, default=0, server_default='0')
+
+    dashboard_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("insight_dashboard.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    dashboard = relationship("InsightDashboard", back_populates="charts")

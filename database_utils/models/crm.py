@@ -139,7 +139,6 @@ class Client(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     gps_precision_m = Column(Float, nullable=True)
-    installation_address = Column(String, nullable=True)  # distinct from billing address
     service_availability = Column(
         Enum(ServiceAvailability), nullable=False,
         default=ServiceAvailability.UNKNOWN, server_default='UNKNOWN'

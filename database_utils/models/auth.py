@@ -99,6 +99,8 @@ class Company(Base):
     topologies = relationship("Topology", back_populates="company", cascade="all, delete-orphan")
     playbooks = relationship("Playbook", back_populates="company", cascade="all, delete-orphan")
     provisioning_jobs = relationship("ProvisioningJob", back_populates="company", cascade="all, delete-orphan")
+    # Cycle 4: insights dashboards.
+    insight_dashboards = relationship("InsightDashboard", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):
