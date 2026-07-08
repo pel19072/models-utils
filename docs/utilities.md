@@ -1,43 +1,62 @@
 # Utilities
 
 ## Description
-Shared utility modules for JWT handling, password hashing, audit logging, permission checking, tier limits, pagination, timezone, and workflow engine.
+
+Shared utility modules in `database_utils/utils/` (20 modules) plus the
+supporting `dependencies/` and `middleware/` packages. The two largest —
+the workflow engine and provisioning resolution — have their own page:
+[workflow-engine.md](workflow-engine.md).
 
 ## Goal
-Eliminate code duplication across auth-erp and backend-erp by centralizing common patterns.
+
+Eliminate duplication across auth-erp and backend-erp by centralizing common
+patterns, and host all logic the workflow engine needs (backends import this
+library, never the reverse).
 
 ## Utility Modules (in `database_utils/utils/`)
 
-| File | Purpose |
+| Module | Purpose |
 |------|---------|
-| `jwt_utils.py` | JWT token creation (`create_token`), validation (`decode_token`), and payload extraction |
-| `password.py` | bcrypt password hashing (`hash_password`) and verification (`verify_password`) |
-| `exception_handlers.py` | Standardized FastAPI exception handlers (400, 401, 403, 404, 422, 500) |
-| `permission_utils.py` | `@require_permission("resource.action")` FastAPI dependency decorator |
-| `audit_utils.py` | `write_audit_log(action, resource_type, resource_id, user_id, ip, details)` helper |
-| `router_factory.py` | FastAPI router factory with automatic OTEL span creation per route |
-| `tier_limits.py` | `check_tier_limit(resource, company_id, db)` — raises 403 if company exceeds tier cap |
-| `pagination_utils.py` | `paginate(query, page, page_size)` — returns `PaginatedResponse` |
-| `timezone_utils.py` | `now_gt()` (Guatemala timezone datetime), `today_gt()` (Guatemala date) |
-| `workflow_engine.py` | `check_triggers(resource_type, event_type, entity, db)` — evaluates and executes workflows |
-| `logging_utils.py` | Loguru structured logging setup with JSON format |
-| `crypto.py` | AES-256-GCM envelope encryption for device secrets (Cycle 5 Phase 1, canon C1): `encrypt_secret` / `decrypt_secret` / `fingerprint`. Fresh per-row DEK wrapped by a KEK from env; AAD binds a ciphertext to `f"{company_id}:{credential_id}"` |
+| `workflow_engine.py` (57.7 KB) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) — see [workflow-engine.md](workflow-engine.md) |
+| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp in Cycle 3) |
+| `jwt_utils.py` | HS256 JWT create/decode. Env: `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE` (minutes, default 1440), `REFRESH_TOKEN_EXPIRE`. **Fails fast if `SECRET_KEY` is unset when `ENVIRONMENT=production`**; dev fallback otherwise |
+| `permission_utils.py` | `PermissionChecker` and require-permission FastAPI dependencies |
+| `audit_utils.py` | `log_create_operation` / `log_update_operation` / `log_delete_operation` / `log_custom_operation` helpers writing `AuditLog` rows |
+| `ssrf.py` | `validate_url_no_ssrf` blocklist — shared by the integration-test endpoint and workflow `HTTP_REQUEST` steps (SEC-6) |
+| `workflow_fields.py` | Trigger-context variable/field handling for workflow steps |
+| `tier_limits.py` | Tier resource-cap enforcement |
+| `pagination_utils.py` | Pagination helpers returning `PaginatedResponse[T]` |
+| `timezone_utils.py` | `now_gt()` / `today_gt()` — America/Guatemala (UTC-6, no DST) |
+| `token_utils.py` | Token generation/validation helpers (email verification, password reset) |
+| `password.py` | bcrypt password hashing/verification |
+| `order_typing.py` | Order type/classification helpers |
+| `json_utils.py` | JSON serialization helpers |
+| `email_templates.py` | Jinja2 rendering of the email templates (see [email-service.md](email-service.md)) |
+| `error_handling.py` | Error-handling helpers |
+| `exception_handlers.py` | Standardized FastAPI exception handlers |
+| `logging_utils.py` | Loguru structured JSON logging setup |
+| `telemetry_utils.py` | `get_tracer`, `set_request_span_attributes` — OTEL **API only**; SDK/exporter configured by the consuming services |
+| `router_factory.py` | FastAPI router factory helpers |
+
+## Related packages
+
+| Path | Purpose |
+|---|---|
+| `dependencies/db.py` | `get_db` FastAPI session dependency (rollback + close) |
+| `dependencies/audit.py` | `AuditContext`, `get_client_ip` (proxy-aware), `get_audit_context[_optional]` |
+| `middleware/logging_middleware.py` | `create_logging_middleware` — request-ID + JWT-context + duration ASGI middleware |
+| `constants/roles.py` | `Roles` ADMIN/MANAGER/SALES/USER |
 
 ## Connections to Other Components
-- **auth-erp** and **backend-erp**: Import and use all utilities
-- **JWT utilities**: Used in auth-erp for token issuance; in both services for validation
-- **Tier limits**: Reads `Tier.features` and company resource counts from database
-- **Workflow engine**: Called by backend-erp after every CRM entity mutation
-- **Audit utilities**: Called by all mutation endpoints in both services
 
-## Key Implementation Details
-- `require_permission` raises HTTP 403 if token lacks the specified permission string
-- `check_tier_limit` queries current count and compares to tier's limit for the resource type
-- `now_gt()` and `today_gt()` use `America/Guatemala` timezone (UTC-6, no DST)
-- `workflow_engine.check_triggers`: loads active workflows, matches trigger conditions, executes step graph
-- `router_factory.py`: wraps each route handler with OTEL span using `resource.action` as span name
+- **auth-erp** and **backend-erp** import these utilities directly
+- **JWT utilities**: auth-erp issues tokens; both backends validate with the
+  shared `SECRET_KEY`
+- **Workflow engine**: fired by backend-erp after CRM/ISP entity mutations
+- **Audit utilities**: called by mutation endpoints in both services
 
 ## Environment Variables
-- `JWT_SECRET` — For `jwt_utils.py`
-- `POSTGRES_*` — For `tier_limits.py`, `audit_utils.py`, `workflow_engine.py`
-- `CREDENTIALS_KEKS` (JSON `{"<kid>": "<base64 32-byte key>"}`) and `CREDENTIALS_ACTIVE_KEK_ID` — for `crypto.py`. The module imports cleanly without them; a clear error is raised only when encrypt/decrypt is actually called (so auth-erp/cron-erp/tests that never touch device credentials still import the library).
+
+- `SECRET_KEY`, `ENVIRONMENT`, `ACCESS_TOKEN_EXPIRE`, `REFRESH_TOKEN_EXPIRE` — `jwt_utils.py`
+- `POSTGRES_*` / `DATABASE_URL` / `DB_URL` — anything touching the DB (via `database.py`)
+- `EMAIL_PROVIDER`, `SMTP_USE_TLS` — email service (see [email-service.md](email-service.md))

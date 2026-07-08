@@ -1,53 +1,53 @@
 # Pydantic Schemas
 
 ## Description
-Pydantic v2 request/response schemas for all models, shared between auth-erp and backend-erp to ensure consistent API contracts.
+
+Pydantic v2 request/response schemas for all models — 36 modules in
+`database_utils/schemas/`, shared between auth-erp and backend-erp to keep API
+contracts consistent (frontend-erp consumes the resulting JSON shapes via the
+backend proxies).
 
 ## Goal
-Validate API inputs and serialize API outputs with a single shared schema definition across services.
 
-## Schema Files (in `database_utils/schemas/`)
+Validate API inputs and serialize API outputs with a single shared schema
+definition across services.
 
-| File | Schemas |
-|------|---------|
-| `client.py` | `ClientOut`, `ClientCreate`, `ClientUpdate`, `ClientWithCustomFields` |
-| `product.py` | `ProductOut`, `ProductCreate`, `ProductUpdate` |
-| `order.py` | `OrderOut`, `OrderCreate`, `OrderUpdate` |
-| `order_item.py` | `OrderItemOut`, `OrderItemCreate`, `OrderItemUpdate` |
-| `recurring_order.py` | `RecurringOrderOut`, `RecurringOrderCreate`, `RecurringOrderUpdate` |
-| `invoice.py` | `InvoiceOut`, `InvoiceCreate` |
-| `user.py` | `UserOut`, `UserCreate`, `UserUpdate` |
-| `company.py` | `CompanyOut`, `CompanyCreate`, `CompanyUpdate` |
-| `tier.py` | `TierOut`, `TierCreate`, `TierUpdate` |
-| `role.py` | `RoleOut`, `RoleCreate` |
-| `permission.py` | `PermissionOut` |
-| `subscription.py` | `SubscriptionOut`, `SubscriptionUpdate` |
-| `payment_method.py` | `PaymentMethodOut`, `PaymentMethodCreate` |
-| `billing_invoice.py` | `BillingInvoiceOut` |
-| `tier_change_request.py` | `TierChangeRequestOut`, `TierChangeRequestCreate` |
-| `invitation.py` | `InvitationOut`, `InvitationCreate`, `InvitationAccept` |
-| `notification.py` | `NotificationOut` |
-| `audit_log.py` | `AuditLogOut` |
-| `custom_field.py` | `CustomFieldDefinitionOut`, `CustomFieldDefinitionCreate`, `ClientCustomFieldValueOut` |
-| `task.py` | `TaskOut`, `TaskCreate`, `TaskUpdate` |
-| `task_state.py` | `TaskStateOut`, `TaskStateCreate`, `TaskStateUpdate` |
-| `task_template.py` | `TaskTemplateOut`, `TaskTemplateCreate` |
-| `workflow.py` | `WorkflowOut`, `WorkflowCreate`, `WorkflowTriggerOut`, `WorkflowStepOut`, `WorkflowExecutionOut` |
-| `insight.py` | `InsightDashboardOut/Create/Update`, `InsightChartOut/Create/Update`, `InsightChartSpec` (ISP Insights, Cycle 4) |
-| `pagination.py` | `PaginatedResponse[T]` — generic paginated wrapper |
-| `requests.py` | `LoginRequest`, `SignupRequest`, `TokenRefreshRequest` |
+## Schema Modules (in `database_utils/schemas/`)
+
+One module per entity. `schemas/__init__.py` star-imports all modules and runs
+`model_rebuild()` to resolve circular Order/RecurringOrder references.
+
+| Domain | Modules |
+|---|---|
+| Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login/Signup), `email_verification`, `password_reset` |
+| SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice`, `tier_change_request` |
+| CRM | `client`, `custom_field`, `order`, `order_item`, `payment`, `invoice`, `product` (legacy), `recurring_order` (legacy), `task`, `task_state`, `task_template`, `integration` |
+| ISP | `service_plan`, `client_service`, `inventory`, `topology`, `playbook`, `device_category` |
+| Workflow | `workflow`, `workflow_template` |
+| Generic | `pagination` — `PaginatedResponse[T]` wrapper |
+
+`schemas/network.py` was **deleted** with the network-graph removal (Cycle 2
+`c2d_graph_removal`) — a comment in `__init__.py` records this.
 
 ## Connections to Other Components
-- **auth-erp** and **backend-erp**: Import schemas directly from models-utils package
-- **Auth/CRM/Workflow models**: Schemas validate against model fields
+
+- **auth-erp** and **backend-erp** import schemas directly from this package
+- **Models** ([auth-models.md](auth-models.md), [crm-models.md](crm-models.md),
+  [isp-models.md](isp-models.md), [workflow-models.md](workflow-models.md)):
+  schemas mirror model fields
+- **frontend-erp**: no direct dependency; its API responses are shaped by
+  these schemas via the backends
 
 ## Key Implementation Details
-- All `Out` schemas use `model_config = ConfigDict(from_attributes=True)` for ORM compatibility
-- Sensitive fields excluded from `Out` schemas (e.g., `password_hash`, integration `credentials`)
-- `PaginatedResponse[T]`: generic wrapper with `items: list[T]`, `total`, `page`, `page_size`, `total_pages`
-- Pydantic v2 validators used for field coercion and constraint checking
-- UUID fields serialized as strings in JSON responses
-- `insight.py` (Cycle 4): `InsightChartSpec` carries `entity`, `measure`, optional `dimension`, and optional `filters` — `filters` is a **list** of clause objects (`{column, op, value}`), the same shape backend-erp's `/insights/query` engine accepts, so a saved chart's `spec` replays verbatim. `InsightDashboardCreate` accepts nested `charts`; `InsightDashboardOut` embeds its `charts` list. `InsightChartOut` exposes `dashboard_id` (no `company_id` — tenant scope derives from the parent dashboard).
+
+- `Out` schemas use `from_attributes=True` for ORM compatibility
+- Sensitive fields are excluded from `Out` schemas (e.g. `password_hash`,
+  integration `credentials`)
+- `PaginatedResponse[T]`: generic paginated wrapper
+- `order_item.product_id` is deprecated but still honored (catalog-merge
+  rollback window — see [limitations.md](limitations.md))
+- UUID fields serialize as strings in JSON responses
 
 ## Environment Variables
+
 None — schemas are pure Python/Pydantic.

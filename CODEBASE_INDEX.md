@@ -1,0 +1,89 @@
+# CODEBASE_INDEX — models-utils
+
+Navigation index for the `database-utils` library (v1.10.0, Python >= 3.11).
+Not a running service: no endpoints, no ports. Consumed as a pip dependency by
+`backend-erp`, `auth-erp`, and `cron-erp`; also built as the one-shot `migrate`
+docker-compose service. May drift — verify against actual files.
+
+## Top Level
+
+| Path | Purpose |
+|---|---|
+| `setup.cfg` | Package metadata (`database-utils`, version), install_requires, `[options.package_data]` for email templates |
+| `pyproject.toml` | Build-system config only |
+| `Dockerfile` | python:3.12-slim, `pip install .`, CMD `alembic upgrade head` — used only by the repo-root compose `migrate` service |
+| `alembic.ini` / `alembic/` | Migration config + 36 revisions (`alembic/versions/`) |
+| `database_utils/` | The library package (see below) |
+| `tests/` | 13 test files, ~66 tests (`pytest.ini`: `asyncio_mode = auto`; in-memory SQLite) |
+| `scripts/resync_billing_cents.sql` | Ad-hoc billing cents resync helper |
+| `.github/workflows/ci.yml` | PR/push CI: migration guard, ruff (advisory), pytest on 3.12 |
+| `.github/workflows/migrate.yml` | Prod migration on push to `main` (`alembic/**` path filter, `DB_URL` secret) |
+| `docs/` | Documentation wiki ([docs/README.md](docs/README.md)) |
+
+## `database_utils/` Package
+
+### Core
+
+| Path | Contents |
+|---|---|
+| `database.py` | Engine bootstrap: `DATABASE_URL` or `DB_URL` or composed `POSTGRES_*` (raises at import if none); `pool_pre_ping`, `pool_recycle=3600`; exports `SessionLocal`, `Base` |
+| `dependencies/db.py` | `get_db` FastAPI session dependency (rollback + close) |
+| `dependencies/audit.py` | `AuditContext`, `get_client_ip` (proxy-aware), `get_audit_context[_optional]` |
+| `middleware/logging_middleware.py` | `create_logging_middleware` — request-ID + JWT-context + duration ASGI middleware |
+| `constants/roles.py` | `Roles`: ADMIN / MANAGER / SALES / USER |
+| `services/email_service.py` | Abstract `EmailService` + SMTP impl (aiosmtplib); 7 transactional email kinds; selected via `EMAIL_PROVIDER`, `SMTP_USE_TLS` |
+| `templates/email/*.html` | 8 Jinja2 templates: base_layout, confirmation, invitation, join_request_decision, password_reset, payment_failed, payment_receipt, welcome |
+
+### Models (`models/` — all UUID v4 PKs, created_at/updated_at; registered in `models/__init__.py` for Alembic autogenerate)
+
+| Module | Models (table names) |
+|---|---|
+| `auth.py` | Tier (tier), Company (company), Permission (permission), Role (role), User (user), Notification (notification), AuditLog (audit_log), UserInvitation (user_invitation), EmailVerificationToken (email_verification_token), PasswordResetToken (password_reset_token), Subscription (subscription), PaymentMethod (payment_method), BillingInvoice (billing_invoice), TierChangeRequest (tier_change_request) |
+| `crm.py` | Client (client), Product (product — legacy, absorbed by catalog merge), Order (order), OrderItem (order_item), RecurringOrder (recurring_order) + RecurringOrderItem (legacy billing, dual-written; consumed by cron-erp), Invoice (invoice), Payment (payment — Cycle 1 ledger), CustomFieldDefinition / ClientCustomFieldValue, TaskState (task_state), Task (task, `task_assignee` M2M), TaskTemplate (task_template), Integration (integration) |
+| `isp.py` | ServicePlan (service_plan), ClientService (client_service), ServiceSuspension (service_suspension), DeviceCategory (device_category — global SaaS-admin table), DeviceType (device_type), Warehouse (warehouse), InventoryItem (inventory_item), EquipmentEvent (equipment_event), Topology (topology), TopologyDeviceType (topology_device_type), TopologyPlaybook (topology_playbook — purpose-keyed), Playbook (playbook), ProvisioningJob (provisioning_job) |
+| `workflow.py` | WorkflowTemplate (workflow_template), Workflow (workflow), WorkflowTrigger (workflow_trigger), WorkflowStep (workflow_step), WorkflowStepEdge (workflow_step_edge), WorkflowExecution / WorkflowStepExecution |
+
+Key enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`, `PaymentMethodType`, `RecurrenceEnum`, `ServiceAvailability`, `InstallationStatus`, `TaskStateColor`, `TaskLinkedObjectType`, `IntegrationAuthType`, `ServicePlanType`, `CatalogKind`, `ClientServiceStatus`, `SuspensionReason`, `ProvisioningJobStatus`, `ProvisioningTrigger`, `TriggerEventType`, `StepActionType`, `ExecutionStatus`.
+
+### Schemas (`schemas/` — 36 modules, Pydantic v2; `__init__.py` star-imports + `model_rebuild()`)
+
+client, company, custom_field, invoice, notification, order, order_item, payment,
+permission, product, recurring_order, requests (Login/Signup), role, task,
+task_state, task_template, user, workflow, integration, service_plan,
+client_service, inventory, topology, playbook, workflow_template, tier,
+subscription, payment_method, billing_invoice, tier_change_request, invitation,
+audit_log, device_category, email_verification, password_reset, pagination
+(`PaginatedResponse[T]`). `schemas/network.py` deleted with the graph removal (c2d).
+
+### Utilities (`utils/` — 20 modules)
+
+| Module | Role |
+|---|---|
+| `workflow_engine.py` (57.7 KB, largest file) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) |
+| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp) |
+| `jwt_utils.py` | HS256 create/decode; `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE`, `REFRESH_TOKEN_EXPIRE`; fails fast in production if `SECRET_KEY` unset |
+| `permission_utils.py` | `PermissionChecker` / require-permission dependencies |
+| `audit_utils.py` | log_create/update/delete/custom operation helpers |
+| `ssrf.py` | `validate_url_no_ssrf` blocklist (integrations + workflow HTTP_REQUEST) |
+| `workflow_fields.py` | Trigger-context variable/field handling |
+| `tier_limits.py`, `pagination_utils.py`, `timezone_utils.py`, `token_utils.py`, `password.py`, `order_typing.py`, `json_utils.py`, `email_templates.py`, `error_handling.py`, `exception_handlers.py`, `logging_utils.py`, `telemetry_utils.py`, `router_factory.py` | Supporting helpers (see [docs/utilities.md](docs/utilities.md)) |
+
+## Alembic (`alembic/`)
+
+`env.py` imports all four model modules; after `upgrade` it runs `_run_seeds(connection)`:
+`alembic/seeds/rbac_seed.py`, `alembic/seeds/tier_seed.py`, `alembic/seeds/isp_seed.py` — all idempotent (importable as `seeds.*` because `env.py` adds the alembic dir to `sys.path`).
+
+Notable revision chains (base: `f612571eaad0_initial_schema_with_uuid`):
+
+- **Cycle 1 billing**: `c1a_billing_ddl` → `c1b_backfill` → `c1c_payment_ledger` → `c1e_install_actions` (**irreversible** ALTER TYPE) → `c1f_verify_grandfather`
+- **Cycle 2 merge/topology**: `c2a_catalog_merge` → `c2b_service_billing` → `c2c_topology_device_chain_playbook` → `c2d_graph_removal` → `c2e_step_exec_snapshot`
+- **Cycle 3**: `c3a_topology_purpose_playbooks`, `c3b_device_categories_global_table`
+- **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant indexes (`a1f2b3c4d5e6`), timezone fixes, task/workflow/integration modules
+
+## Relationships
+
+- `backend-erp` — pins by SHA; uses models, schemas, `get_db`, permission/audit utils, workflow engine, provisioning models/resolution
+- `auth-erp` — pins by SHA; uses auth models/schemas, jwt_utils, email service + templates, SaaS billing models
+- `cron-erp` — pip dependency; RecurringOrder models
+- `frontend-erp` — no direct dependency; consumes JSON shaped by these schemas via backend proxies
+- Repo-root `docker-compose.yml` — `migrate` service builds this repo's Dockerfile

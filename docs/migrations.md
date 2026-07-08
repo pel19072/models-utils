@@ -1,44 +1,91 @@
 # Database Migrations
 
 ## Description
-Alembic-managed database schema migrations for all models defined in models-utils.
+
+Alembic-managed schema migrations for all models in this repo — 36 revisions in
+`alembic/versions/` — plus the idempotent seed scripts that run after every
+upgrade.
 
 ## Goal
-Provide a safe, versioned, and automated migration path for schema changes across development and production databases.
 
-## Migration Files
-Located in `alembic/versions/` — each file is an auto-generated Alembic revision with `upgrade()` and `downgrade()` functions.
+Provide a safe, versioned, automated migration path for the single shared
+PostgreSQL database across local development and production.
 
-## Current Head
+## How migrations run
 
-The head revision is **`c4b_drop_installation_address`** (Cycle 4). The most recent linear chain is:
+- **Local development**: the `migrate` service in the root
+  `docker-compose.yml` builds this repo's `Dockerfile` and runs
+  `alembic upgrade head` on every `docker compose up` (Railway dev was
+  decommissioned; local compose is the only dev migration path)
+- **Production**: GitHub Actions (`.github/workflows/migrate.yml`) runs
+  `alembic upgrade head` against the prod `secrets.DB_URL` on push to `main`.
+  The workflow is path-filtered on `alembic/**` (widened to include `env.py`
+  and seeds) — so **every seed change must ship with a possibly-no-op
+  revision** to trigger it
+- **CI migration guard** (`.github/workflows/ci.yml`): PRs that change
+  `database_utils/models/**` without adding an `alembic/versions/**` file are
+  rejected
 
-```
-c3a_topology_purpose
-  -> c3b_device_categories        (Cycle 3: global device_category table)
-  -> c4a_insights_dashboards      (Cycle 4: creates insight_dashboard + insight_chart)
-  -> c4b_drop_installation_address (Cycle 4: drops client.installation_address)  <-- head
-```
+## Workflow
 
-- **`c4a_insights_dashboards`** — purely additive; adds the two tenant-scoped Insights tables (`insight_dashboard`, `insight_chart`). No changes to existing tables.
-- **`c4b_drop_installation_address`** — drops `client.installation_address`. Safe on production: that column was introduced by `cd2f0076c709` (the isp-platform-core migration), which itself has **not** reached production (the prod head predates it), and it was never populated separately — clients use their single `address`.
+1. Modify the model in `database_utils/models/` (on a feature branch from `main`)
+2. `alembic revision --autogenerate -m "description"` (needs a reachable DB env)
+3. Review the generated revision for correctness
+4. Commit; compose into `develop` (erp-release), pin backends to the SHA
+5. Local `migrate` service applies it on `docker compose up`; GitHub Actions
+   applies it to prod on merge to `main`
 
-## Connections to Other Components
-- **auth-erp** and **backend-erp**: Both share the same PostgreSQL database; migrations apply to both
-- **Local development**: the `migrate` service in the root `docker-compose.yml` runs `alembic upgrade head` against the local DB on every `docker compose up` (Railway dev was decommissioned)
-- **GitHub Actions**: Runs `alembic upgrade head` on the **production** DB when merged to `main`
-- **Feature branches**: Schema changes committed to a feature branch in models-utils, then composed into `develop`
+Full release mechanics: [deployment-production.md](deployment-production.md).
 
-## Key Implementation Details
-- Migration workflow:
-  1. Modify model in `database_utils/models/`
-  2. Run `alembic revision --autogenerate -m "description"` to generate revision file
-  3. Review generated file for correctness
-  4. Commit to feature branch; the local `migrate` service applies it on `docker compose up`, and GitHub Actions applies it to prod on merge to `main`
-- `alembic.ini`: configured to use `POSTGRES_*` env vars for connection string
-- All migrations are reversible (downgrade functions implemented)
-- Additive changes (new columns, new tables): safe to apply before consuming service code
-- Destructive changes (removing/renaming): apply AFTER all consuming service code is deployed
+## Connection configuration
+
+`alembic/env.py` imports all four model modules (for autogenerate) and builds
+the DB URL itself from `DATABASE_URL`, `DB_URL`, or the composed `POSTGRES_*`
+env vars — the URL is **not** hardcoded in `alembic.ini`.
+
+## Seeds
+
+After `upgrade`, `env.py` runs `_run_seeds(connection)`:
+
+| Seed | Contents |
+|---|---|
+| `alembic/seeds/rbac_seed.py` | Permissions and roles |
+| `alembic/seeds/tier_seed.py` | SaaS tiers |
+| `alembic/seeds/isp_seed.py` | ISP permissions, tier modules, purpose-based workflow-template blueprints, device_category baseline |
+
+The modules are importable as `seeds.*` because `env.py` adds the alembic dir to
+`sys.path`. All seeds are idempotent (ON CONFLICT / upsert), so re-runs converge
+even after SaaS-admin edits.
+
+`scripts/resync_billing_cents.sql` is an ad-hoc billing cents resync helper
+(not part of the Alembic chain).
+
+## Notable revision chains
+
+Base revision: `f612571eaad0_initial_schema_with_uuid` (the schema is UUID-native
+from the start).
+
+- **Cycle 1 (billing rework)**: `c1a_billing_ddl` → `c1b_backfill` (data
+  backfill) → `c1c_payment_ledger` → `c1e_install_actions` → `c1f_verify_grandfather`
+- **Cycle 2 (entity merge / topology)**: `c2a_catalog_merge` →
+  `c2b_service_billing` (client_service absorbs recurring_order) →
+  `c2c_topology_device_chain_playbook` → `c2d_graph_removal` → `c2e_step_exec_snapshot`
+- **Cycle 3**: `c3a_topology_purpose_playbooks`, `c3b_device_categories_global_table`
+- **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
+  indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
+
+## Key rules
+
+- **Not all migrations are reversible**: `c1e_install_actions` uses
+  `ALTER TYPE ... ADD VALUE`, which has no downgrade. Check each revision's
+  `downgrade()` before assuming rollback is possible
+- Additive changes (new columns/tables): safe to apply before consuming
+  service code ships
+- Destructive changes (removing/renaming): apply AFTER all consuming service
+  code is in production
+- Parallel schema features use separate branches/revisions — never combine
+  unrelated schema changes
 
 ## Environment Variables
-- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` — Database connection
+
+- `DATABASE_URL` / `DB_URL` / `POSTGRES_USER`+`POSTGRES_PASSWORD`+`POSTGRES_HOST`+`POSTGRES_PORT`+`POSTGRES_DB` — connection for `alembic/env.py`

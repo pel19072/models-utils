@@ -1,67 +1,57 @@
 # CRM Models
 
 ## Description
-SQLAlchemy ORM models for all CRM entities: clients, products, orders, invoices, tasks, and integrations.
+
+SQLAlchemy ORM models for the CRM domain (`database_utils/models/crm.py`):
+clients, orders + the payment ledger, invoices, legacy catalog/recurring
+billing, custom fields, the task board, and integrations.
 
 ## Goal
-Provide a single shared definition for CRM database tables consumed by backend-erp and referenced for auth validation.
 
-## Models (in `database_utils/models/crm.py`)
+Provide a single shared definition for CRM database tables consumed primarily
+by backend-erp (and cron-erp for recurring orders).
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| `Client` | name, tax_id, address, phone, email, contact, observations, company_id, advisor_id | Company customer |
-| `Product` | name, price, description, stock, company_id | Catalog item |
-| `Order` | due_date, payment_date, total, paid, status (ACTIVE/CANCELLED), company_id, client_id, recurring_order_id | Customer order |
-| `OrderItem` | quantity, order_id, product_id | Order line item |
-| `RecurringOrder` | recurrence, recurrence_end, next_generation_date, status, client_id | Recurring order template |
-| `RecurringOrderItem` | quantity, recurring_order_id, product_id | Template line item |
-| `Invoice` | issue_date, subtotal, tax, total, details (JSON), is_valid, company_id, order_id | Customer invoice |
-| `CustomFieldDefinition` | field_name, field_key, field_type, is_required, display_order, company_id | Dynamic field schema |
-| `ClientCustomFieldValue` | value (string), client_id, field_definition_id | Custom field data |
-| `TaskState` | name, color, position, company_id | Kanban column |
-| `Task` | name, description, due_date, time_spent_minutes, linked_object_type, linked_object_id, task_state_id | Work item |
-| `TaskTemplate` | task_name, due_date_offset_days, default_assignee_ids (JSON), linked_object_type, company_id | Task template |
-| `Integration` | name, base_url, auth_type, credentials (JSON), company_id | External API connection |
+## Models (in `database_utils/models/crm.py`; table names in parens)
+
+| Model | Purpose |
+|-------|---------|
+| `Client` (client) | Tenant's subscriber/customer |
+| `Product` (product) | **Legacy catalog item** — absorbed by the Cycle 2 catalog merge (`c2a`) into `ServicePlan` with hybrid `CatalogKind`; bridge-less legacy products are treated as SERVICE. Retained during the rollback window |
+| `Order` (order) | Customer order — enums include `OrderStatus`, `OrderType`, `PaymentStatus`, plus installation/serviceability fields (`ServiceAvailability`, `InstallationStatus`) |
+| `OrderItem` (order_item) | Order line item (`product_id` deprecated but still honored) |
+| `RecurringOrder` (recurring_order) + `RecurringOrderItem` | **Legacy billing engine** (`RecurrenceEnum`) — `ClientService` absorbed its billing in Cycle 2 (`c2b`) but still dual-writes here during the rollback window; consumed by cron-erp |
+| `Invoice` (invoice) | Customer invoice |
+| `Payment` (payment) | **Cycle 1 payment ledger** — `PaymentKind`, `PaymentMethodType` |
+| `CustomFieldDefinition` / `ClientCustomFieldValue` | Dynamic per-tenant client fields |
+| `TaskState` (task_state) | Kanban column (`TaskStateColor`) |
+| `Task` (task) | Work item; assignees via `task_assignee` M2M; `TaskLinkedObjectType` CLIENT/ORDER/RECURRING_ORDER |
+| `TaskTemplate` (task_template) | Task blueprint |
+| `Integration` (integration) | External API connection — `IntegrationAuthType` NONE/API_KEY/BEARER_TOKEN/BASIC_AUTH |
 
 ## Connections to Other Components
-- **backend-erp**: Primary consumer of all CRM models
-- **auth-erp**: References Client/Order counts for tier limit checks
-- **Workflow models**: Workflow triggers reference CRM resource types
-- **CRM schemas** (`schemas/`): Pydantic representations of these models
+
+- **backend-erp**: primary consumer of all CRM models
+- **cron-erp**: consumes `RecurringOrder` for nightly recurring order generation
+- **ISP models** ([isp-models.md](isp-models.md)): `ServicePlan` superseded
+  `Product`; `ClientService` supersedes `RecurringOrder` billing (dual-write
+  link retained)
+- **Workflow engine** ([workflow-engine.md](workflow-engine.md)): fires on CRM
+  entity events; `CREATE_ORDER`/`CREATE_TASK` steps create these rows;
+  `HTTP_REQUEST` steps use `Integration` credentials
+- **CRM schemas** ([schemas.md](schemas.md)): Pydantic representations
 
 ## Key Implementation Details
-- All models: UUID primary key + created_at/updated_at timestamps
-- `RecurringOrder.status` enum: ACTIVE/PAUSED/INACTIVE/CANCELLED
-- `CustomFieldDefinition.field_type` enum: TEXT/NUMBER/EMAIL/PHONE/URL/DATE/BOOLEAN
-- `TaskState.color` enum: GRAY/RED/ORANGE/YELLOW/GREEN/BLUE/PURPLE/PINK
-- `Task.linked_object_type` enum: CLIENT/ORDER/RECURRING_ORDER
-- `Integration.auth_type` enum: NONE/API_KEY/BEARER_TOKEN/BASIC_AUTH
-- Task assignees: many-to-many with User via association table
 
-## ISP: Insights dashboards (Cycle 4)
-
-Tenant-defined analytics dashboards live in `database_utils/models/isp.py` (alongside the other ISP models: service plans, client services, device categories, topologies). Each company builds dashboards of simple charts driven off existing entities (clients, orders, client_services, …); chart data is resolved server-side by backend-erp's insights service.
-
-| Model | Table | Key Fields | Purpose |
-|-------|-------|-----------|---------|
-| `InsightDashboard` | `insight_dashboard` | name, ordering, company_id | A named, company-scoped collection of charts |
-| `InsightChart` | `insight_chart` | title, chart_type, spec (JSON), ordering, dashboard_id | One chart within a dashboard |
-
-- **Tenant scope**: `insight_dashboard.company_id` FK → `company.id` (`ondelete=CASCADE`); `Company` exposes an `insight_dashboards` relationship. `insight_chart` has **no** `company_id` — its tenant scope derives via `dashboard_id` → dashboard's `company_id` (same scoping-through-parent pattern as `topology_device_type` → `topology`).
-- **Uniqueness**: `UniqueConstraint(company_id, name)` on `insight_dashboard` (`uq_insight_dashboard_company_name`).
-- **Cascade**: deleting a dashboard cascades to its charts (`insight_chart.dashboard_id` FK `ondelete=CASCADE` + ORM `delete-orphan`).
-- **`InsightChart.chart_type`** enum `InsightChartType`: `NUMBER` / `BAR` / `PIE`.
-- **`InsightChart.spec`** JSON shape: `{entity, measure, dimension?, filters?}` where `filters` is a list of `{column, op, value}` clauses — the exact payload backend-erp's `/insights/query` engine accepts, so a saved chart replays verbatim.
-- Both tables carry UUID PKs + `created_at`/`updated_at`. Purely additive (revision `c4a_insights_dashboards`).
-
-> **Cycle 4 note:** `Client.installation_address` was removed (revision `c4b_drop_installation_address`). It was intended to be distinct from the billing `address` but was never populated separately; clients now use their single `address`.
-
-> **Cycle 5 Phase 1 note:** the network configuration models (`device_credential`,
-> `network_access`, `acs_device_registration`, `provisioning_settings`,
-> `device_action_log`) and the `ProvisioningJob` extensions (`PENDING_INFORM` status,
-> dry-run / device-lock / heartbeat columns) also live in `isp.py` — documented
-> separately in [network-models.md](network-models.md).
+- All models: UUID v4 primary key + `created_at`/`updated_at` timestamps
+- Cycle 2 dual-write: `ClientService` still writes legacy `recurring_order`
+  rows until the rollback window closes (see
+  [limitations.md](limitations.md))
+- Enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`,
+  `PaymentMethodType`, `RecurrenceEnum`, `ServiceAvailability`,
+  `InstallationStatus`, `TaskStateColor`, `TaskLinkedObjectType`,
+  `IntegrationAuthType`
+- Task assignees: many-to-many with `User` via the `task_assignee` table
 
 ## Environment Variables
-- `POSTGRES_*` — Database connection string components
+
+- `POSTGRES_*` / `DATABASE_URL` / `DB_URL` — database connection (via `database.py`)
