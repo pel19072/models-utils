@@ -55,6 +55,8 @@ class DeviceTypeBase(BaseModel):
     description: Optional[str] = None
     attribute_schema: Optional[List[AttributeDefinition]] = None
     default_attributes: Optional[Dict[str, Any]] = None
+    # Cycle 5 Phase 1 (canon C6): device-group provisioning opt-out gate.
+    provisioning_enabled: bool = True
 
 
 class DeviceTypeCreate(DeviceTypeBase):
@@ -69,6 +71,7 @@ class DeviceTypeUpdate(BaseModel):
     description: Optional[str] = None
     attribute_schema: Optional[List[AttributeDefinition]] = None
     default_attributes: Optional[Dict[str, Any]] = None
+    provisioning_enabled: Optional[bool] = None
 
 
 class DeviceTypeOut(DeviceTypeBase):
@@ -116,6 +119,9 @@ class InventoryItemBase(BaseModel):
     device_type_id: UUID
     serial_number: Optional[str] = None
     mac_address: Optional[str] = None
+    # Cycle 5 Phase 1 (canon C13): device-identity half paired with serial for
+    # the acs_device_registration match.
+    oui: Optional[str] = None
     condition: InventoryItemCondition = InventoryItemCondition.NEW
     warehouse_id: Optional[UUID] = None
     attributes: Optional[Dict[str, Any]] = None
@@ -132,6 +138,7 @@ class InventoryItemCreate(InventoryItemBase):
 class InventoryItemUpdate(BaseModel):
     serial_number: Optional[str] = None
     mac_address: Optional[str] = None
+    oui: Optional[str] = None
     status: Optional[InventoryItemStatus] = None
     condition: Optional[InventoryItemCondition] = None
     warehouse_id: Optional[UUID] = None

@@ -57,5 +57,11 @@ Tenant-defined analytics dashboards live in `database_utils/models/isp.py` (alon
 
 > **Cycle 4 note:** `Client.installation_address` was removed (revision `c4b_drop_installation_address`). It was intended to be distinct from the billing `address` but was never populated separately; clients now use their single `address`.
 
+> **Cycle 5 Phase 1 note:** the network configuration models (`device_credential`,
+> `network_access`, `acs_device_registration`, `provisioning_settings`,
+> `device_action_log`) and the `ProvisioningJob` extensions (`PENDING_INFORM` status,
+> dry-run / device-lock / heartbeat columns) also live in `isp.py` — documented
+> separately in [network-models.md](network-models.md).
+
 ## Environment Variables
 - `POSTGRES_*` — Database connection string components
