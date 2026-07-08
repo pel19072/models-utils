@@ -21,6 +21,7 @@ Eliminate code duplication across auth-erp and backend-erp by centralizing commo
 | `timezone_utils.py` | `now_gt()` (Guatemala timezone datetime), `today_gt()` (Guatemala date) |
 | `workflow_engine.py` | `check_triggers(resource_type, event_type, entity, db)` — evaluates and executes workflows |
 | `logging_utils.py` | Loguru structured logging setup with JSON format |
+| `crypto.py` | AES-256-GCM envelope encryption for device secrets (Cycle 5 Phase 1, canon C1): `encrypt_secret` / `decrypt_secret` / `fingerprint`. Fresh per-row DEK wrapped by a KEK from env; AAD binds a ciphertext to `f"{company_id}:{credential_id}"` |
 
 ## Connections to Other Components
 - **auth-erp** and **backend-erp**: Import and use all utilities
@@ -39,3 +40,4 @@ Eliminate code duplication across auth-erp and backend-erp by centralizing commo
 ## Environment Variables
 - `JWT_SECRET` — For `jwt_utils.py`
 - `POSTGRES_*` — For `tier_limits.py`, `audit_utils.py`, `workflow_engine.py`
+- `CREDENTIALS_KEKS` (JSON `{"<kid>": "<base64 32-byte key>"}`) and `CREDENTIALS_ACTIVE_KEK_ID` — for `crypto.py`. The module imports cleanly without them; a clear error is raised only when encrypt/decrypt is actually called (so auth-erp/cron-erp/tests that never touch device credentials still import the library).
