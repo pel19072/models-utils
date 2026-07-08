@@ -1,6 +1,6 @@
 # CODEBASE_INDEX — models-utils
 
-Navigation index for the `database-utils` library (v1.10.0, Python >= 3.11).
+Navigation index for the `database-utils` library (v1.12.0, Python >= 3.11).
 Not a running service: no endpoints, no ports. Consumed as a pip dependency by
 `backend-erp`, `auth-erp`, and `cron-erp`; also built as the one-shot `migrate`
 docker-compose service. May drift — verify against actual files.
@@ -12,7 +12,7 @@ docker-compose service. May drift — verify against actual files.
 | `setup.cfg` | Package metadata (`database-utils`, version), install_requires, `[options.package_data]` for email templates |
 | `pyproject.toml` | Build-system config only |
 | `Dockerfile` | python:3.12-slim, `pip install .`, CMD `alembic upgrade head` — used only by the repo-root compose `migrate` service |
-| `alembic.ini` / `alembic/` | Migration config + 36 revisions (`alembic/versions/`) |
+| `alembic.ini` / `alembic/` | Migration config + 40 revisions (`alembic/versions/`) |
 | `database_utils/` | The library package (see below) |
 | `tests/` | 13 test files, ~66 tests (`pytest.ini`: `asyncio_mode = auto`; in-memory SQLite) |
 | `scripts/resync_billing_cents.sql` | Ad-hoc billing cents resync helper |
@@ -40,12 +40,12 @@ docker-compose service. May drift — verify against actual files.
 |---|---|
 | `auth.py` | Tier (tier), Company (company), Permission (permission), Role (role), User (user), Notification (notification), AuditLog (audit_log), UserInvitation (user_invitation), EmailVerificationToken (email_verification_token), PasswordResetToken (password_reset_token), Subscription (subscription), PaymentMethod (payment_method), BillingInvoice (billing_invoice), TierChangeRequest (tier_change_request) |
 | `crm.py` | Client (client), Product (product — legacy, absorbed by catalog merge), Order (order), OrderItem (order_item), RecurringOrder (recurring_order) + RecurringOrderItem (legacy billing, dual-written; consumed by cron-erp), Invoice (invoice), Payment (payment — Cycle 1 ledger), CustomFieldDefinition / ClientCustomFieldValue, TaskState (task_state), Task (task, `task_assignee` M2M), TaskTemplate (task_template), Integration (integration) |
-| `isp.py` | ServicePlan (service_plan), ClientService (client_service), ServiceSuspension (service_suspension), DeviceCategory (device_category — global SaaS-admin table), DeviceType (device_type), Warehouse (warehouse), InventoryItem (inventory_item), EquipmentEvent (equipment_event), Topology (topology), TopologyDeviceType (topology_device_type), TopologyPlaybook (topology_playbook — purpose-keyed), Playbook (playbook), ProvisioningJob (provisioning_job) |
+| `isp.py` | ServicePlan (service_plan), ClientService (client_service), ServiceSuspension (service_suspension), DeviceCategory (device_category — global SaaS-admin table), DeviceType (device_type), Warehouse (warehouse), InventoryItem (inventory_item), EquipmentEvent (equipment_event), Topology (topology), TopologyDeviceType (topology_device_type), TopologyPlaybook (topology_playbook — purpose-keyed), Playbook (playbook), ProvisioningJob (provisioning_job); **Cycle 4 insights**: InsightDashboard (insight_dashboard), InsightChart (insight_chart); **Cycle 5 network config**: NetworkAccess (network_access), DeviceCredential (device_credential), AcsDeviceRegistration (acs_device_registration), ProvisioningSettings (provisioning_settings), DeviceActionLog (device_action_log) — see [docs/network-models.md](docs/network-models.md) |
 | `workflow.py` | WorkflowTemplate (workflow_template), Workflow (workflow), WorkflowTrigger (workflow_trigger), WorkflowStep (workflow_step), WorkflowStepEdge (workflow_step_edge), WorkflowExecution / WorkflowStepExecution |
 
-Key enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`, `PaymentMethodType`, `RecurrenceEnum`, `ServiceAvailability`, `InstallationStatus`, `TaskStateColor`, `TaskLinkedObjectType`, `IntegrationAuthType`, `ServicePlanType`, `CatalogKind`, `ClientServiceStatus`, `SuspensionReason`, `ProvisioningJobStatus`, `ProvisioningTrigger`, `TriggerEventType`, `StepActionType`, `ExecutionStatus`.
+Key enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`, `PaymentMethodType`, `RecurrenceEnum`, `ServiceAvailability`, `InstallationStatus`, `TaskStateColor`, `TaskLinkedObjectType`, `IntegrationAuthType`, `ServicePlanType`, `CatalogKind`, `ClientServiceStatus`, `SuspensionReason`, `ProvisioningJobStatus` (incl. Cycle-5 `PENDING_INFORM`), `ProvisioningTrigger`, `TriggerEventType`, `StepActionType`, `ExecutionStatus`, `InsightChartType`. Cycle-5 driver-bounded value sets are CHECK-constrained strings, not PG enums: `CREDENTIAL_KINDS`, `NETWORK_ACCESS_KINDS`, `NETWORK_ACCESS_MODES`.
 
-### Schemas (`schemas/` — 36 modules, Pydantic v2; `__init__.py` star-imports + `model_rebuild()`)
+### Schemas (`schemas/` — 42 modules, Pydantic v2; `__init__.py` star-imports + `model_rebuild()`)
 
 client, company, custom_field, invoice, notification, order, order_item, payment,
 permission, product, recurring_order, requests (Login/Signup), role, task,
@@ -53,9 +53,12 @@ task_state, task_template, user, workflow, integration, service_plan,
 client_service, inventory, topology, playbook, workflow_template, tier,
 subscription, payment_method, billing_invoice, tier_change_request, invitation,
 audit_log, device_category, email_verification, password_reset, pagination
-(`PaginatedResponse[T]`). `schemas/network.py` deleted with the graph removal (c2d).
+(`PaginatedResponse[T]`); **Cycle 4**: insight; **Cycle 5**: acs_registration,
+device_credential, network_access, provisioning_settings. (`schemas/network.py`
+— the old graph schema — was deleted with the graph removal (c2d); unrelated to
+the Cycle-5 network-config schemas above.)
 
-### Utilities (`utils/` — 20 modules)
+### Utilities (`utils/` — 21 modules)
 
 | Module | Role |
 |---|---|
@@ -65,6 +68,7 @@ audit_log, device_category, email_verification, password_reset, pagination
 | `permission_utils.py` | `PermissionChecker` / require-permission dependencies |
 | `audit_utils.py` | log_create/update/delete/custom operation helpers |
 | `ssrf.py` | `validate_url_no_ssrf` blocklist (integrations + workflow HTTP_REQUEST) |
+| `crypto.py` | AES-256-GCM envelope encryption for device credentials (Cycle 5): `CREDENTIALS_KEKS`, `CREDENTIALS_ACTIVE_KEK_ID`; wrap/unwrap DEKs, KEK rotation |
 | `workflow_fields.py` | Trigger-context variable/field handling |
 | `tier_limits.py`, `pagination_utils.py`, `timezone_utils.py`, `token_utils.py`, `password.py`, `order_typing.py`, `json_utils.py`, `email_templates.py`, `error_handling.py`, `exception_handlers.py`, `logging_utils.py`, `telemetry_utils.py`, `router_factory.py` | Supporting helpers (see [docs/utilities.md](docs/utilities.md)) |
 
@@ -78,6 +82,8 @@ Notable revision chains (base: `f612571eaad0_initial_schema_with_uuid`):
 - **Cycle 1 billing**: `c1a_billing_ddl` → `c1b_backfill` → `c1c_payment_ledger` → `c1e_install_actions` (**irreversible** ALTER TYPE) → `c1f_verify_grandfather`
 - **Cycle 2 merge/topology**: `c2a_catalog_merge` → `c2b_service_billing` → `c2c_topology_device_chain_playbook` → `c2d_graph_removal` → `c2e_step_exec_snapshot`
 - **Cycle 3**: `c3a_topology_purpose_playbooks`, `c3b_device_categories_global_table`
+- **Cycle 4 insights**: insight dashboard/chart tables
+- **Cycle 5 network config**: `nc1a` (five network tables + `ProvisioningJob` columns + `PENDING_INFORM` via `ALTER TYPE … ADD VALUE` + 17 permissions) → `nc1b` (append-only `device_action_log` trigger)
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant indexes (`a1f2b3c4d5e6`), timezone fixes, task/workflow/integration modules
 
 ## Relationships

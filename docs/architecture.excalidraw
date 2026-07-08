@@ -1,2809 +1,2809 @@
 {
- "type": "excalidraw",
- "version": 2,
- "source": "claude",
- "elements": [
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "title",
-   "type": "text",
-   "x": 220,
-   "y": 20,
-   "width": 1250,
-   "height": 27,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "models-utils \u2014 Architecture  (shared data layer of Uplink, pip package database-utils v1.10.0)",
-   "fontSize": 22,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "models-utils \u2014 Architecture  (shared data layer of Uplink, pip package database-utils v1.10.0)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "backend-erp",
-   "type": "rectangle",
-   "x": 100,
-   "y": 100,
-   "width": 210,
-   "height": 70,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "#d0bfff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
+  "type": "excalidraw",
+  "version": 2,
+  "source": "claude",
+  "elements": [
     {
-     "type": "text",
-     "id": "backend-erp-text"
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "title",
+      "type": "text",
+      "x": 220,
+      "y": 20,
+      "width": 1250,
+      "height": 27,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "models-utils \u2014 Architecture  (shared data layer of Uplink, pip package database-utils v1.10.0)",
+      "fontSize": 22,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "models-utils \u2014 Architecture  (shared data layer of Uplink, pip package database-utils v1.10.0)",
+      "lineHeight": 1.25,
+      "boundElements": null
     },
     {
-     "type": "arrow",
-     "id": "arr-backend-repo"
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "backend-erp",
+      "type": "rectangle",
+      "x": 100,
+      "y": 100,
+      "width": 210,
+      "height": 70,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "#d0bfff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "backend-erp-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-backend-repo"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "backend-erp-text",
+      "type": "text",
+      "x": 105,
+      "y": 117.5,
+      "width": 200,
+      "height": 35,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "backend-erp\nCRM API + provision-worker",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "backend-erp",
+      "originalText": "backend-erp\nCRM API + provision-worker",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "auth-erp",
+      "type": "rectangle",
+      "x": 340,
+      "y": 100,
+      "width": 180,
+      "height": 70,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "#d0bfff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "auth-erp-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-auth-repo"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "auth-erp-text",
+      "type": "text",
+      "x": 345,
+      "y": 117.5,
+      "width": 170,
+      "height": 35,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "auth-erp\nauth / SaaS billing API",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "auth-erp",
+      "originalText": "auth-erp\nauth / SaaS billing API",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "cron-erp",
+      "type": "rectangle",
+      "x": 550,
+      "y": 100,
+      "width": 170,
+      "height": 70,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "#d0bfff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "cron-erp-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-cron-repo"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "cron-erp-text",
+      "type": "text",
+      "x": 555,
+      "y": 117.5,
+      "width": 160,
+      "height": 35,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "cron-erp\nnightly billing jobs",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "cron-erp",
+      "originalText": "cron-erp\nnightly billing jobs",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "frontend-erp",
+      "type": "rectangle",
+      "x": 750,
+      "y": 100,
+      "width": 200,
+      "height": 70,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "#d0bfff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "frontend-erp-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-frontend-repo"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "frontend-erp-text",
+      "type": "text",
+      "x": 755,
+      "y": 117.5,
+      "width": 190,
+      "height": 35,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "frontend-erp\n(no pip dependency)",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "frontend-erp",
+      "originalText": "frontend-erp\n(no pip dependency)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "repo-boundary",
+      "type": "rectangle",
+      "x": 80,
+      "y": 250,
+      "width": 920,
+      "height": 590,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "arrow",
+          "id": "arr-backend-repo"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-auth-repo"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-cron-repo"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-frontend-repo"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "repo-boundary-label",
+      "type": "text",
+      "x": 100,
+      "y": 262,
+      "width": 787,
+      "height": 20,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "models-utils (this repo) \u2014 Python library + Alembic migrations, no server process",
+      "fontSize": 16,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "models-utils (this repo) \u2014 Python library + Alembic migrations, no server process",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-backend-repo",
+      "type": "arrow",
+      "x": 205.0,
+      "y": 170,
+      "width": 0,
+      "height": 80,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "backend-erp",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "repo-boundary",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.1359,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-auth-repo",
+      "type": "arrow",
+      "x": 430.0,
+      "y": 170,
+      "width": 0,
+      "height": 80,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "auth-erp",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "repo-boundary",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.3804,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-cron-repo",
+      "type": "arrow",
+      "x": 635.0,
+      "y": 170,
+      "width": 0,
+      "height": 80,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "cron-erp",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "repo-boundary",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.6033,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-frontend-repo",
+      "type": "arrow",
+      "x": 850.0,
+      "y": 170,
+      "width": 0,
+      "height": 80,
+      "strokeColor": "#868e96",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "frontend-erp",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "repo-boundary",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.837,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-backend-pip",
+      "type": "text",
+      "x": 212,
+      "y": 196,
+      "width": 89,
+      "height": 13,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "pip @6843506",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "pip @6843506",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-auth-pip",
+      "type": "text",
+      "x": 437,
+      "y": 196,
+      "width": 89,
+      "height": 13,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "pip @6843506",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "pip @6843506",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-cron-pip",
+      "type": "text",
+      "x": 642,
+      "y": 196,
+      "width": 102,
+      "height": 13,
+      "strokeColor": "#7048e8",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "pip dependency",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "pip dependency",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-frontend",
+      "type": "text",
+      "x": 857,
+      "y": 192,
+      "width": 148,
+      "height": 27,
+      "strokeColor": "#868e96",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "indirect: JSON shaped\nby Pydantic schemas",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "indirect: JSON shaped\nby Pydantic schemas",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "deps",
+      "type": "rectangle",
+      "x": 110,
+      "y": 300,
+      "width": 190,
+      "height": 70,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "deps-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-deps-utils"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "deps-text",
+      "type": "text",
+      "x": 115,
+      "y": 317.5,
+      "width": 180,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "dependencies/\nget_db \u00b7 audit context",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "deps",
+      "originalText": "dependencies/\nget_db \u00b7 audit context",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "middleware",
+      "type": "rectangle",
+      "x": 330,
+      "y": 300,
+      "width": 180,
+      "height": 70,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "middleware-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-mw-utils"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "middleware-text",
+      "type": "text",
+      "x": 335,
+      "y": 317.5,
+      "width": 170,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "middleware/\nlogging ASGI",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "middleware",
+      "originalText": "middleware/\nlogging ASGI",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "services-email",
+      "type": "rectangle",
+      "x": 540,
+      "y": 300,
+      "width": 230,
+      "height": 70,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "services-email-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-svc-utils"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-email-smtp"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "services-email-text",
+      "type": "text",
+      "x": 545,
+      "y": 317.5,
+      "width": 220,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "services/email_service\n+ Jinja2 email templates",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "services-email",
+      "originalText": "services/email_service\n+ Jinja2 email templates",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "utils",
+      "type": "rectangle",
+      "x": 110,
+      "y": 420,
+      "width": 660,
+      "height": 90,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "utils-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-deps-utils"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-mw-utils"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-svc-utils"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-utils-schemas"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-utils-models"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "utils-text",
+      "type": "text",
+      "x": 115,
+      "y": 447.5,
+      "width": 650,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "utils/ \u2014 workflow_engine \u00b7 provisioning_resolution \u00b7\njwt_utils \u00b7 permissions \u00b7 audit \u00b7 ssrf \u00b7 OTEL-API helpers",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "utils",
+      "originalText": "utils/ \u2014 workflow_engine \u00b7 provisioning_resolution \u00b7\njwt_utils \u00b7 permissions \u00b7 audit \u00b7 ssrf \u00b7 OTEL-API helpers",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "schemas",
+      "type": "rectangle",
+      "x": 110,
+      "y": 560,
+      "width": 300,
+      "height": 80,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "schemas-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-utils-schemas"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-schemas-db"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "schemas-text",
+      "type": "text",
+      "x": 115,
+      "y": 582.5,
+      "width": 290,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "schemas/ (42 modules)\nPydantic v2",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "schemas",
+      "originalText": "schemas/ (34 modules)\nPydantic v2",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "models",
+      "type": "rectangle",
+      "x": 450,
+      "y": 560,
+      "width": 320,
+      "height": 80,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "models-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-utils-models"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-models-db"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-alembic-models"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "models-text",
+      "type": "text",
+      "x": 455,
+      "y": 582.5,
+      "width": 310,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "models/ SQLAlchemy 2.0\nauth \u00b7 crm \u00b7 isp (+insights,\nnetwork-config) \u00b7 workflow",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "models",
+      "originalText": "models/ SQLAlchemy 2.0\nauth \u00b7 crm \u00b7 isp \u00b7 workflow",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "database-py",
+      "type": "rectangle",
+      "x": 280,
+      "y": 690,
+      "width": 320,
+      "height": 70,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "database-py-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-schemas-db"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-models-db"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-db-postgres"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "database-py-text",
+      "type": "text",
+      "x": 285,
+      "y": 707.5,
+      "width": 310,
+      "height": 35,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "database.py\nengine \u00b7 SessionLocal \u00b7 Base",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "database-py",
+      "originalText": "database.py\nengine \u00b7 SessionLocal \u00b7 Base",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "alembic",
+      "type": "rectangle",
+      "x": 800,
+      "y": 560,
+      "width": 180,
+      "height": 110,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "#ffec99",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "alembic-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-alembic-models"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-alembic-postgres"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-gh-alembic"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-compose-alembic"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "alembic-text",
+      "type": "text",
+      "x": 805,
+      "y": 589.0,
+      "width": 170,
+      "height": 52,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "alembic/\n40 revisions + seeds\n(RBAC \u00b7 tiers \u00b7 ISP)",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "alembic",
+      "originalText": "alembic/\n38 revisions + seeds\n(RBAC \u00b7 tiers \u00b7 ISP)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-deps-utils",
+      "type": "arrow",
+      "x": 205.0,
+      "y": 370,
+      "width": 0,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "deps",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "utils",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.1439,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-mw-utils",
+      "type": "arrow",
+      "x": 420.0,
+      "y": 370,
+      "width": 0,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "middleware",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "utils",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.4697,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-svc-utils",
+      "type": "arrow",
+      "x": 655.0,
+      "y": 370,
+      "width": 0,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "services-email",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "utils",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.8258,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-utils-schemas",
+      "type": "arrow",
+      "x": 260.0,
+      "y": 510,
+      "width": 0,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "utils",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.2273,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "schemas",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-utils-models",
+      "type": "arrow",
+      "x": 610.0,
+      "y": 510,
+      "width": 0,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "utils",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.7576,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "models",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-schemas-db",
+      "type": "arrow",
+      "x": 260.0,
+      "y": 640,
+      "width": 80,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          25
+        ],
+        [
+          80,
+          25
+        ],
+        [
+          80,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "schemas",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "database-py",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.1875,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-models-db",
+      "type": "arrow",
+      "x": 610.0,
+      "y": 640,
+      "width": 170,
+      "height": 50,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          25
+        ],
+        [
+          -170,
+          25
+        ],
+        [
+          -170,
+          50
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "models",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "database-py",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-alembic-models",
+      "type": "arrow",
+      "x": 800,
+      "y": 615.0,
+      "width": 30,
+      "height": 15,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -15,
+          0
+        ],
+        [
+          -15,
+          -15
+        ],
+        [
+          -30,
+          -15
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "alembic",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.0,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "models",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          1.0,
+          0.5
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-alembic-models",
+      "type": "text",
+      "x": 686,
+      "y": 522,
+      "width": 95,
+      "height": 27,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "autogen from\nBase metadata",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "autogen from\nBase metadata",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "postgres",
+      "type": "rectangle",
+      "x": 280,
+      "y": 920,
+      "width": 320,
+      "height": 80,
+      "strokeColor": "#2f9e44",
+      "backgroundColor": "#b2f2bb",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "postgres-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-db-postgres"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-alembic-postgres"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "postgres-text",
+      "type": "text",
+      "x": 285,
+      "y": 942.5,
+      "width": 310,
+      "height": 35,
+      "strokeColor": "#2f9e44",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "PostgreSQL (shared DB)\nlocal compose :5432 / Railway prod",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "postgres",
+      "originalText": "PostgreSQL (shared DB)\nlocal compose :5432 / Railway prod",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-db-postgres",
+      "type": "arrow",
+      "x": 440.0,
+      "y": 760,
+      "width": 0,
+      "height": 160,
+      "strokeColor": "#2f9e44",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          160
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "database-py",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "postgres",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-db-postgres",
+      "type": "text",
+      "x": 455,
+      "y": 820,
+      "width": 204,
+      "height": 30,
+      "strokeColor": "#2f9e44",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "SQL \u2014 DATABASE_URL / DB_URL\nor POSTGRES_* env vars",
+      "fontSize": 12,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "SQL \u2014 DATABASE_URL / DB_URL\nor POSTGRES_* env vars",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-alembic-postgres",
+      "type": "arrow",
+      "x": 890.0,
+      "y": 670,
+      "width": 330,
+      "height": 250,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          210
+        ],
+        [
+          -330,
+          210
+        ],
+        [
+          -330,
+          250
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "alembic",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          1.0
+        ]
+      },
+      "endBinding": {
+        "elementId": "postgres",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.875,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-alembic-postgres",
+      "type": "text",
+      "x": 620,
+      "y": 855,
+      "width": 211,
+      "height": 15,
+      "strokeColor": "#f08c00",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "alembic upgrade head + seeds",
+      "fontSize": 12,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "alembic upgrade head + seeds",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "smtp",
+      "type": "rectangle",
+      "x": 1080,
+      "y": 300,
+      "width": 240,
+      "height": 70,
+      "strokeColor": "#e03131",
+      "backgroundColor": "#ffc9c9",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "smtp-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-email-smtp"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "smtp-text",
+      "type": "text",
+      "x": 1085,
+      "y": 317.5,
+      "width": 230,
+      "height": 35,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "SMTP server\n(transactional email)",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "smtp",
+      "originalText": "SMTP server\n(transactional email)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "gh-actions",
+      "type": "rectangle",
+      "x": 1080,
+      "y": 430,
+      "width": 240,
+      "height": 90,
+      "strokeColor": "#e03131",
+      "backgroundColor": "#ffc9c9",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "gh-actions-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-gh-alembic"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "gh-actions-text",
+      "type": "text",
+      "x": 1085,
+      "y": 451.0,
+      "width": 230,
+      "height": 48,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "GitHub Actions\nci.yml (guard + tests)\nmigrate.yml (prod DB_URL)",
+      "fontSize": 13,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "gh-actions",
+      "originalText": "GitHub Actions\nci.yml (guard + tests)\nmigrate.yml (prod DB_URL)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "compose-migrate",
+      "type": "rectangle",
+      "x": 1080,
+      "y": 590,
+      "width": 240,
+      "height": 80,
+      "strokeColor": "#e03131",
+      "backgroundColor": "#ffc9c9",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "compose-migrate-text"
+        },
+        {
+          "type": "arrow",
+          "id": "arr-compose-alembic"
+        }
+      ]
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "compose-migrate-text",
+      "type": "text",
+      "x": 1085,
+      "y": 612.5,
+      "width": 230,
+      "height": 35,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "docker compose\n'migrate' service (local)",
+      "fontSize": 14,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "compose-migrate",
+      "originalText": "docker compose\n'migrate' service (local)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-email-smtp",
+      "type": "arrow",
+      "x": 770,
+      "y": 335.0,
+      "width": 310,
+      "height": 0,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          310,
+          0
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "services-email",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          1.0,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "smtp",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.0,
+          0.5
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-email-smtp",
+      "type": "text",
+      "x": 810,
+      "y": 312,
+      "width": 287,
+      "height": 13,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "aiosmtplib \u2014 EMAIL_PROVIDER / SMTP_USE_TLS",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "aiosmtplib \u2014 EMAIL_PROVIDER / SMTP_USE_TLS",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-gh-alembic",
+      "type": "arrow",
+      "x": 1080,
+      "y": 475.0,
+      "width": 190,
+      "height": 85,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -190,
+          0
+        ],
+        [
+          -190,
+          85
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "gh-actions",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.0,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "alembic",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.5,
+          0.0
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-gh-alembic",
+      "type": "text",
+      "x": 902,
+      "y": 448,
+      "width": 102,
+      "height": 27,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "runs on push\nto main (prod)",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "runs on push\nto main (prod)",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "arr-compose-alembic",
+      "type": "arrow",
+      "x": 1080,
+      "y": 630.0,
+      "width": 100,
+      "height": 15,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "elbowed": true,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -100,
+          0
+        ],
+        [
+          -100,
+          -15
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startBinding": {
+        "elementId": "compose-migrate",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          0.0,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "alembic",
+        "focus": 0,
+        "gap": 1,
+        "fixedPoint": [
+          1.0,
+          0.5
+        ]
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "lbl-compose-alembic",
+      "type": "text",
+      "x": 990,
+      "y": 645,
+      "width": 128,
+      "height": 27,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "builds Dockerfile,\nmigrates local DB",
+      "fontSize": 11,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "builds Dockerfile,\nmigrates local DB",
+      "lineHeight": 1.25,
+      "boundElements": null
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "legend-box",
+      "type": "rectangle",
+      "x": 1060,
+      "y": 700,
+      "width": 360,
+      "height": 220,
+      "strokeColor": "#868e96",
+      "backgroundColor": "transparent",
+      "roundness": {
+        "type": 3
+      },
+      "boundElements": []
+    },
+    {
+      "angle": 0,
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "seed": 1,
+      "version": 1,
+      "versionNonce": 1,
+      "isDeleted": false,
+      "updated": 1,
+      "link": null,
+      "locked": false,
+      "id": "legend",
+      "type": "text",
+      "x": 1080,
+      "y": 715,
+      "width": 407,
+      "height": 130,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "roundness": null,
+      "text": "Legend\npurple \u2014 consuming Uplink services (pip)\nblue \u2014 internal library layers (imports point down)\nyellow \u2014 migrations + seeds\ngreen \u2014 shared PostgreSQL database\nred \u2014 external systems / runners\nNot used here: Redis, HTTP server,\nAUTH_URL / CRM_URL (belong to consumers)",
+      "fontSize": 13,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "Legend\npurple \u2014 consuming Uplink services (pip)\nblue \u2014 internal library layers (imports point down)\nyellow \u2014 migrations + seeds\ngreen \u2014 shared PostgreSQL database\nred \u2014 external systems / runners\nNot used here: Redis, HTTP server,\nAUTH_URL / CRM_URL (belong to consumers)",
+      "lineHeight": 1.25,
+      "boundElements": null
     }
-   ]
+  ],
+  "appState": {
+    "gridSize": 20,
+    "viewBackgroundColor": "#ffffff"
   },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "backend-erp-text",
-   "type": "text",
-   "x": 105,
-   "y": 117.5,
-   "width": 200,
-   "height": 35,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "backend-erp\nCRM API + provision-worker",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "backend-erp",
-   "originalText": "backend-erp\nCRM API + provision-worker",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "auth-erp",
-   "type": "rectangle",
-   "x": 340,
-   "y": 100,
-   "width": 180,
-   "height": 70,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "#d0bfff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "auth-erp-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-auth-repo"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "auth-erp-text",
-   "type": "text",
-   "x": 345,
-   "y": 117.5,
-   "width": 170,
-   "height": 35,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "auth-erp\nauth / SaaS billing API",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "auth-erp",
-   "originalText": "auth-erp\nauth / SaaS billing API",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "cron-erp",
-   "type": "rectangle",
-   "x": 550,
-   "y": 100,
-   "width": 170,
-   "height": 70,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "#d0bfff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "cron-erp-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-cron-repo"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "cron-erp-text",
-   "type": "text",
-   "x": 555,
-   "y": 117.5,
-   "width": 160,
-   "height": 35,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "cron-erp\nnightly billing jobs",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "cron-erp",
-   "originalText": "cron-erp\nnightly billing jobs",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "dashed",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "frontend-erp",
-   "type": "rectangle",
-   "x": 750,
-   "y": 100,
-   "width": 200,
-   "height": 70,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "#d0bfff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "frontend-erp-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-frontend-repo"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "frontend-erp-text",
-   "type": "text",
-   "x": 755,
-   "y": 117.5,
-   "width": 190,
-   "height": 35,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "frontend-erp\n(no pip dependency)",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "frontend-erp",
-   "originalText": "frontend-erp\n(no pip dependency)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "dashed",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "repo-boundary",
-   "type": "rectangle",
-   "x": 80,
-   "y": 250,
-   "width": 920,
-   "height": 590,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "arrow",
-     "id": "arr-backend-repo"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-auth-repo"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-cron-repo"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-frontend-repo"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "repo-boundary-label",
-   "type": "text",
-   "x": 100,
-   "y": 262,
-   "width": 787,
-   "height": 20,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "models-utils (this repo) \u2014 Python library + Alembic migrations, no server process",
-   "fontSize": 16,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "models-utils (this repo) \u2014 Python library + Alembic migrations, no server process",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-backend-repo",
-   "type": "arrow",
-   "x": 205.0,
-   "y": 170,
-   "width": 0,
-   "height": 80,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     80
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "backend-erp",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "repo-boundary",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.1359,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-auth-repo",
-   "type": "arrow",
-   "x": 430.0,
-   "y": 170,
-   "width": 0,
-   "height": 80,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     80
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "auth-erp",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "repo-boundary",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.3804,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-cron-repo",
-   "type": "arrow",
-   "x": 635.0,
-   "y": 170,
-   "width": 0,
-   "height": 80,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     80
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "cron-erp",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "repo-boundary",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.6033,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "dashed",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-frontend-repo",
-   "type": "arrow",
-   "x": 850.0,
-   "y": 170,
-   "width": 0,
-   "height": 80,
-   "strokeColor": "#868e96",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     80
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "frontend-erp",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "repo-boundary",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.837,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-backend-pip",
-   "type": "text",
-   "x": 212,
-   "y": 196,
-   "width": 89,
-   "height": 13,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "pip @6843506",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "pip @6843506",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-auth-pip",
-   "type": "text",
-   "x": 437,
-   "y": 196,
-   "width": 89,
-   "height": 13,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "pip @6843506",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "pip @6843506",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-cron-pip",
-   "type": "text",
-   "x": 642,
-   "y": 196,
-   "width": 102,
-   "height": 13,
-   "strokeColor": "#7048e8",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "pip dependency",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "pip dependency",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-frontend",
-   "type": "text",
-   "x": 857,
-   "y": 192,
-   "width": 148,
-   "height": 27,
-   "strokeColor": "#868e96",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "indirect: JSON shaped\nby Pydantic schemas",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "indirect: JSON shaped\nby Pydantic schemas",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "deps",
-   "type": "rectangle",
-   "x": 110,
-   "y": 300,
-   "width": 190,
-   "height": 70,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "deps-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-deps-utils"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "deps-text",
-   "type": "text",
-   "x": 115,
-   "y": 317.5,
-   "width": 180,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "dependencies/\nget_db \u00b7 audit context",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "deps",
-   "originalText": "dependencies/\nget_db \u00b7 audit context",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "middleware",
-   "type": "rectangle",
-   "x": 330,
-   "y": 300,
-   "width": 180,
-   "height": 70,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "middleware-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-mw-utils"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "middleware-text",
-   "type": "text",
-   "x": 335,
-   "y": 317.5,
-   "width": 170,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "middleware/\nlogging ASGI",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "middleware",
-   "originalText": "middleware/\nlogging ASGI",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "services-email",
-   "type": "rectangle",
-   "x": 540,
-   "y": 300,
-   "width": 230,
-   "height": 70,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "services-email-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-svc-utils"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-email-smtp"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "services-email-text",
-   "type": "text",
-   "x": 545,
-   "y": 317.5,
-   "width": 220,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "services/email_service\n+ Jinja2 email templates",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "services-email",
-   "originalText": "services/email_service\n+ Jinja2 email templates",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "utils",
-   "type": "rectangle",
-   "x": 110,
-   "y": 420,
-   "width": 660,
-   "height": 90,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "utils-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-deps-utils"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-mw-utils"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-svc-utils"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-utils-schemas"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-utils-models"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "utils-text",
-   "type": "text",
-   "x": 115,
-   "y": 447.5,
-   "width": 650,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "utils/ \u2014 workflow_engine \u00b7 provisioning_resolution \u00b7\njwt_utils \u00b7 permissions \u00b7 audit \u00b7 ssrf \u00b7 OTEL-API helpers",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "utils",
-   "originalText": "utils/ \u2014 workflow_engine \u00b7 provisioning_resolution \u00b7\njwt_utils \u00b7 permissions \u00b7 audit \u00b7 ssrf \u00b7 OTEL-API helpers",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "schemas",
-   "type": "rectangle",
-   "x": 110,
-   "y": 560,
-   "width": 300,
-   "height": 80,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "schemas-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-utils-schemas"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-schemas-db"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "schemas-text",
-   "type": "text",
-   "x": 115,
-   "y": 582.5,
-   "width": 290,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "schemas/ (34 modules)\nPydantic v2",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "schemas",
-   "originalText": "schemas/ (34 modules)\nPydantic v2",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "models",
-   "type": "rectangle",
-   "x": 450,
-   "y": 560,
-   "width": 320,
-   "height": 80,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "models-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-utils-models"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-models-db"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-alembic-models"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "models-text",
-   "type": "text",
-   "x": 455,
-   "y": 582.5,
-   "width": 310,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "models/ SQLAlchemy 2.0\nauth \u00b7 crm \u00b7 isp \u00b7 workflow",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "models",
-   "originalText": "models/ SQLAlchemy 2.0\nauth \u00b7 crm \u00b7 isp \u00b7 workflow",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "database-py",
-   "type": "rectangle",
-   "x": 280,
-   "y": 690,
-   "width": 320,
-   "height": 70,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "#a5d8ff",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "database-py-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-schemas-db"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-models-db"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-db-postgres"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "database-py-text",
-   "type": "text",
-   "x": 285,
-   "y": 707.5,
-   "width": 310,
-   "height": 35,
-   "strokeColor": "#1971c2",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "database.py\nengine \u00b7 SessionLocal \u00b7 Base",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "database-py",
-   "originalText": "database.py\nengine \u00b7 SessionLocal \u00b7 Base",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "alembic",
-   "type": "rectangle",
-   "x": 800,
-   "y": 560,
-   "width": 180,
-   "height": 110,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "#ffec99",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "alembic-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-alembic-models"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-alembic-postgres"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-gh-alembic"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-compose-alembic"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "alembic-text",
-   "type": "text",
-   "x": 805,
-   "y": 589.0,
-   "width": 170,
-   "height": 52,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "alembic/\n38 revisions + seeds\n(RBAC \u00b7 tiers \u00b7 ISP)",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "alembic",
-   "originalText": "alembic/\n38 revisions + seeds\n(RBAC \u00b7 tiers \u00b7 ISP)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-deps-utils",
-   "type": "arrow",
-   "x": 205.0,
-   "y": 370,
-   "width": 0,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "deps",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "utils",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.1439,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-mw-utils",
-   "type": "arrow",
-   "x": 420.0,
-   "y": 370,
-   "width": 0,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "middleware",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "utils",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.4697,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-svc-utils",
-   "type": "arrow",
-   "x": 655.0,
-   "y": 370,
-   "width": 0,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "services-email",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "utils",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.8258,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-utils-schemas",
-   "type": "arrow",
-   "x": 260.0,
-   "y": 510,
-   "width": 0,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "utils",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.2273,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "schemas",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-utils-models",
-   "type": "arrow",
-   "x": 610.0,
-   "y": 510,
-   "width": 0,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "utils",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.7576,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "models",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-schemas-db",
-   "type": "arrow",
-   "x": 260.0,
-   "y": 640,
-   "width": 80,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     25
-    ],
-    [
-     80,
-     25
-    ],
-    [
-     80,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "schemas",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "database-py",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.1875,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-models-db",
-   "type": "arrow",
-   "x": 610.0,
-   "y": 640,
-   "width": 170,
-   "height": 50,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     25
-    ],
-    [
-     -170,
-     25
-    ],
-    [
-     -170,
-     50
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "models",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "database-py",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-alembic-models",
-   "type": "arrow",
-   "x": 800,
-   "y": 615.0,
-   "width": 30,
-   "height": 15,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     -15,
-     0
-    ],
-    [
-     -15,
-     -15
-    ],
-    [
-     -30,
-     -15
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "alembic",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.0,
-     0.5
-    ]
-   },
-   "endBinding": {
-    "elementId": "models",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     1.0,
-     0.5
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-alembic-models",
-   "type": "text",
-   "x": 686,
-   "y": 522,
-   "width": 95,
-   "height": 27,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "autogen from\nBase metadata",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "autogen from\nBase metadata",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "postgres",
-   "type": "rectangle",
-   "x": 280,
-   "y": 920,
-   "width": 320,
-   "height": 80,
-   "strokeColor": "#2f9e44",
-   "backgroundColor": "#b2f2bb",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "postgres-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-db-postgres"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-alembic-postgres"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "postgres-text",
-   "type": "text",
-   "x": 285,
-   "y": 942.5,
-   "width": 310,
-   "height": 35,
-   "strokeColor": "#2f9e44",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "PostgreSQL (shared DB)\nlocal compose :5432 / Railway prod",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "postgres",
-   "originalText": "PostgreSQL (shared DB)\nlocal compose :5432 / Railway prod",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-db-postgres",
-   "type": "arrow",
-   "x": 440.0,
-   "y": 760,
-   "width": 0,
-   "height": 160,
-   "strokeColor": "#2f9e44",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     160
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "database-py",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "postgres",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-db-postgres",
-   "type": "text",
-   "x": 455,
-   "y": 820,
-   "width": 204,
-   "height": 30,
-   "strokeColor": "#2f9e44",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "SQL \u2014 DATABASE_URL / DB_URL\nor POSTGRES_* env vars",
-   "fontSize": 12,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "SQL \u2014 DATABASE_URL / DB_URL\nor POSTGRES_* env vars",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-alembic-postgres",
-   "type": "arrow",
-   "x": 890.0,
-   "y": 670,
-   "width": 330,
-   "height": 250,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     210
-    ],
-    [
-     -330,
-     210
-    ],
-    [
-     -330,
-     250
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "alembic",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     1.0
-    ]
-   },
-   "endBinding": {
-    "elementId": "postgres",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.875,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-alembic-postgres",
-   "type": "text",
-   "x": 620,
-   "y": 855,
-   "width": 211,
-   "height": 15,
-   "strokeColor": "#f08c00",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "alembic upgrade head + seeds",
-   "fontSize": 12,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "alembic upgrade head + seeds",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "smtp",
-   "type": "rectangle",
-   "x": 1080,
-   "y": 300,
-   "width": 240,
-   "height": 70,
-   "strokeColor": "#e03131",
-   "backgroundColor": "#ffc9c9",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "smtp-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-email-smtp"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "smtp-text",
-   "type": "text",
-   "x": 1085,
-   "y": 317.5,
-   "width": 230,
-   "height": 35,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "SMTP server\n(transactional email)",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "smtp",
-   "originalText": "SMTP server\n(transactional email)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "gh-actions",
-   "type": "rectangle",
-   "x": 1080,
-   "y": 430,
-   "width": 240,
-   "height": 90,
-   "strokeColor": "#e03131",
-   "backgroundColor": "#ffc9c9",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "gh-actions-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-gh-alembic"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "gh-actions-text",
-   "type": "text",
-   "x": 1085,
-   "y": 451.0,
-   "width": 230,
-   "height": 48,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "GitHub Actions\nci.yml (guard + tests)\nmigrate.yml (prod DB_URL)",
-   "fontSize": 13,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "gh-actions",
-   "originalText": "GitHub Actions\nci.yml (guard + tests)\nmigrate.yml (prod DB_URL)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "compose-migrate",
-   "type": "rectangle",
-   "x": 1080,
-   "y": 590,
-   "width": 240,
-   "height": 80,
-   "strokeColor": "#e03131",
-   "backgroundColor": "#ffc9c9",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": [
-    {
-     "type": "text",
-     "id": "compose-migrate-text"
-    },
-    {
-     "type": "arrow",
-     "id": "arr-compose-alembic"
-    }
-   ]
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "compose-migrate-text",
-   "type": "text",
-   "x": 1085,
-   "y": 612.5,
-   "width": 230,
-   "height": 35,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "docker compose\n'migrate' service (local)",
-   "fontSize": 14,
-   "fontFamily": 1,
-   "textAlign": "center",
-   "verticalAlign": "middle",
-   "containerId": "compose-migrate",
-   "originalText": "docker compose\n'migrate' service (local)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-email-smtp",
-   "type": "arrow",
-   "x": 770,
-   "y": 335.0,
-   "width": 310,
-   "height": 0,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     310,
-     0
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "services-email",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     1.0,
-     0.5
-    ]
-   },
-   "endBinding": {
-    "elementId": "smtp",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.0,
-     0.5
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-email-smtp",
-   "type": "text",
-   "x": 810,
-   "y": 312,
-   "width": 287,
-   "height": 13,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "aiosmtplib \u2014 EMAIL_PROVIDER / SMTP_USE_TLS",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "aiosmtplib \u2014 EMAIL_PROVIDER / SMTP_USE_TLS",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-gh-alembic",
-   "type": "arrow",
-   "x": 1080,
-   "y": 475.0,
-   "width": 190,
-   "height": 85,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     -190,
-     0
-    ],
-    [
-     -190,
-     85
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "gh-actions",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.0,
-     0.5
-    ]
-   },
-   "endBinding": {
-    "elementId": "alembic",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.5,
-     0.0
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-gh-alembic",
-   "type": "text",
-   "x": 902,
-   "y": 448,
-   "width": 102,
-   "height": 27,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "runs on push\nto main (prod)",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "runs on push\nto main (prod)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 0,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "arr-compose-alembic",
-   "type": "arrow",
-   "x": 1080,
-   "y": 630.0,
-   "width": 100,
-   "height": 15,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "elbowed": true,
-   "points": [
-    [
-     0,
-     0
-    ],
-    [
-     -100,
-     0
-    ],
-    [
-     -100,
-     -15
-    ]
-   ],
-   "lastCommittedPoint": null,
-   "startBinding": {
-    "elementId": "compose-migrate",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     0.0,
-     0.5
-    ]
-   },
-   "endBinding": {
-    "elementId": "alembic",
-    "focus": 0,
-    "gap": 1,
-    "fixedPoint": [
-     1.0,
-     0.5
-    ]
-   },
-   "startArrowhead": null,
-   "endArrowhead": "arrow",
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "lbl-compose-alembic",
-   "type": "text",
-   "x": 990,
-   "y": 645,
-   "width": 128,
-   "height": 27,
-   "strokeColor": "#e03131",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "builds Dockerfile,\nmigrates local DB",
-   "fontSize": 11,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "builds Dockerfile,\nmigrates local DB",
-   "lineHeight": 1.25,
-   "boundElements": null
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "dashed",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "legend-box",
-   "type": "rectangle",
-   "x": 1060,
-   "y": 700,
-   "width": 360,
-   "height": 220,
-   "strokeColor": "#868e96",
-   "backgroundColor": "transparent",
-   "roundness": {
-    "type": 3
-   },
-   "boundElements": []
-  },
-  {
-   "angle": 0,
-   "fillStyle": "solid",
-   "strokeWidth": 2,
-   "strokeStyle": "solid",
-   "roughness": 1,
-   "opacity": 100,
-   "groupIds": [],
-   "frameId": null,
-   "seed": 1,
-   "version": 1,
-   "versionNonce": 1,
-   "isDeleted": false,
-   "updated": 1,
-   "link": null,
-   "locked": false,
-   "id": "legend",
-   "type": "text",
-   "x": 1080,
-   "y": 715,
-   "width": 407,
-   "height": 130,
-   "strokeColor": "#1e1e1e",
-   "backgroundColor": "transparent",
-   "roundness": null,
-   "text": "Legend\npurple \u2014 consuming Uplink services (pip)\nblue \u2014 internal library layers (imports point down)\nyellow \u2014 migrations + seeds\ngreen \u2014 shared PostgreSQL database\nred \u2014 external systems / runners\nNot used here: Redis, HTTP server,\nAUTH_URL / CRM_URL (belong to consumers)",
-   "fontSize": 13,
-   "fontFamily": 1,
-   "textAlign": "left",
-   "verticalAlign": "top",
-   "containerId": null,
-   "originalText": "Legend\npurple \u2014 consuming Uplink services (pip)\nblue \u2014 internal library layers (imports point down)\nyellow \u2014 migrations + seeds\ngreen \u2014 shared PostgreSQL database\nred \u2014 external systems / runners\nNot used here: Redis, HTTP server,\nAUTH_URL / CRM_URL (belong to consumers)",
-   "lineHeight": 1.25,
-   "boundElements": null
-  }
- ],
- "appState": {
-  "gridSize": 20,
-  "viewBackgroundColor": "#ffffff"
- },
- "files": {}
+  "files": {}
 }

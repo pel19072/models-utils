@@ -3,7 +3,7 @@
 ## What models-utils is
 
 models-utils (pip package **`database-utils`**, Python module **`database_utils`**,
-v1.10.0) is the **shared data layer** of the Uplink ISP platform. It is a
+v1.12.0) is the **shared data layer** of the Uplink ISP platform. It is a
 pip-installable Python library — **not a running service**. There is no server,
 no port, and no entry point; it executes only inside its consumers and as an
 Alembic migration runner.
@@ -28,16 +28,20 @@ consuming backends. Its CI blocks PRs that change models without a revision.
 1. **SQLAlchemy ORM models** for all four domains — auth/tenancy/SaaS-billing
    ([auth-models.md](auth-models.md)), CRM ([crm-models.md](crm-models.md)),
    ISP vertical ([isp-models.md](isp-models.md)), and workflow automation
-   ([workflow-models.md](workflow-models.md)). All models use UUID v4 primary
+   ([workflow-models.md](workflow-models.md)). The ISP module also holds the
+   Cycle 4 **insights** models (`InsightDashboard`, `InsightChart`) and the
+   Cycle 5 **network-config** models (GenieACS/TR-069 — see
+   [network-models.md](network-models.md)). All models use UUID v4 primary
    keys and `created_at`/`updated_at` timestamps.
-2. **Pydantic v2 schemas** — 36 modules shared between services
+2. **Pydantic v2 schemas** — 42 modules shared between services
    ([schemas.md](schemas.md)).
-3. **Alembic migrations + idempotent seeds** — 36 revisions; RBAC, tier, and
+3. **Alembic migrations + idempotent seeds** — 40 revisions; RBAC, tier, and
    ISP catalog/template seeds run automatically after upgrade
    ([migrations.md](migrations.md)).
 4. **Cross-service utilities** — JWT, password hashing, permission checks,
    audit logging, pagination, Guatemala timezone helpers, SSRF guard, OTEL
-   helpers ([utilities.md](utilities.md)) — and, crucially, the **workflow
+   helpers, and AES-256-GCM envelope encryption (`crypto.py`, for device
+   credentials) ([utilities.md](utilities.md)) — and, crucially, the **workflow
    engine** and **provisioning resolution** logic
    ([workflow-engine.md](workflow-engine.md)).
 5. **Transactional email service** — abstract interface + SMTP implementation
