@@ -18,7 +18,9 @@ class InsightChartSpec(BaseModel):
     entity: str
     measure: str
     dimension: Optional[str] = None
-    filters: Optional[Dict[str, Any]] = None
+    # A list of filter clauses ({column, op, value}) — the SAME shape the
+    # /insights/query engine accepts, so a saved chart's spec replays verbatim.
+    filters: Optional[List[Dict[str, Any]]] = None
 
 
 class InsightChartBase(BaseModel):
