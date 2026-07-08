@@ -122,3 +122,24 @@ class RegeneratePeriodResponse(BaseModel):
     failed_periods: List[MissingPeriod]
     success_count: int
     failure_count: int
+
+
+class DueBillingItemOut(BaseModel):
+    """Cycle 2 (doc 18 amendment 5): the cron contract-frozen response_model
+    for GET /recurring-orders/get-all-due. Both the client_service billing
+    engine pass and the residual legacy recurring_order pass serialize into
+    this shape — cron-erp reads only id/client.name/recurrence/
+    next_generation_date via .get(), so this reshape is contract-safe.
+    `source` is additive and cron-erp ignores it."""
+    id: UUID
+    client: Optional["_DueBillingClientOut"] = None
+    recurrence: RecurrenceEnum
+    next_generation_date: Optional[datetime] = None
+    source: str  # "client_service" | "recurring_order"
+
+
+class _DueBillingClientOut(BaseModel):
+    name: str
+
+
+DueBillingItemOut.model_rebuild()

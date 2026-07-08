@@ -190,6 +190,12 @@ class Permissions:
     ORDERS_CHANGE_STATUS = "orders.change_status"
     ORDERS_ALL = "orders.*"
 
+    # Payment ledger permissions (doc 16 §1). Grants are copied by migration
+    # c1b_backfill from orders.update / orders.read / orders.revert_payment.
+    PAYMENTS_RECORD = "payments.record"
+    PAYMENTS_READ = "payments.read"
+    PAYMENTS_REFUND = "payments.refund"
+
     # Product permissions
     PRODUCTS_CREATE = "products.create"
     PRODUCTS_READ = "products.read"
@@ -260,6 +266,11 @@ def get_default_permissions() -> List[dict]:
         {"name": Permissions.ORDERS_READ, "resource": "orders", "action": "read", "description": "View order information"},
         {"name": Permissions.ORDERS_UPDATE, "resource": "orders", "action": "update", "description": "Update order information"},
         {"name": Permissions.ORDERS_DELETE, "resource": "orders", "action": "delete", "description": "Delete orders"},
+
+        # Payment ledger permissions
+        {"name": Permissions.PAYMENTS_RECORD, "resource": "payments", "action": "record", "description": "Record payments against orders"},
+        {"name": Permissions.PAYMENTS_READ, "resource": "payments", "action": "read", "description": "View order payment ledgers"},
+        {"name": Permissions.PAYMENTS_REFUND, "resource": "payments", "action": "refund", "description": "Refund recorded payments (ADMIN only)"},
 
         # Product permissions
         {"name": Permissions.PRODUCTS_CREATE, "resource": "products", "action": "create", "description": "Create new products"},

@@ -39,5 +39,23 @@ Provide a single shared definition for CRM database tables consumed by backend-e
 - `Integration.auth_type` enum: NONE/API_KEY/BEARER_TOKEN/BASIC_AUTH
 - Task assignees: many-to-many with User via association table
 
+## ISP: Insights dashboards (Cycle 4)
+
+Tenant-defined analytics dashboards live in `database_utils/models/isp.py` (alongside the other ISP models: service plans, client services, device categories, topologies). Each company builds dashboards of simple charts driven off existing entities (clients, orders, client_services, …); chart data is resolved server-side by backend-erp's insights service.
+
+| Model | Table | Key Fields | Purpose |
+|-------|-------|-----------|---------|
+| `InsightDashboard` | `insight_dashboard` | name, ordering, company_id | A named, company-scoped collection of charts |
+| `InsightChart` | `insight_chart` | title, chart_type, spec (JSON), ordering, dashboard_id | One chart within a dashboard |
+
+- **Tenant scope**: `insight_dashboard.company_id` FK → `company.id` (`ondelete=CASCADE`); `Company` exposes an `insight_dashboards` relationship. `insight_chart` has **no** `company_id` — its tenant scope derives via `dashboard_id` → dashboard's `company_id` (same scoping-through-parent pattern as `topology_device_type` → `topology`).
+- **Uniqueness**: `UniqueConstraint(company_id, name)` on `insight_dashboard` (`uq_insight_dashboard_company_name`).
+- **Cascade**: deleting a dashboard cascades to its charts (`insight_chart.dashboard_id` FK `ondelete=CASCADE` + ORM `delete-orphan`).
+- **`InsightChart.chart_type`** enum `InsightChartType`: `NUMBER` / `BAR` / `PIE`.
+- **`InsightChart.spec`** JSON shape: `{entity, measure, dimension?, filters?}` where `filters` is a list of `{column, op, value}` clauses — the exact payload backend-erp's `/insights/query` engine accepts, so a saved chart replays verbatim.
+- Both tables carry UUID PKs + `created_at`/`updated_at`. Purely additive (revision `c4a_insights_dashboards`).
+
+> **Cycle 4 note:** `Client.installation_address` was removed (revision `c4b_drop_installation_address`). It was intended to be distinct from the billing `address` but was never populated separately; clients now use their single `address`.
+
 ## Environment Variables
 - `POSTGRES_*` — Database connection string components

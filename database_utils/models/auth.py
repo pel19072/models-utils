@@ -88,6 +88,19 @@ class Company(Base):
     integrations = relationship("Integration", back_populates="company", cascade="all, delete-orphan")
     roles = relationship("Role", back_populates="company", cascade="all, delete-orphan")
     tier_change_requests = relationship("TierChangeRequest", back_populates="company", cascade="all, delete-orphan")
+    # ISP modules
+    service_plans = relationship("ServicePlan", back_populates="company", cascade="all, delete-orphan")
+    client_services = relationship("ClientService", back_populates="company", cascade="all, delete-orphan")
+    device_types = relationship("DeviceType", back_populates="company", cascade="all, delete-orphan")
+    warehouses = relationship("Warehouse", back_populates="company", cascade="all, delete-orphan")
+    inventory_items = relationship("InventoryItem", back_populates="company", cascade="all, delete-orphan")
+    # Cycle 2 D6: network_node_types/network_nodes rels removed with the graph
+    # (revision c2d_graph_removal); topologies (D5) is the replacement.
+    topologies = relationship("Topology", back_populates="company", cascade="all, delete-orphan")
+    playbooks = relationship("Playbook", back_populates="company", cascade="all, delete-orphan")
+    provisioning_jobs = relationship("ProvisioningJob", back_populates="company", cascade="all, delete-orphan")
+    # Cycle 4: insights dashboards.
+    insight_dashboards = relationship("InsightDashboard", back_populates="company", cascade="all, delete-orphan")
 
 
 class Permission(Base):
@@ -138,7 +151,10 @@ class User(Base):
 
     # Relationships
     company = relationship("Company", back_populates="users")
-    clients = relationship("Client", back_populates="advisor", cascade="all, delete-orphan")
+    clients = relationship(
+        "Client", back_populates="advisor", cascade="all, delete-orphan",
+        foreign_keys="Client.advisor_id",
+    )
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     roles = relationship("Role", secondary=user_role, back_populates="users")
 
