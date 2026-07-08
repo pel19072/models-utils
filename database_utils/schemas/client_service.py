@@ -73,6 +73,10 @@ class ClientServiceOut(ClientServiceBase):
     cancelled_at: Optional[datetime] = None
     created_at: datetime
     service_plan: Optional[ServicePlanOut] = None
+    # Cycle 5 Phase 1 (functionality F1.4/F2.3): learned network identifiers
+    # written by the provisioning executor at settlement, read back by
+    # suspension/reactivation/deprovision playbooks. Read-only here.
+    provisioning_state: Optional[Dict[str, Any]] = None
 
     # --- Billing (read-only here; settable via ClientServiceCreate or the
     # dedicated ClientServiceBillingUpdate / generate / regenerate-charges

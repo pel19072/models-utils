@@ -60,6 +60,16 @@ from .isp import (
     InsightDashboard,
     InsightChart,
     InsightChartType,
+    # Cycle 5 Phase 1: network configuration (TR-069 / GenieACS)
+    NetworkAccess,
+    DeviceCredential,
+    AcsDeviceRegistration,
+    ProvisioningSettings,
+    DeviceActionLog,
+    CREDENTIAL_KINDS,
+    NETWORK_ACCESS_KINDS,
+    NETWORK_ACCESS_MODES,
+    ACS_STALE_AFTER_SECONDS,
 )
 
 from .workflow import (
@@ -136,6 +146,16 @@ __all__ = [
     "InsightDashboard",
     "InsightChart",
     "InsightChartType",
+    # Network configuration (Cycle 5 Phase 1)
+    "NetworkAccess",
+    "DeviceCredential",
+    "AcsDeviceRegistration",
+    "ProvisioningSettings",
+    "DeviceActionLog",
+    "CREDENTIAL_KINDS",
+    "NETWORK_ACCESS_KINDS",
+    "NETWORK_ACCESS_MODES",
+    "ACS_STALE_AFTER_SECONDS",
     # Workflows
     "WorkflowTemplate",
     "Workflow",

@@ -102,6 +102,26 @@ ISP_PERMISSIONS = [
     {"name": "insights.read", "resource": "insights", "action": "read", "description": "View insight dashboards"},
     {"name": "insights.update", "resource": "insights", "action": "update", "description": "Update insight dashboards/charts"},
     {"name": "insights.delete", "resource": "insights", "action": "delete", "description": "Delete insight dashboards/charts"},
+    # Network configuration (Cycle 5 Phase 1: TR-069 / GenieACS) — INSERT-ONLY
+    # convergent (ON CONFLICT DO NOTHING); ADMIN/MANAGER auto-inherit all via
+    # _seed_permissions.
+    {"name": "network_access.read", "resource": "network_access", "action": "read", "description": "View network transport paths"},
+    {"name": "network_access.create", "resource": "network_access", "action": "create", "description": "Create network transport paths"},
+    {"name": "network_access.update", "resource": "network_access", "action": "update", "description": "Update network transport paths"},
+    {"name": "network_access.delete", "resource": "network_access", "action": "delete", "description": "Delete network transport paths"},
+    {"name": "device_credentials.read", "resource": "device_credentials", "action": "read", "description": "View device credentials (secrets never exposed)"},
+    {"name": "device_credentials.create", "resource": "device_credentials", "action": "create", "description": "Create device credentials"},
+    {"name": "device_credentials.update", "resource": "device_credentials", "action": "update", "description": "Update/rotate device credentials"},
+    {"name": "device_credentials.delete", "resource": "device_credentials", "action": "delete", "description": "Delete device credentials"},
+    {"name": "acs_devices.read", "resource": "acs_devices", "action": "read", "description": "View ACS/TR-069 device state"},
+    {"name": "acs_devices.action", "resource": "acs_devices", "action": "action", "description": "Run ACS device actions (reboot, factory-reset, refresh)"},
+    {"name": "provisioning_settings.read", "resource": "provisioning_settings", "action": "read", "description": "View tenant provisioning settings/enable gate"},
+    {"name": "provisioning_settings.update", "resource": "provisioning_settings", "action": "update", "description": "Update tenant provisioning settings/enable gate"},
+    {"name": "acs_registrations.read", "resource": "acs_registrations", "action": "read", "description": "View ACS device registrations"},
+    {"name": "acs_registrations.create", "resource": "acs_registrations", "action": "create", "description": "Create ACS device registrations (incl. bulk import)"},
+    {"name": "acs_registrations.update", "resource": "acs_registrations", "action": "update", "description": "Update ACS device registrations"},
+    {"name": "acs_registrations.delete", "resource": "acs_registrations", "action": "delete", "description": "Release/delete ACS device registrations"},
+    {"name": "network_audit.read", "resource": "network_audit", "action": "read", "description": "View the append-only device action log"},
 ]
 
 # New ISP base roles (global: company_id NULL) and their permission grants.
@@ -125,6 +145,9 @@ ISP_ROLES = {
             # the dashboard — read-only for base roles, full CRUD is
             # ADMIN/MANAGER-only (granted automatically in _seed_permissions).
             "insights.read",
+            # Cycle 5 Phase 1: field techs register CPEs and read ACS device state.
+            "acs_registrations.create", "acs_registrations.read",
+            "acs_devices.read",
         ],
     },
     "NOC": {
@@ -142,6 +165,13 @@ ISP_ROLES = {
             "task_states.read",
             "dashboard.read",
             "insights.read",
+            # Cycle 5 Phase 1: NOC owns the network-configuration surface.
+            "network_access.read", "network_access.create", "network_access.update", "network_access.delete",
+            "device_credentials.read", "device_credentials.create", "device_credentials.update", "device_credentials.delete",
+            "acs_devices.read", "acs_devices.action",
+            "acs_registrations.read", "acs_registrations.create", "acs_registrations.update", "acs_registrations.delete",
+            "provisioning_settings.read", "provisioning_settings.update",
+            "network_audit.read",
         ],
     },
     "WAREHOUSE": {
@@ -168,6 +198,9 @@ ISP_ROLES = {
             "provisioning.read",
             "dashboard.read",
             "insights.read",
+            # Cycle 5 Phase 1: subscriber-care read visibility into ACS state.
+            "acs_devices.read", "acs_registrations.read",
+            "network_audit.read", "provisioning_settings.read",
         ],
     },
     "BILLING": {

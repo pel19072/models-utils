@@ -67,13 +67,44 @@ class PlaybookStepValidation(BaseModel):
     expect_status: Optional[int] = None  # http driver
 
 
+class PlaybookPrecondition(BaseModel):
+    """Check-before-create guard (canon C15, doc 21 §3.6). The executor runs
+    the template/request as a read, evaluates `validation`, then:
+    when_met='skip' -> idempotent no-op (step already satisfied);
+    when_met='fail' -> abort the job (guard breached). The existing step-level
+    `validation` block stays the POSTcondition — there is no new postcondition
+    field (canon C15)."""
+    template: Optional[str] = None
+    request: Optional[Dict[str, Any]] = None
+    validation: PlaybookStepValidation  # REQUIRED: what "already satisfied" looks like
+    when_met: str = "skip"
+
+    @field_validator("when_met")
+    @classmethod
+    def validate_when_met(cls, v: str) -> str:
+        if v not in {"skip", "fail"}:
+            raise ValueError("precondition when_met must be 'skip' or 'fail'")
+        return v
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "PlaybookPrecondition":
+        if not self.template and not self.request:
+            raise ValueError("precondition requires 'template' or 'request'")
+        return self
+
+
 class PlaybookStep(BaseModel):
     name: str
     driver: str
     template: Optional[str] = None            # command-style drivers
-    request: Optional[Dict[str, Any]] = None  # http driver
-    validation: Optional[PlaybookStepValidation] = None
+    request: Optional[Dict[str, Any]] = None  # http / tr069 drivers
+    validation: Optional[PlaybookStepValidation] = None  # postcondition (canon C15)
     timeout_seconds: int = 30
+    # --- Cycle 5 Phase 1 additive fields (canon C15) ---
+    precondition: Optional[PlaybookPrecondition] = None
+    # per-step compensation (saga-lite, doc 21 §3.7). Depth-1 only: an
+    # on_failure step may not itself carry on_failure or a precondition.
+    on_failure: List["PlaybookStep"] = []
 
     @field_validator("driver")
     @classmethod
@@ -84,14 +115,35 @@ class PlaybookStep(BaseModel):
 
     @model_validator(mode="after")
     def validate_payload(self) -> "PlaybookStep":
+        # canon C15: tr069 accepts a `request` dict like http. It ALSO still
+        # accepts `template` so pre-Cycle-5 tr069 (stub) definitions stay valid
+        # — the relaxation only adds the request path, never removes template.
         if self.driver == "http":
             if not self.request:
                 raise ValueError(f"step '{self.name}': http driver requires 'request'")
+        elif self.driver == "tr069":
+            if not self.request and not self.template:
+                raise ValueError(
+                    f"step '{self.name}': tr069 driver requires 'request' or 'template'"
+                )
         elif not self.template:
             raise ValueError(f"step '{self.name}': driver '{self.driver}' requires 'template'")
         if not (1 <= self.timeout_seconds <= 600):
             raise ValueError(f"step '{self.name}': timeout_seconds must be 1-600")
+        # Compensation steps are depth-1: forbid nested on_failure/precondition.
+        for comp in self.on_failure:
+            if comp.on_failure:
+                raise ValueError(
+                    f"step '{self.name}': on_failure steps must not nest on_failure"
+                )
+            if comp.precondition is not None:
+                raise ValueError(
+                    f"step '{self.name}': on_failure steps must not carry a precondition"
+                )
         return self
+
+
+PlaybookStep.model_rebuild()  # resolve the self-referential on_failure forward ref
 
 
 class PlaybookDefinition(BaseModel):
@@ -141,6 +193,9 @@ class PlaybookOut(PlaybookBase):
     # Cycle 3 E4: the resolved FK id, alongside the string `target_category`
     # key (inherited from PlaybookBase, populated from the model's @property).
     target_category_id: Optional[UUID] = None
+    # Cycle 5 Phase 1 (canon C7): the playbook version whose dry-run last
+    # SUCCEEDED. A live job is accepted iff this equals `version`.
+    last_dry_run_version: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -156,6 +211,9 @@ class ProvisioningJobCreate(BaseModel):
     idempotency_key: Optional[str] = None
     max_attempts: int = 3
     scheduled_for: Optional[datetime] = None
+    # Cycle 5 Phase 1 (canon C7): a dry-run job never touches a device; a
+    # SUCCEEDED dry-run stamps playbook.last_dry_run_version.
+    dry_run: bool = False
 
 
 class ProvisioningJobOut(BaseModel):
@@ -179,5 +237,11 @@ class ProvisioningJobOut(BaseModel):
     integration_id: Optional[UUID] = None
     created_at: datetime
     playbook: Optional[PlaybookOut] = None
+    # --- Cycle 5 Phase 1 (network config) ---
+    dry_run: bool = False
+    pending_step_index: Optional[int] = None    # canon C2: parked step (PENDING_INFORM)
+    pending_task_ids: Optional[Any] = None      # GenieACS task ids polled on the 202 path
+    heartbeat_at: Optional[datetime] = None     # canon C11: lease reaper
+    device_lock_key: Optional[str] = None       # canon C11: per-device serialization key
 
     model_config = ConfigDict(from_attributes=True)

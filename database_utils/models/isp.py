@@ -16,12 +16,12 @@ docs/isp-platform/18-cycle2-design.md (D1-D10, entity merge + topology rework).
 """
 from sqlalchemy import (
     Column, String, Integer, BigInteger, Boolean, JSON, DateTime, ForeignKey, Enum, text,
-    Uuid, Float, Index, UniqueConstraint, CheckConstraint
+    Uuid, Float, Index, UniqueConstraint, CheckConstraint, LargeBinary
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column, validates
 
 from database_utils.database import Base
-from ..utils.timezone_utils import now_gt
+from ..utils.timezone_utils import now_gt, make_aware_gt
 # Cycle 2 D1 (entity merge): client_service billing reuses these EXISTING PG
 # enum types owned by recurring_order — zero new-enum risk (doc 18 §1b).
 from .crm import RecurrenceEnum, RecurringOrderStatus
@@ -126,12 +126,49 @@ class ProvisioningJobStatus(str, enum.Enum):
     FAILED = "FAILED"
     ROLLED_BACK = "ROLLED_BACK"
     CANCELLED = "CANCELLED"
+    # Cycle 5 Phase 1 (network config, canon C2, revision nc1a): the job parks
+    # when a TR-069 connection-request task returns 202; the worker slot is
+    # released and a poller settles the parked step (pending_step_index) once
+    # the inform arrives. Added to the PG enum via ALTER TYPE ADD VALUE in an
+    # autocommit block (nc1a) — see the migration docstring.
+    PENDING_INFORM = "PENDING_INFORM"
 
 
 class ProvisioningTrigger(str, enum.Enum):
     USER = "USER"
     WORKFLOW = "WORKFLOW"
     API = "API"
+
+
+# ---------------------------------------------------------------------------
+# Cycle 5 Phase 1 (network configuration / GenieACS-TR069). Plan:
+# docs/isp-platform/23-network-config-implementation-plan.md §2; canonical
+# conventions register C1–C20. Open, driver-bounded value sets are
+# CHECK-constrained strings, NOT PG enums (c3a/c3b precedent) — adding a value
+# is a plain transactional ALTER of the CHECK constraint, never the
+# ALTER TYPE ... ADD VALUE autocommit dance.
+# ---------------------------------------------------------------------------
+
+# canon C19: credential kinds — an OPEN set bounded by driver support (grows by
+# phase: tr069 P1; ssh/telnet/snmp P2; agent protocols P3).
+CREDENTIAL_KINDS = (
+    "SSH", "TELNET", "SNMP_COMMUNITY", "TR069_CONNECTION_REQUEST",
+    "HTTP_BASIC", "HTTP_BEARER", "WIREGUARD", "AGENT",
+)
+
+# canon C9: network-access transport shape.
+NETWORK_ACCESS_KINDS = ("acs", "olt")
+NETWORK_ACCESS_MODES = ("direct", "vpn", "tunnel")
+
+# canon C13: derived acs_device_registration ONLINE-vs-STALE threshold (a
+# registration that has not informed within this window reads STALE).
+ACS_STALE_AFTER_SECONDS = 900
+
+# SQL fragments reused by both the model CheckConstraints below and the
+# hand-written nc1a migration — kept as strings so both agree byte-for-byte.
+_CREDENTIAL_KIND_CHECK = "kind IN ('SSH','TELNET','SNMP_COMMUNITY','TR069_CONNECTION_REQUEST','HTTP_BASIC','HTTP_BEARER','WIREGUARD','AGENT')"
+_NETWORK_ACCESS_KIND_CHECK = "kind IN ('acs','olt')"
+_NETWORK_ACCESS_MODE_CHECK = "mode IN ('direct','vpn','tunnel')"
 
 
 class InsightChartType(str, enum.Enum):
@@ -223,6 +260,13 @@ class ClientService(Base):
     # Connection long-tail: {"pppoe_user": "...", "static_ip": "...", "onu_port": 2}
     connection_params = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
+    # Cycle 5 Phase 1 (functionality F1.4/F2.3, revision nc1a): learned network
+    # identifiers written by the provisioning executor at job settlement
+    # ({"ont_id": ..., "service_port_ids": [...], "vlan": ..., ...}). Read back
+    # as template variables by suspension/reactivation/deprovision playbooks —
+    # without it, teardown cannot know which service-ports to delete. JSON:
+    # shape varies by vendor/topology, read whole at render time (ADR-002).
+    provisioning_state = Column(JSON, nullable=True)
 
     # --- Cycle 2 D1 billing absorption (client_service absorbs recurring_order) ---
     # NULL recurrence/billing_status = billing not configured on this service
@@ -375,6 +419,11 @@ class DeviceType(Base):
     #   "required": false, "options": null, "unit": "dBm"}]
     attribute_schema = Column(JSON, nullable=True)
     default_attributes = Column(JSON, nullable=True)
+    # Cycle 5 Phase 1 (canon C6, revision nc1a): the device-group provisioning
+    # opt-out gate. Default TRUE — the tenant provisioning_settings row is the
+    # master switch; this flag lets a tenant exclude gear it never wants
+    # touched. Live jobs against a disabled type are rejected 409 at creation.
+    provisioning_enabled = Column(Boolean, nullable=False, default=True, server_default='true')
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -422,6 +471,10 @@ class InventoryItem(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
     serial_number = Column(String, nullable=True)
     mac_address = Column(String, nullable=True)
+    # Cycle 5 Phase 1 (canon C13/F1.2, revision nc1a): device-identity half that
+    # pairs with serial_number for the acs_device_registration match. Nullable
+    # — populated by UI/import tooling, no automated backfill from attributes.
+    oui = Column(String, nullable=True)
     status = Column(
         Enum(InventoryItemStatus), nullable=False,
         default=InventoryItemStatus.IN_STOCK, server_default='IN_STOCK'
@@ -659,6 +712,12 @@ class Playbook(Base):
     )
     is_active = Column(Boolean, nullable=False, default=True)
     definition = Column(JSON, nullable=False)
+    # Cycle 5 Phase 1 (canon C7, revision nc1a): stamped with `version` when a
+    # dry-run ProvisioningJob (dry_run=true) for that version SUCCEEDS. A live
+    # job is accepted iff last_dry_run_version == version, else 409
+    # DRY_RUN_REQUIRED. The render-only preview endpoint does NOT satisfy this
+    # gate; seeded system playbooks are exempt (SaaS-verified in CI).
+    last_dry_run_version = Column(Integer, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -703,6 +762,21 @@ class ProvisioningJob(Base):
         Enum(ProvisioningTrigger), nullable=False,
         default=ProvisioningTrigger.USER, server_default='USER'
     )
+    # --- Cycle 5 Phase 1 (network config, revision nc1a) ---
+    # canon C7: dry-run jobs never touch a device; a SUCCEEDED dry-run stamps
+    # playbook.last_dry_run_version.
+    dry_run = Column(Boolean, nullable=False, default=False, server_default='false')
+    # canon C2: the parked step to settle when the inform arrives (PENDING_INFORM).
+    pending_step_index = Column(Integer, nullable=True)
+    # GenieACS NBI task ids being polled on the 202 / connection-request path.
+    pending_task_ids = Column(JSON, nullable=True)
+    # canon C11: the worker stamps this while RUNNING; the lease reaper re-queues
+    # stale RUNNING jobs (Railway redeploys the worker on every merge). The
+    # reaper does NOT increment attempts (the claim path already does).
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+    # canon C11: per-device serialization key. The DB partial unique index below
+    # is the serialization authority; in-process locks are a local optimization.
+    device_lock_key = Column(String, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -739,13 +813,264 @@ class ProvisioningJob(Base):
             "status", "scheduled_for", "created_at",
             postgresql_where=text("status = 'QUEUED'"),
         ),
-        # Duplicate-enqueue guard (e.g. workflow retriggers).
+        # Duplicate-enqueue guard (e.g. workflow retriggers). Cycle 5 Phase 1
+        # (canon C2): the in-flight set now includes PENDING_INFORM so a parked
+        # job still de-duplicates re-enqueues. The predicate is dropped and
+        # recreated in revision nc1a (autogenerate cannot alter a partial index).
         Index(
             "uq_provisioning_job_company_idem",
             "company_id", "idempotency_key",
             unique=True,
-            postgresql_where=text("idempotency_key IS NOT NULL AND status IN ('QUEUED','RUNNING')"),
+            postgresql_where=text(
+                "idempotency_key IS NOT NULL AND status IN ('QUEUED','RUNNING','PENDING_INFORM')"
+            ),
         ),
+        # Cycle 5 Phase 1 (canon C11, revision nc1a): per-device serialization
+        # authority — at most one live job per device_lock_key across the
+        # in-flight set (QUEUED/RUNNING/PENDING_INFORM).
+        Index(
+            "uq_provisioning_job_device_lock",
+            "device_lock_key",
+            unique=True,
+            postgresql_where=text(
+                "device_lock_key IS NOT NULL AND status IN ('QUEUED','RUNNING','PENDING_INFORM')"
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network configuration (Cycle 5 Phase 1: TR-069 / GenieACS). Plan:
+# docs/isp-platform/23-network-config-implementation-plan.md §2. Envelope-
+# encrypted device secrets (device_credential, canon C1/C19), per-tenant
+# transport config (network_access, canon C9), serial/OUI -> tenant mapping
+# (acs_device_registration, canon C13), the tenant enable gate
+# (provisioning_settings, canon C6), and the append-only device audit trail
+# (device_action_log, canon C14 — append-only enforced by a Postgres trigger
+# created in revision nc1b, not here).
+# ---------------------------------------------------------------------------
+
+class NetworkAccess(Base):
+    """Per-tenant transport configuration (canon C9). Multiple rows per tenant,
+    keyed by `kind` (acs|olt); the transport resolver reads it keyed on
+    company_id + the target management address. `kind`/`mode` are
+    CHECK-constrained strings (not PG enums) per the c3a/c3b precedent —
+    transport modes are config-flavored and grow by phase. WireGuard keys/PSK
+    are NOT columns here (Phase 2+): they live in a device_credential row of
+    kind WIREGUARD bound via network_access_id (canon C19 — bindings on the
+    credential, no credential FK here)."""
+    __tablename__ = "network_access"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)   # CHECK: acs | olt
+    mode = Column(String, nullable=False, default="direct", server_default="direct")  # CHECK
+    is_default = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Which mgmt addresses this path serves (JSON list of CIDR strings); the
+    # resolver does longest-prefix match, else the default row. NULL on the
+    # default row. Atomic config value read whole — never queried per-element.
+    mgmt_subnets = Column(JSON, nullable=True)
+    # Phase-4 per-tenant ACS escape hatch — nullable from day one, unused until P4.
+    acs_base_url = Column(String, nullable=True)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    company = relationship("Company", back_populates="network_accesses")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_network_access_company_name"),
+        CheckConstraint(_NETWORK_ACCESS_KIND_CHECK, name="ck_network_access_kind"),
+        CheckConstraint(_NETWORK_ACCESS_MODE_CHECK, name="ck_network_access_mode"),
+        # Exactly one default path per tenant PER KIND (one default ACS, one
+        # default OLT).
+        Index(
+            "uq_network_access_default",
+            "company_id", "kind",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+
+class DeviceCredential(Base):
+    """Envelope-encrypted per-tenant device secret (canon C1/C19). AES-256-GCM
+    with a per-row DEK wrapped by a KEK held in Railway env vars
+    (database_utils.utils.crypto). `kind` is a CHECK-constrained string (open
+    set, CREDENTIAL_KINDS) — adding a kind is a plain ALTER of the CHECK, never
+    an ALTER TYPE. Secrets never round-trip: the Out schema exposes only
+    has_secret + fingerprint (last 4).
+
+    Binding FKs live ON this row (canon C19): resolution order at execution is
+    inventory_item > device_type > network_access default. No other table
+    carries an FK pointing at a credential."""
+    __tablename__ = "device_credential"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)             # CHECK: CREDENTIAL_KINDS
+    username = Column(String, nullable=True)          # display-safe, NOT secret
+    # --- envelope encryption (all opaque to SQL; canon C1 column names) ---
+    secret_ciphertext = Column(LargeBinary, nullable=False)  # 12-byte nonce prefixed
+    dek_wrapped = Column(LargeBinary, nullable=False)        # AES-256-GCM(KEK, DEK)
+    kek_id = Column(String, nullable=False)                  # key id into CREDENTIALS_KEKS
+    # last 4 chars of a SHA-256 over the plaintext, computed at write time —
+    # display-safe, lets the UI confirm which secret is stored without exposing it.
+    fingerprint = Column(String, nullable=True)
+    last_rotated_at = Column(DateTime(timezone=True), nullable=True)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # --- bindings (canon C19: binding FKs live ON the credential row) ---
+    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    device_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("device_type.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    network_access_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("network_access.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    company = relationship("Company", back_populates="device_credentials")
+    inventory_item = relationship("InventoryItem")
+    device_type = relationship("DeviceType")
+    network_access = relationship("NetworkAccess")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_device_credential_company_name"),
+        CheckConstraint(_CREDENTIAL_KIND_CHECK, name="ck_device_credential_kind"),
+    )
+
+    @property
+    def has_secret(self) -> bool:
+        """Out-schema surface (canon C19): a credential always stores a secret,
+        but expose the boolean explicitly so the API never implies the
+        ciphertext could be read back."""
+        return self.secret_ciphertext is not None
+
+
+class AcsDeviceRegistration(Base):
+    """Serial/OUI -> tenant mapping (canon C13): the tenant-stamping keystone.
+    At first inform the GenieACS provision script calls back into Uplink; we
+    look up the announcing device here and stamp the tag `t-{company_id}`.
+
+    `company_id` is NULLABLE (NULL = QUARANTINED: informed without
+    pre-registration, awaiting superadmin assignment). The (oui, serial_number)
+    unique is GLOBAL (no company_id) so two tenants can never claim the same
+    physical CPE — cross-tenant duplicate pre-registration is a 409 in the
+    router. Status is DERIVED (no enum column), see `state`."""
+    __tablename__ = "acs_device_registration"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True
+    )
+    serial_number = Column(String, nullable=False)
+    oui = Column(String, nullable=True)
+    first_inform_at = Column(DateTime(timezone=True), nullable=True)
+    last_inform_at = Column(DateTime(timezone=True), nullable=True)
+    genieacs_device_id = Column(String, nullable=True)  # "OUI-ProductClass-Serial"
+    # per-device CWMP connection-request credentials (canon C13): issued at
+    # bootstrap, used by GenieACS connection requests — never blank/blank.
+    # Envelope-encrypted via crypto.py (AAD = f"{company_id}:{registration_id}").
+    cwmp_cr_username = Column(String, nullable=True)
+    cwmp_cr_secret_ciphertext = Column(LargeBinary, nullable=True)
+    cwmp_cr_dek_wrapped = Column(LargeBinary, nullable=True)
+    cwmp_cr_kek_id = Column(String, nullable=True)
+
+    company = relationship("Company", back_populates="acs_device_registrations")
+    inventory_item = relationship("InventoryItem")
+
+    __table_args__ = (
+        UniqueConstraint("oui", "serial_number", name="uq_acs_registration_identity"),
+    )
+
+    @property
+    def state(self) -> str:
+        """Derived status (canon C13) — no enum column, matching the
+        ServiceSuspension.reactivated_at NULL-episode pattern. Order matters:
+        a quarantined device may already have informed, so company_id wins."""
+        if self.company_id is None:
+            return "QUARANTINED"
+        if self.first_inform_at is None:
+            return "PRE_REGISTERED"
+        if self.last_inform_at is None:
+            return "STALE"
+        age = (now_gt() - make_aware_gt(self.last_inform_at)).total_seconds()
+        return "ONLINE" if age <= ACS_STALE_AFTER_SECONDS else "STALE"
+
+
+class ProvisioningSettings(Base):
+    """Tenant provisioning enable gate — a singleton per tenant (canon C6).
+    Absence of a row means DISABLED (fail-safe); the row is created lazily /
+    by tenant-onboarding automation, never seeded. Not a column on `company`:
+    auth-erp owns that table and this is ISP-module config."""
+    __tablename__ = "provisioning_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    # master switch, default OFF (fail-safe).
+    enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    # tenant default inform interval (seconds) pushed to CPE presets; NULL = use
+    # the platform default.
+    default_inform_interval = Column(Integer, nullable=True)
+
+    company = relationship("Company", back_populates="provisioning_settings")
+
+
+class DeviceActionLog(Base):
+    """Append-only device audit trail (canon C14). Distinct from auth's
+    AuditLog (super-admin actions) and EquipmentEvent (stock movements). No
+    `updated_at` — rows are immutable. Append-only is enforced AT THE DATABASE
+    by a BEFORE UPDATE OR DELETE trigger raising an exception, created in the
+    hand-written revision nc1b (not here). The app layer exposes read-only
+    list/get; writes happen exclusively in the worker/backend service modules."""
+    __tablename__ = "device_action_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_kind = Column(String, nullable=False)          # user | automation | system
+    device_kind = Column(String, nullable=True)          # cpe | olt | ...
+    device_identity = Column(String, nullable=True)      # serial or host
+    action = Column(String, nullable=False)              # 'ont.add', 'cpe.factory_reset', ...
+    before_data = Column(JSON, nullable=True)            # secret-redacted before insert
+    after_data = Column(JSON, nullable=True)
+    provisioning_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("provisioning_job.id", ondelete="SET NULL"), nullable=True
+    )
+    detail = Column(JSON, nullable=True)
+
+    company = relationship("Company", back_populates="device_action_logs")
+    actor = relationship("User", foreign_keys=[actor_user_id])
+    provisioning_job = relationship("ProvisioningJob")
+
+    __table_args__ = (
+        Index("ix_device_action_log_company_created", "company_id", "created_at"),
     )
 
 
