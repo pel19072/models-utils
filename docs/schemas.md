@@ -33,6 +33,7 @@ Validate API inputs and serialize API outputs with a single shared schema defini
 | `task_state.py` | `TaskStateOut`, `TaskStateCreate`, `TaskStateUpdate` |
 | `task_template.py` | `TaskTemplateOut`, `TaskTemplateCreate` |
 | `workflow.py` | `WorkflowOut`, `WorkflowCreate`, `WorkflowTriggerOut`, `WorkflowStepOut`, `WorkflowExecutionOut` |
+| `insight.py` | `InsightDashboardOut/Create/Update`, `InsightChartOut/Create/Update`, `InsightChartSpec` (ISP Insights, Cycle 4) |
 | `pagination.py` | `PaginatedResponse[T]` — generic paginated wrapper |
 | `requests.py` | `LoginRequest`, `SignupRequest`, `TokenRefreshRequest` |
 
@@ -46,6 +47,7 @@ Validate API inputs and serialize API outputs with a single shared schema defini
 - `PaginatedResponse[T]`: generic wrapper with `items: list[T]`, `total`, `page`, `page_size`, `total_pages`
 - Pydantic v2 validators used for field coercion and constraint checking
 - UUID fields serialized as strings in JSON responses
+- `insight.py` (Cycle 4): `InsightChartSpec` carries `entity`, `measure`, optional `dimension`, and optional `filters` — `filters` is a **list** of clause objects (`{column, op, value}`), the same shape backend-erp's `/insights/query` engine accepts, so a saved chart's `spec` replays verbatim. `InsightDashboardCreate` accepts nested `charts`; `InsightDashboardOut` embeds its `charts` list. `InsightChartOut` exposes `dashboard_id` (no `company_id` — tenant scope derives from the parent dashboard).
 
 ## Environment Variables
 None — schemas are pure Python/Pydantic.
