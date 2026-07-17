@@ -12,7 +12,7 @@ A playbook definition is uploadable JSON (or YAML converted client-side):
   "steps": [
     {
       "name": "register-onu",
-      "driver": "simulator",           // simulator | http | ssh | telnet | snmp | tr069
+      "driver": "simulator",           // simulator | http | ssh | telnet | snmp | tr069 | ping
       "template": "interface gpon 0/1\\n ont add {{onu_serial}} vlan {{vlan}}",
       "request": null,                  // http driver: {"method","path","headers","body"}
       "validation": {"expect_contains": "success", "expect_status": 200},
@@ -34,7 +34,10 @@ from database_utils.models.isp import (
     ProvisioningTrigger,
 )
 
-PLAYBOOK_DRIVERS = {"simulator", "http", "ssh", "telnet", "snmp", "tr069"}
+# Cycle 7 (doc 25 §4.3): "ping" joins the set — backend-erp's connectivity
+# probe driver (provisioning/drivers/ping.py), used by the per-company
+# core_connectivity_check system playbooks (doc 25 §5.1).
+PLAYBOOK_DRIVERS = {"simulator", "http", "ssh", "telnet", "snmp", "tr069", "ping"}
 _VAR_TYPES = {"TEXT", "NUMBER", "BOOLEAN"}
 
 
