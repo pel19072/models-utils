@@ -1122,10 +1122,18 @@ def _find_queued_or_running_provisioning_job(db: Session, company_id: UUID, idem
     # Pre-check instead of catching the unique violation: a mid-workflow
     # rollback would discard this run's execution audit rows. A genuine
     # race still trips uq_provisioning_job_company_idem and fails the step.
+    # Cycle 7 (doc 25 §6.3): PENDING_INFORM joined the in-flight set in nc1a's
+    # uq_provisioning_job_company_idem predicate — this pre-check must match
+    # it, or a re-enqueue while a job is parked trips the unique index and
+    # fails the step instead of deduping.
     return db.query(ProvisioningJob).filter(
         ProvisioningJob.company_id == company_id,
         ProvisioningJob.idempotency_key == idempotency_key,
-        ProvisioningJob.status.in_([ProvisioningJobStatus.QUEUED, ProvisioningJobStatus.RUNNING]),
+        ProvisioningJob.status.in_([
+            ProvisioningJobStatus.QUEUED,
+            ProvisioningJobStatus.RUNNING,
+            ProvisioningJobStatus.PENDING_INFORM,
+        ]),
     ).first()
 
 

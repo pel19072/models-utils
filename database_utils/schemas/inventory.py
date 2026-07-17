@@ -8,7 +8,22 @@ from database_utils.models.isp import (
     InventoryItemStatus,
     InventoryItemCondition,
     EquipmentEventType,
+    CLI_PROTOCOLS,
 )
+
+
+def _normalize_cli_protocol(v: Optional[str]) -> Optional[str]:
+    """Cycle 7 (doc 25 §2.3): cli_protocol is a CHECK-constrained string on
+    the model (CLI_PROTOCOLS, lowercase driver keys) — normalize + validate
+    here so the DB CHECK never fires as a raw 500."""
+    if v is None:
+        return v
+    p = v.strip().lower()
+    if not p:
+        return None
+    if p not in CLI_PROTOCOLS:
+        raise ValueError(f"cli_protocol must be one of {list(CLI_PROTOCOLS)} (got '{v}')")
+    return p
 
 
 # --- Attribute schema entries (device_type.attribute_schema) ---
@@ -57,6 +72,9 @@ class DeviceTypeBase(BaseModel):
     default_attributes: Optional[Dict[str, Any]] = None
     # Cycle 5 Phase 1 (canon C6): device-group provisioning opt-out gate.
     provisioning_enabled: bool = True
+    # Cycle 7 (doc 25 §2.2): netmiko platform id for the generic CLI drivers;
+    # NULL -> 'generic' / 'generic_telnet'. Free string (open netmiko set).
+    cli_platform: Optional[str] = None
 
 
 class DeviceTypeCreate(DeviceTypeBase):
@@ -72,6 +90,7 @@ class DeviceTypeUpdate(BaseModel):
     attribute_schema: Optional[List[AttributeDefinition]] = None
     default_attributes: Optional[Dict[str, Any]] = None
     provisioning_enabled: Optional[bool] = None
+    cli_platform: Optional[str] = None
 
 
 class DeviceTypeOut(DeviceTypeBase):
@@ -129,6 +148,16 @@ class InventoryItemBase(BaseModel):
     warranty_until: Optional[datetime] = None
     cost: Optional[float] = None
     notes: Optional[str] = None
+    # --- Cycle 7 management surface (doc 25 §2.3) — how the CLI drivers reach
+    # a CORE-tier device. mgmt_port NULL -> driver default (22 ssh / 23 telnet).
+    mgmt_host: Optional[str] = None
+    mgmt_port: Optional[int] = None
+    cli_protocol: Optional[str] = None
+
+    @field_validator("cli_protocol")
+    @classmethod
+    def validate_cli_protocol(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_cli_protocol(v)
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -149,6 +178,17 @@ class InventoryItemUpdate(BaseModel):
     warranty_until: Optional[datetime] = None
     cost: Optional[float] = None
     notes: Optional[str] = None
+    # Cycle 7 (doc 25 §2.3): mgmt_* are PATCHable through the existing
+    # inventory PATCH (no dedicated endpoint); the mgmt_last_check_* stamps
+    # are deliberately absent — worker-owned, read-only.
+    mgmt_host: Optional[str] = None
+    mgmt_port: Optional[int] = None
+    cli_protocol: Optional[str] = None
+
+    @field_validator("cli_protocol")
+    @classmethod
+    def validate_cli_protocol(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_cli_protocol(v)
 
 
 class InventoryItemOut(InventoryItemBase):
@@ -160,6 +200,10 @@ class InventoryItemOut(InventoryItemBase):
     created_at: datetime
     device_type: Optional[DeviceTypeOut] = None
     warehouse: Optional[WarehouseOut] = None
+    # Cycle 7 (doc 25 §2.3): worker-stamped connectivity-check result — read-
+    # only (stamped when a core_connectivity_check job reaches terminal state).
+    mgmt_last_check_at: Optional[datetime] = None
+    mgmt_last_check_ok: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 

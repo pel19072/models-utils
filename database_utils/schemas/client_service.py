@@ -77,6 +77,12 @@ class ClientServiceOut(ClientServiceBase):
     # written by the provisioning executor at settlement, read back by
     # suspension/reactivation/deprovision playbooks. Read-only here.
     provisioning_state: Optional[Dict[str, Any]] = None
+    # Cycle 7 (doc 25 §2.5): install state machine, separate from billing
+    # `status`. Read-only — written exclusively by backend-erp's
+    # recompute_install_state (link/unlink CPE, acs_sync, worker settlement);
+    # deliberately NOT on ClientServiceUpdate.
+    install_state: str = "NOT_INSTALLED"
+    installed_at: Optional[datetime] = None
 
     # --- Billing (read-only here; settable via ClientServiceCreate or the
     # dedicated ClientServiceBillingUpdate / generate / regenerate-charges

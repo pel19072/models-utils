@@ -17,6 +17,8 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 
+from database_utils.models.isp import DEVICE_CATEGORY_TIERS
+
 # Key format per appendix admin-categories-sidebar §2: uppercase snake,
 # 2-51 chars, first char a letter (mirrors the topology purpose pattern's
 # shape but is a distinct constant — categories and purposes are unrelated
@@ -24,11 +26,33 @@ from datetime import datetime
 _KEY_PATTERN = r'^[A-Z][A-Z0-9_]{1,50}$'
 
 
+def _normalize_tier(v: Optional[str]) -> Optional[str]:
+    """Cycle 7 (doc 25 §2.1): tier is a CHECK-constrained string on the model
+    (DEVICE_CATEGORY_TIERS) — normalize + validate here so the router never
+    hands the DB a value the CHECK would reject with a raw 500."""
+    if v is None:
+        return v
+    t = v.strip().upper()
+    if not t:
+        return None
+    if t not in DEVICE_CATEGORY_TIERS:
+        raise ValueError(f"tier must be one of {list(DEVICE_CATEGORY_TIERS)} (got '{v}')")
+    return t
+
+
 class DeviceCategoryBase(BaseModel):
     name: str
     sort_order: int = 0
     icon: Optional[str] = None
     is_active: bool = True
+    # Cycle 7 (doc 25 §2.1): CORE/EDGE axis; NULL = passives/unclassified.
+    # SaaS-admin editable like name/icon (key stays immutable).
+    tier: Optional[str] = None
+
+    @field_validator('tier')
+    @classmethod
+    def validate_tier(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_tier(v)
 
 
 class DeviceCategoryCreate(DeviceCategoryBase):
@@ -52,6 +76,14 @@ class DeviceCategoryUpdate(BaseModel):
     sort_order: Optional[int] = None
     icon: Optional[str] = None
     is_active: Optional[bool] = None
+    # Cycle 7 (doc 25 §2.1): tier IS editable (unlike key) — a super-admin may
+    # classify custom categories or clear a tier back to NULL (passives).
+    tier: Optional[str] = None
+
+    @field_validator('tier')
+    @classmethod
+    def validate_tier(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_tier(v)
 
 
 class DeviceCategoryOut(DeviceCategoryBase):

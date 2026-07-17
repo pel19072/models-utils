@@ -171,6 +171,37 @@ _NETWORK_ACCESS_KIND_CHECK = "kind IN ('acs','olt')"
 _NETWORK_ACCESS_MODE_CHECK = "mode IN ('direct','vpn','tunnel')"
 
 
+# ---------------------------------------------------------------------------
+# Cycle 7 (core network configuration, doc 25 §2, revision nc2a_core_config).
+# Same c3a/c3b/nc1a precedent: every new value set is a CHECK-constrained
+# string, never a PG enum. The SQL fragments below are shared byte-for-byte
+# with the hand-written nc2a migration (the _CREDENTIAL_KIND_CHECK pattern).
+# ---------------------------------------------------------------------------
+
+# doc 25 §2.1: the CORE/EDGE axis on device categories. CORE = shared
+# infrastructure devices (one physical device serves many subscribers, pinned
+# per topology position via topology_device_type.inventory_item_id); EDGE =
+# per-subscriber CPE resolved from the client's assigned inventory. NULL =
+# passives/unclassified (splitters, patch panels, ...).
+DEVICE_CATEGORY_TIERS = ("CORE", "EDGE")
+
+# doc 25 §2.3: transports the generic netmiko CLI drivers speak (Phase 2).
+# Lowercase on purpose — these are driver keys, matching the playbook step
+# `driver` values, not display strings.
+CLI_PROTOCOLS = ("ssh", "telnet")
+
+# doc 25 §2.5: subscriber install state machine on client_service — separate
+# from billing `status` by founder decision (2026-07-17 #2). Monotonic upward
+# except unlink-cpe may regress to NOT_INSTALLED; first INSTALLED stamps
+# installed_at and auto-transitions status PENDING_INSTALL -> ACTIVE
+# (backend-erp utils/install_state.py owns the recompute).
+INSTALL_STATES = ("NOT_INSTALLED", "IN_PROGRESS", "INSTALLED")
+
+_DEVICE_CATEGORY_TIER_CHECK = "tier IN ('CORE','EDGE')"
+_CLI_PROTOCOL_CHECK = "cli_protocol IN ('ssh','telnet')"
+_INSTALL_STATE_CHECK = "install_state IN ('NOT_INSTALLED','IN_PROGRESS','INSTALLED')"
+
+
 class InsightChartType(str, enum.Enum):
     NUMBER = "NUMBER"
     BAR = "BAR"
@@ -267,6 +298,18 @@ class ClientService(Base):
     # without it, teardown cannot know which service-ports to delete. JSON:
     # shape varies by vendor/topology, read whole at render time (ADR-002).
     provisioning_state = Column(JSON, nullable=True)
+    # Cycle 7 (doc 25 §2.5, revision nc2a_core_config): install state machine,
+    # deliberately SEPARATE from billing `status` (founder decision 2026-07-17
+    # #2). CHECK-constrained string (INSTALL_STATES), never a PG enum. Written
+    # exclusively by backend-erp's recompute_install_state — routers/workflows
+    # must not PATCH it directly (not exposed on Update schemas).
+    install_state = Column(
+        String(20), nullable=False,
+        default=INSTALL_STATES[0], server_default='NOT_INSTALLED'
+    )
+    # Stamped on the FIRST transition to INSTALLED (never cleared by a later
+    # regression to NOT_INSTALLED — a historical fact, like activation_date).
+    installed_at = Column(DateTime(timezone=True), nullable=True)
 
     # --- Cycle 2 D1 billing absorption (client_service absorbs recurring_order) ---
     # NULL recurrence/billing_status = billing not configured on this service
@@ -329,6 +372,9 @@ class ClientService(Base):
             "ix_client_service_billing_due",
             "billing_status", "company_id", "next_generation_date",
         ),
+        # Cycle 7 (doc 25 §2.5): services-page install-state badge filter scan.
+        Index("ix_client_service_company_install_state", "company_id", "install_state"),
+        CheckConstraint(_INSTALL_STATE_CHECK, name="ck_client_service_install_state"),
     )
 
     @validates("status")
@@ -393,8 +439,18 @@ class DeviceCategory(Base):
     icon = Column(String(50), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default='true')
     is_system = Column(Boolean, nullable=False, default=False, server_default='false')
+    # Cycle 7 (doc 25 §2.1, revision nc2a_core_config): the CORE/EDGE axis.
+    # CHECK-constrained string (DEVICE_CATEGORY_TIERS), NULL = passives/
+    # unclassified. SaaS-admin editable like name/icon (key stays immutable);
+    # nc2a backfills CORE <- ROUTER/SWITCH/OLT, EDGE <- ONU/CPE_ROUTER/
+    # ACCESS_POINT by key.
+    tier = Column(String(10), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
+
+    __table_args__ = (
+        CheckConstraint(_DEVICE_CATEGORY_TIER_CHECK, name="ck_device_category_tier"),
+    )
 
 
 class DeviceType(Base):
@@ -424,6 +480,12 @@ class DeviceType(Base):
     # master switch; this flag lets a tenant exclude gear it never wants
     # touched. Live jobs against a disabled type are rejected 409 at creation.
     provisioning_enabled = Column(Boolean, nullable=False, default=True, server_default='true')
+    # Cycle 7 (doc 25 §2.2, revision nc2a_core_config): netmiko platform id
+    # for the generic CLI drivers ('huawei_smartax', 'cisco_ios',
+    # 'mikrotik_routeros', ...). NULL -> drivers fall back to 'generic' /
+    # 'generic_telnet'. Free string on purpose (netmiko's platform list is an
+    # open set that grows with netmiko releases — never CHECK-bound it).
+    cli_platform = Column(String(50), nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -491,6 +553,17 @@ class InventoryItem(Base):
     # Cycle 2). NULL stays NULL in the backfill — doc 16 §2.5.3.
     cost_cents = Column(BigInteger, nullable=True)
     notes = Column(String, nullable=True)
+    # --- Cycle 7 management surface (doc 25 §2.3, revision nc2a_core_config) ---
+    # How the CLI drivers reach a CORE-tier device. mgmt_port NULL -> driver
+    # default (22 ssh / 23 telnet); cli_protocol is a CHECK-constrained string
+    # (CLI_PROTOCOLS) selecting which driver the connectivity probe uses.
+    mgmt_host = Column(String, nullable=True)
+    mgmt_port = Column(Integer, nullable=True)
+    cli_protocol = Column(String, nullable=True)
+    # Stamped by the provisioning worker when a core_connectivity_check job
+    # reaches a terminal state (ok = status SUCCEEDED). Read-only in the API.
+    mgmt_last_check_at = Column(DateTime(timezone=True), nullable=True)
+    mgmt_last_check_ok = Column(Boolean, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
@@ -528,6 +601,8 @@ class InventoryItem(Base):
             postgresql_where=text("serial_number IS NOT NULL"),
         ),
         Index("ix_inventory_item_company_status", "company_id", "status"),
+        # Cycle 7 (doc 25 §2.3).
+        CheckConstraint(_CLI_PROTOCOL_CHECK, name="ck_inventory_item_cli_protocol"),
     )
 
 
@@ -642,9 +717,20 @@ class TopologyDeviceType(Base):
     device_type_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("device_type.id", ondelete="RESTRICT"), nullable=False
     )
+    # Cycle 7 (doc 25 §2.4, revision nc2a_core_config): pins the concrete
+    # SHARED device serving this chain position (e.g. this topology's OLT).
+    # Pinned items are exempt from client/service candidate matching in
+    # provisioning resolution (§3 — shared infrastructure, not CPE). SET NULL:
+    # retiring the item must never block, resolution then fails visibly with
+    # MISSING_DEVICE. Same-company + device_type match + CORE-tier category
+    # are router/schema validation, not DB constraints (doc 25 §2.4).
+    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     topology = relationship("Topology", back_populates="device_types")
     device_type = relationship("DeviceType")
+    inventory_item = relationship("InventoryItem")
 
     __table_args__ = (
         UniqueConstraint("topology_id", "position", name="uq_topology_position"),
