@@ -22,7 +22,7 @@ ISP platform. Start with the [repo README](../README.md) for a quickstart.
 | [auth-models.md](auth-models.md) | Auth, tenancy, RBAC, email/password tokens, and SaaS-billing models |
 | [crm-models.md](crm-models.md) | CRM models: clients, orders, payments ledger, tasks, custom fields, integrations |
 | [isp-models.md](isp-models.md) | ISP vertical models: service plans, client services, inventory, topology, playbooks, provisioning jobs |
-| [network-models.md](network-models.md) | Network config models (Cycle 5): GenieACS/TR-069 tables, ProvisioningJob extensions, PENDING_INFORM status |
+| [network-models.md](network-models.md) | Network config models (Cycles 5+7): GenieACS/TR-069 tables, ProvisioningJob extensions, PENDING_INFORM status; Cycle-7 core-config columns (tiers, mgmt surface, topology pinning, install state) |
 | [workflow-models.md](workflow-models.md) | Workflow automation models: templates, triggers, step DAG, executions |
 | [workflow-engine.md](workflow-engine.md) | Engine semantics: trigger matching, DAG execution, provisioning resolution |
 | [schemas.md](schemas.md) | The 36 Pydantic v2 schema modules |

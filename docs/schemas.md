@@ -2,7 +2,7 @@
 
 ## Description
 
-Pydantic v2 request/response schemas for all models — 36 modules in
+Pydantic v2 request/response schemas for all models — 42 modules in
 `database_utils/schemas/`, shared between auth-erp and backend-erp to keep API
 contracts consistent (frontend-erp consumes the resulting JSON shapes via the
 backend proxies).
@@ -22,7 +22,8 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 | Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login/Signup), `email_verification`, `password_reset` |
 | SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice`, `tier_change_request` |
 | CRM | `client`, `custom_field`, `order`, `order_item`, `payment`, `invoice`, `product` (legacy), `recurring_order` (legacy), `task`, `task_state`, `task_template`, `integration` |
-| ISP | `service_plan`, `client_service`, `inventory`, `topology`, `playbook`, `device_category` |
+| ISP | `service_plan`, `client_service`, `inventory`, `topology`, `playbook`, `device_category`, `insight` (Cycle 4) |
+| Network config (Cycle 5) | `acs_registration`, `device_credential`, `network_access`, `provisioning_settings` |
 | Workflow | `workflow`, `workflow_template` |
 | Generic | `pagination` — `PaginatedResponse[T]` wrapper |
 
@@ -47,6 +48,29 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 - `order_item.product_id` is deprecated but still honored (catalog-merge
   rollback window — see [limitations.md](limitations.md))
 - UUID fields serialize as strings in JSON responses
+
+### Cycle 7 (core config, doc 25) — extensions to existing modules
+
+- `device_category`: `tier` on Base/Update with a normalizing validator
+  (strip/upper, must be in `DEVICE_CATEGORY_TIERS`, empty → None) so the DB
+  CHECK never fires as a raw 500
+- `inventory`: `DeviceType*.cli_platform` (free string); `InventoryItem*`
+  mgmt surface — `mgmt_host`/`mgmt_port`/`cli_protocol` (normalizing validator
+  against `CLI_PROTOCOLS`) PATCHable via the existing inventory update; the
+  worker-stamped `mgmt_last_check_at`/`mgmt_last_check_ok` appear **only** on
+  `InventoryItemOut` (read-only)
+- `topology`: `TopologyChainEntryIn` — richer per-position write shape carrying
+  `inventory_item_id` (pinned shared device). `TopologyCreate` requires exactly
+  one of `device_type_ids`/`chain`; `TopologyUpdate` at most one; both expose a
+  normalized `chain_entries()` helper. `TopologyChainEntryOut` gains
+  `inventory_item_id`/`inventory_item_serial`/`category_tier` (router-populated)
+- `playbook`: `PLAYBOOK_DRIVERS` gains `ping`; `PlaybookStep.target_item_id`
+  (and the same on `PlaybookPrecondition`) — an inventory_item id or a
+  `{{variable}}` rendered by the executor, declared so it round-trips through
+  `model_dump()` instead of being silently dropped
+- `client_service`: `ClientServiceOut.install_state`/`installed_at` — read-only
+  (deliberately absent from `ClientServiceUpdate`; written only by backend-erp's
+  `recompute_install_state`)
 
 ## Environment Variables
 

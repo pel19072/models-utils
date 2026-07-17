@@ -2,7 +2,7 @@
 
 ## Description
 
-Shared utility modules in `database_utils/utils/` (20 modules) plus the
+Shared utility modules in `database_utils/utils/` (21 modules) plus the
 supporting `dependencies/` and `middleware/` packages. The two largest —
 the workflow engine and provisioning resolution — have their own page:
 [workflow-engine.md](workflow-engine.md).
@@ -17,8 +17,8 @@ library, never the reverse).
 
 | Module | Purpose |
 |------|---------|
-| `workflow_engine.py` (57.7 KB) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) — see [workflow-engine.md](workflow-engine.md) |
-| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp in Cycle 3) |
+| `workflow_engine.py` (58 KB) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) — see [workflow-engine.md](workflow-engine.md) |
+| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp in Cycle 3; Cycle 7 adds pinned positions + `device{i}_category_tier`) |
 | `jwt_utils.py` | HS256 JWT create/decode. Env: `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE` (minutes, default 1440), `REFRESH_TOKEN_EXPIRE`. **Fails fast if `SECRET_KEY` is unset when `ENVIRONMENT=production`**; dev fallback otherwise |
 | `permission_utils.py` | `PermissionChecker` and require-permission FastAPI dependencies |
 | `audit_utils.py` | `log_create_operation` / `log_update_operation` / `log_delete_operation` / `log_custom_operation` helpers writing `AuditLog` rows |
