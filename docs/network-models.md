@@ -77,6 +77,33 @@ Also in Cycle 7 (same revision cycle, no DDL):
   while NO row has a tier yet, so super-admin tier edits (including clear-to-NULL)
   survive every re-seed.
 
+## Cycle 8 (c8a_playbook_topology) — topology-owned playbooks (doc 26 §2)
+
+Playbooks become **topology-owned**: a playbook is authored inside a topology,
+one per purpose, and the topology supplies the device context (which/how many
+devices, of what category). The old vendor/category targeting no longer makes
+sense. Revision `c8a_playbook_topology` (head, on `nc2a_core_config`) is
+hand-written, guarded/idempotent with in-migration assertions.
+
+| Table | Change | Purpose |
+|---|---|---|
+| `playbook` | **DROP** `target_vendor` and `target_category_id` (+ FK `fk_playbook_target_category_id` from `c3b`) | Vendor/category targeting removed — the topology supplies device context now. Destructive, but consuming backend/frontend ship in the same release (Cycles 1–8 have not reached prod). The `target_category_ref` relationship and the `target_category` @property are removed from the model too |
+| `playbook` | **ADD** `topology_id` (UUID FK → `topology.id`, **ON DELETE CASCADE**, nullable, indexed `ix_playbook_topology_id`) | NULL = a system/global playbook (the seeded per-company `core_connectivity_check_*`); non-NULL = an inline playbook owned by that topology's editor (one per purpose). No backfill — existing playbooks stay NULL until the topology editor re-saves; they keep working via `TopologyPlaybook` meanwhile |
+
+**Orphan-free delete is not the CASCADE alone.** CASCADE removes an inline
+playbook when its topology is deleted, but `provisioning_job.playbook_id` is
+`ON DELETE RESTRICT` (NOT NULL, and it carries no topology FK, so a job is never
+cascaded away). A topology whose inline playbook has ever run a job — including a
+Simulate/dry-run — is deletable only after the backend topology-delete path first
+clears (deletes/detaches) the dependent `provisioning_job` rows. The RESTRICT
+backstop is deliberate: it preserves job history. The "inline playbook dies with
+its topology" contract is enforced by the delete path, not by the FK alone.
+
+Schema changes (`schemas/playbook.py`) — see [schemas.md](schemas.md): drop
+`target_vendor`/`target_category`/`target_category_id`; add `PlaybookOut.topology_id`
+and `PlaybookStep.target_position` (1-based chain position, renderer derives
+`{{device<N>_item_id}}` when `target_item_id` is unset — no resolution change).
+
 ## Open value sets (CHECK-constrained strings, not PG enums)
 
 Following the c3a/c3b precedent, driver-bounded value sets are CHECK-constrained
