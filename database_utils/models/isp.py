@@ -792,10 +792,20 @@ class Playbook(Base):
     # Cycle 8 (doc 26 §2, revision c8a_playbook_topology): playbooks are now
     # topology-owned. NULL = a system/global playbook (the seeded per-company
     # core_connectivity_check_*); non-NULL = an inline playbook authored inside
-    # that topology's editor, one per purpose. CASCADE: the inline playbook
-    # dies with its topology (no orphans). The old target_vendor/
+    # that topology's editor, one per purpose. The old target_vendor/
     # target_category_id targeting columns are gone — the topology supplies the
     # device context now (which/how many devices, of what category).
+    #
+    # CASCADE removes an inline playbook when its topology is deleted, but it is
+    # NOT sufficient on its own to guarantee an orphan-free delete: a
+    # provisioning_job references playbook.id ON DELETE RESTRICT (NOT NULL, and
+    # it has no topology FK, so it is never cascaded away). A topology whose
+    # inline playbook has ever run a job — including a Simulate/dry-run — is
+    # therefore deletable only after the backend topology-delete path first
+    # clears (deletes/detaches) the dependent provisioning_job rows. That
+    # RESTRICT backstop is deliberate (it preserves job history); the "inline
+    # playbook dies with its topology" contract is enforced by the delete path,
+    # not by this FK alone.
     topology_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=True, index=True
     )

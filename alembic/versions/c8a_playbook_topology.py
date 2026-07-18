@@ -15,7 +15,13 @@ vendor/category targeting columns no longer make sense.
   - ADD playbook.topology_id UUID FK -> topology.id ON DELETE CASCADE,
     nullable, indexed (ix_playbook_topology_id). NULL = a system/global
     playbook (the seeded per-company core_connectivity_check_*); non-NULL = an
-    inline playbook owned by that topology (dies with it on delete).
+    inline playbook owned by that topology. CASCADE removes the inline playbook
+    when the topology is deleted, but does NOT by itself guarantee an
+    orphan-free delete: provisioning_job.playbook_id is ON DELETE RESTRICT (NOT
+    NULL, and it carries no topology FK), so a topology whose inline playbook
+    has run a job (incl. a dry-run) is deletable only after the backend
+    topology-delete path first clears the dependent provisioning_job rows. The
+    RESTRICT backstop is deliberate (preserves job history).
 
 Hand-written (NOT autogenerate), nc2a_core_config style: guarded/idempotent
 ops (DROP ... IF EXISTS, ADD COLUMN IF NOT EXISTS, DROP CONSTRAINT IF EXISTS +
