@@ -111,6 +111,13 @@ class PlaybookStep(BaseModel):
     # variables (e.g. "{{device1_item_id}}"). Declared here so it round-trips
     # through model_dump()/PlaybookOut instead of being silently dropped.
     target_item_id: Optional[str] = None
+    # Cycle 8 (doc 26 §2): 1-based topology chain position this step configures
+    # (e.g. 1 = the first device type in the chain). The visual editor speaks
+    # "position"; when set and target_item_id is unset, the renderer derives
+    # target_item_id = "{{device<N>_item_id}}" (N = target_position) at render
+    # time, so provisioning-resolution keeps emitting device{i}_* unchanged.
+    # target_item_id still wins for power users / system playbooks.
+    target_position: Optional[int] = None
     # --- Cycle 5 Phase 1 additive fields (canon C15) ---
     precondition: Optional[PlaybookPrecondition] = None
     # per-step compensation (saga-lite, doc 21 §3.7). Depth-1 only: an
@@ -122,6 +129,15 @@ class PlaybookStep(BaseModel):
     def validate_driver(cls, v: str) -> str:
         if v not in PLAYBOOK_DRIVERS:
             raise ValueError(f"driver must be one of {sorted(PLAYBOOK_DRIVERS)}")
+        return v
+
+    @field_validator("target_position")
+    @classmethod
+    def validate_target_position(cls, v: Optional[int]) -> Optional[int]:
+        # 1-based chain position (doc 26 §2): position 0 or negative is never a
+        # valid device slot.
+        if v is not None and v < 1:
+            raise ValueError("target_position must be >= 1 (1-based chain position)")
         return v
 
     @model_validator(mode="after")
@@ -175,10 +191,8 @@ class PlaybookDefinition(BaseModel):
 class PlaybookBase(BaseModel):
     name: str
     description: Optional[str] = None
-    target_vendor: Optional[str] = None
-    # Cycle 3 E4: device_category.key (a plain string) — replaces the
-    # `devicecategory` PG enum (dropped in revision c3b_device_categories).
-    target_category: Optional[str] = None
+    # Cycle 8 (doc 26 §2): target_vendor/target_category are gone — playbooks
+    # are topology-owned, the topology supplies the device context.
     is_active: bool = True
     definition: PlaybookDefinition
 
@@ -190,8 +204,6 @@ class PlaybookCreate(PlaybookBase):
 class PlaybookUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    target_vendor: Optional[str] = None
-    target_category: Optional[str] = None
     is_active: Optional[bool] = None
     definition: Optional[PlaybookDefinition] = None
 
@@ -201,9 +213,9 @@ class PlaybookOut(PlaybookBase):
     company_id: UUID
     version: int
     created_at: datetime
-    # Cycle 3 E4: the resolved FK id, alongside the string `target_category`
-    # key (inherited from PlaybookBase, populated from the model's @property).
-    target_category_id: Optional[UUID] = None
+    # Cycle 8 (doc 26 §2): NULL = a system/global playbook; non-NULL = an
+    # inline playbook owned by that topology (cascades on topology delete).
+    topology_id: Optional[UUID] = None
     # Cycle 5 Phase 1 (canon C7): the playbook version whose dry-run last
     # SUCCEEDED. A live job is accepted iff this equals `version`.
     last_dry_run_version: Optional[int] = None
