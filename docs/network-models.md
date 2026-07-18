@@ -1,10 +1,12 @@
 # Network Configuration Models
 
 ## Description
-SQLAlchemy models for Uplink's network configuration layer (Cycle 5 Phase 1 —
-TR-069 / GenieACS CPE management). Added in revisions **nc1a** (five tables +
+SQLAlchemy models for Uplink's network configuration layer. Cycle 5 Phase 1
+(TR-069 / GenieACS CPE management) added revisions **nc1a** (five tables +
 `ProvisioningJob` extensions + `PENDING_INFORM` status) and **nc1b** (the append-only
-trigger on `device_action_log`). All live in `database_utils/models/isp.py`.
+trigger on `device_action_log`). Cycle 7 Phase 2 (core-device CLI config, doc 25)
+added revision **nc2a_core_config** — no new tables, only columns on existing ones
+(see the Cycle 7 section below). All live in `database_utils/models/isp.py`.
 
 ## Goal
 Persist per-tenant device secrets, transport config, the serial→tenant mapping that
@@ -47,6 +49,34 @@ idempotent execution.
   job settlement, read back by suspension/reactivation/deprovision playbooks.
 - **17 new permissions** for the network-config endpoints.
 
+## Cycle 7 (nc2a_core_config) — core-config additions (doc 25 §2)
+
+Phase 2 targets CORE-tier devices (OLTs, routers, switches) over generic
+netmiko CLI drivers. All additive columns on existing tables:
+
+| Table | New columns | Purpose |
+|---|---|---|
+| `device_category` | `tier` (CHECK: `DEVICE_CATEGORY_TIERS` CORE\|EDGE, nullable) | CORE = shared infrastructure (one device serves many subscribers, pinned per topology position); EDGE = per-subscriber CPE; NULL = passives/unclassified. SaaS-admin editable (key stays immutable). nc2a backfills CORE ← ROUTER/SWITCH/OLT, EDGE ← ONU/CPE_ROUTER/ACCESS_POINT by key |
+| `device_type` | `cli_platform` (free string, deliberately no CHECK) | netmiko platform id (`huawei_smartax`, `cisco_ios`, ...); NULL → drivers fall back to `generic` / `generic_telnet` |
+| `inventory_item` | `mgmt_host`, `mgmt_port`, `cli_protocol` (CHECK: `CLI_PROTOCOLS` ssh\|telnet), `mgmt_last_check_at`, `mgmt_last_check_ok` | Management surface: how CLI drivers reach a CORE device. `mgmt_port` NULL → driver default (22/23). The `mgmt_last_check_*` stamps are worker-owned (written when a `core_connectivity_check` job reaches terminal state), read-only in the API |
+| `topology_device_type` | `inventory_item_id` (FK → inventory_item, **ON DELETE SET NULL**, indexed) | Pins the concrete SHARED device serving a chain position (e.g. this topology's OLT). Pinned items are exempt from client/service candidate matching in provisioning resolution. SET NULL: retiring the item never blocks — resolution then fails visibly with MISSING_DEVICE. Same-company / device-type-match / CORE-tier are router validation, not DB constraints |
+| `client_service` | `install_state` (NOT NULL default `NOT_INSTALLED`, CHECK: `INSTALL_STATES`), `installed_at`; index `ix_client_service_company_install_state` | Subscriber install state machine (NOT_INSTALLED / IN_PROGRESS / INSTALLED), deliberately **separate** from billing `status`. Written exclusively by backend-erp's `recompute_install_state` (not on Update schemas); `installed_at` stamps the FIRST transition to INSTALLED and is never cleared |
+
+Also in Cycle 7 (same revision cycle, no DDL):
+- `PLAYBOOK_DRIVERS` (schemas/playbook.py) gains **`ping`** — backend-erp's
+  connectivity-probe driver, used by the per-company `core_connectivity_check`
+  system playbooks (doc 25 §4.3/§5.1).
+- `PlaybookStep.target_item_id` (+ same field on `PlaybookPrecondition`) — step
+  targeting for the CLI/ping drivers: an inventory_item id or a `{{variable}}`
+  the executor renders (e.g. `{{device1_item_id}}`).
+- Workflow-engine dedupe fix: the `ENQUEUE_PROVISIONING` in-flight pre-check now
+  includes `PENDING_INFORM` (matching nc1a's idempotency-index predicate) — see
+  [workflow-engine.md](workflow-engine.md).
+- `isp_seed.py`: `DEVICE_CATEGORIES` entries carry the tier (ONU display name →
+  'ONU / ONT' for fresh inserts); a gated backfill classifies pre-nc2a rows only
+  while NO row has a tier yet, so super-admin tier edits (including clear-to-NULL)
+  survive every re-seed.
+
 ## Open value sets (CHECK-constrained strings, not PG enums)
 
 Following the c3a/c3b precedent, driver-bounded value sets are CHECK-constrained
@@ -56,6 +86,10 @@ strings so adding a value is a plain transactional `ALTER` of the CHECK, never t
 - `CREDENTIAL_KINDS`: SSH, TELNET, SNMP_COMMUNITY, TR069_CONNECTION_REQUEST, HTTP_BASIC,
   HTTP_BEARER, WIREGUARD, AGENT
 - `NETWORK_ACCESS_KINDS`: acs, olt · `NETWORK_ACCESS_MODES`: direct, vpn, tunnel
+- **Cycle 7**: `DEVICE_CATEGORY_TIERS`: CORE, EDGE · `CLI_PROTOCOLS`: ssh, telnet ·
+  `INSTALL_STATES`: NOT_INSTALLED, IN_PROGRESS, INSTALLED (SQL CHECK fragments kept
+  byte-identical between `models/isp.py` and the nc2a migration, guarded by
+  `tests/test_core_config_constants.py`)
 
 ## Connections to Other Components
 - **backend-erp** — the `genieacs` driver, worker loops (`acs_sync`, PENDING_INFORM

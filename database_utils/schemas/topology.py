@@ -12,7 +12,7 @@ inventory; purpose -> topology_playbook entry -> playbook. This module is
 pure request/response shape.
 """
 import re
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -46,6 +46,17 @@ def _validate_playbooks_map(v: Dict[str, UUID]) -> Dict[str, UUID]:
     return normalized
 
 
+class TopologyChainEntryIn(BaseModel):
+    """One position in a topology's device chain (write model, Cycle 7 doc 25
+    §2.4/§2.6). The richer alternative to the bare device_type_ids list:
+    `inventory_item_id` pins the concrete SHARED device serving this position
+    (e.g. this topology's OLT). Router-validated (not DB): the pinned item
+    must belong to the same company, have this position's device_type_id, and
+    the position's category tier must be CORE (soft-enforced 422)."""
+    device_type_id: UUID
+    inventory_item_id: Optional[UUID] = None
+
+
 class TopologyChainEntryOut(BaseModel):
     """One resolved position in a topology's device chain (read model)."""
     position: int
@@ -54,6 +65,12 @@ class TopologyChainEntryOut(BaseModel):
     # Cycle 3 E4: string device_category.key (model @property), not the old
     # devicecategory enum — no other change (appendix admin-categories §2).
     category: Optional[str] = None
+    # Cycle 7 (doc 25 §2.4/§2.6): pinned shared device (+ resolved serial for
+    # display) and the position category's CORE/EDGE tier badge. All optional
+    # — router-populated, absent on pre-Cycle-7 rows.
+    inventory_item_id: Optional[UUID] = None
+    inventory_item_serial: Optional[str] = None
+    category_tier: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,12 +81,26 @@ class TopologyBase(BaseModel):
     is_active: bool = True
 
 
+def _validate_chain_entries(v: List[TopologyChainEntryIn]) -> List[TopologyChainEntryIn]:
+    if not v:
+        raise ValueError("topology must have at least one device type")
+    type_ids = [e.device_type_id for e in v]
+    if len(type_ids) != len(set(type_ids)):
+        raise ValueError("chain must not contain duplicate device types")
+    return v
+
+
 class TopologyCreate(TopologyBase):
     # Ordered chain, position = list index. uq_topology_device_type (DB) backs
     # the "no duplicate type in one chain" rule the resolution algorithm
     # requires (D5: matching is BY TYPE, so a repeated type would be
     # ambiguous by construction).
-    device_type_ids: List[UUID]
+    # Cycle 7 (doc 25 §2.4): Optional — `chain` below is the richer
+    # alternative carrying per-position pinned inventory_item_id; exactly one
+    # of the two shapes must be provided (pre-Cycle-7 callers keep sending
+    # device_type_ids unchanged).
+    device_type_ids: Optional[List[UUID]] = None
+    chain: Optional[List[TopologyChainEntryIn]] = None
     # Cycle 3 E1: purpose -> playbook_id map, replacing the single
     # playbook_id field. ACTIVATION is a mandatory application invariant (not
     # DB-enforced — PG can't cheaply enforce "at least one child row"); it is
@@ -78,17 +109,41 @@ class TopologyCreate(TopologyBase):
 
     @field_validator("device_type_ids")
     @classmethod
-    def validate_chain(cls, v: List[UUID]) -> List[UUID]:
+    def validate_chain(cls, v: Optional[List[UUID]]) -> Optional[List[UUID]]:
+        if v is None:
+            return v
         if not v:
             raise ValueError("topology must have at least one device type")
         if len(v) != len(set(v)):
             raise ValueError("device_type_ids must not contain duplicates")
         return v
 
+    @field_validator("chain")
+    @classmethod
+    def validate_chain_entries(
+        cls, v: Optional[List[TopologyChainEntryIn]]
+    ) -> Optional[List[TopologyChainEntryIn]]:
+        if v is None:
+            return v
+        return _validate_chain_entries(v)
+
     @field_validator("playbooks")
     @classmethod
     def validate_playbooks(cls, v: Dict[str, UUID]) -> Dict[str, UUID]:
         return _validate_playbooks_map(v)
+
+    @model_validator(mode="after")
+    def validate_one_chain_shape(self) -> "TopologyCreate":
+        if (self.device_type_ids is None) == (self.chain is None):
+            raise ValueError("provide exactly one of device_type_ids or chain")
+        return self
+
+    def chain_entries(self) -> List[TopologyChainEntryIn]:
+        """Normalized write shape — routers consume this instead of branching
+        on which of the two input shapes the caller used."""
+        if self.chain is not None:
+            return self.chain
+        return [TopologyChainEntryIn(device_type_id=dt) for dt in (self.device_type_ids or [])]
 
 
 class TopologyUpdate(BaseModel):
@@ -98,6 +153,10 @@ class TopologyUpdate(BaseModel):
     # When present, replaces the WHOLE chain (bulk delete-orphan + recreate —
     # safe because nothing references topology_device_type rows by id).
     device_type_ids: Optional[List[UUID]] = None
+    # Cycle 7 (doc 25 §2.4): richer whole-chain replacement carrying pinned
+    # inventory_item_id per position — same replace semantics; at most one of
+    # device_type_ids/chain per request.
+    chain: Optional[List[TopologyChainEntryIn]] = None
     # When present, REPLACES the WHOLE purpose map (same semantics as
     # device_type_ids) and must still include ACTIVATION — an update can
     # never leave a topology without one.
@@ -113,6 +172,29 @@ class TopologyUpdate(BaseModel):
         if len(v) != len(set(v)):
             raise ValueError("device_type_ids must not contain duplicates")
         return v
+
+    @field_validator("chain")
+    @classmethod
+    def validate_chain_entries(
+        cls, v: Optional[List[TopologyChainEntryIn]]
+    ) -> Optional[List[TopologyChainEntryIn]]:
+        if v is None:
+            return v
+        return _validate_chain_entries(v)
+
+    @model_validator(mode="after")
+    def validate_one_chain_shape(self) -> "TopologyUpdate":
+        if self.device_type_ids is not None and self.chain is not None:
+            raise ValueError("provide at most one of device_type_ids or chain")
+        return self
+
+    def chain_entries(self) -> Optional[List[TopologyChainEntryIn]]:
+        """Normalized write shape (None = chain untouched by this update)."""
+        if self.chain is not None:
+            return self.chain
+        if self.device_type_ids is not None:
+            return [TopologyChainEntryIn(device_type_id=dt) for dt in self.device_type_ids]
+        return None
 
     @field_validator("playbooks")
     @classmethod

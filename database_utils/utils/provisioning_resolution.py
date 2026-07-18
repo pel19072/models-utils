@@ -36,6 +36,16 @@ Cycle 3 changes (doc 20/20a, E1/E2):
   playbook's own template actually references a device-derived variable.
   ACTIVATION keeps the original founder hard-fail-visibly behavior
   unconditionally.
+
+Cycle 7 changes (doc 25 §3, revision nc2a_core_config):
+- Pinned positions: a chain position with topology_device_type
+  .inventory_item_id set resolves to THAT item — shared core infrastructure
+  (e.g. the topology's OLT), exempt from client/service candidate matching.
+  Company checked; status must be RESERVED/INSTALLED, else the position
+  fails PINNED_DEVICE_UNAVAILABLE (collected like MISSING_DEVICE, same
+  amendment-4 fatality rules).
+- New emitted variable per resolved position: device{i}_category_tier
+  (CORE/EDGE/empty) for template convenience.
 """
 from __future__ import annotations
 
@@ -83,6 +93,12 @@ class ResolvedItem:
     inventory_item_id: Any
     serial_number: Optional[str]
     mac_address: Optional[str]
+    # Cycle 7 (doc 25 §3): the position category's CORE/EDGE tier (None =
+    # passives/unclassified) and whether the item came from a topology pin
+    # rather than client/service candidate matching. Defaulted so pre-Cycle-7
+    # constructors stay valid.
+    category_tier: Optional[str] = None
+    pinned: bool = False
 
 
 @dataclass
@@ -102,12 +118,12 @@ def get_topology_playbook(topology: Topology, purpose: str) -> Optional[Topology
 
 
 # Amendment 4: a device-derived variable is either a positional
-# device{i}_item_id/_serial/_mac/_type or a unique-category alias like
-# cpe_router_serial/onu_mac (category keys are open-ended super-admin data,
-# so the suffix is what's matched — no ordinary business variable name ends
-# in _serial or _mac).
+# device{i}_item_id/_serial/_mac/_type (Cycle 7 adds _category_tier, doc 25
+# §3) or a unique-category alias like cpe_router_serial/onu_mac (category
+# keys are open-ended super-admin data, so the suffix is what's matched — no
+# ordinary business variable name ends in _serial or _mac).
 _DEVICE_VARIABLE_PATTERN = re.compile(
-    r'\{\{\s*(device\d+_(?:item_id|serial|mac|type)|[a-z0-9_]+_(?:serial|mac))\s*\}\}'
+    r'\{\{\s*(device\d+_(?:item_id|serial|mac|type|category_tier)|[a-z0-9_]+_(?:serial|mac))\s*\}\}'
 )
 
 
@@ -145,9 +161,13 @@ def resolve_provisioning(
     3. Candidate pool: InventoryItem WHERE company_id=svc.company_id AND
        status IN (RESERVED, INSTALLED) AND (client_service_id = svc.id OR
        (client_id = svc.client_id AND client_service_id IS NULL)).
-    4. Per chain position, match candidates by device_type_id. Preference:
-       service-assigned beats client-only; within a tier, >1 candidate ->
-       AMBIGUOUS_DEVICE (never auto-pick); 0 -> MISSING_DEVICE.
+    4. Per chain position (Cycle 7, doc 25 §3): a PINNED position
+       (topology_device_type.inventory_item_id set) resolves to that item
+       directly — company checked, status must be RESERVED/INSTALLED else
+       PINNED_DEVICE_UNAVAILABLE; pinned items are exempt from the candidate
+       pool of step 3. Otherwise match candidates by device_type_id.
+       Preference: service-assigned beats client-only; within a tier, >1
+       candidate -> AMBIGUOUS_DEVICE (never auto-pick); 0 -> MISSING_DEVICE.
     5. Errors collected across ALL positions. For purpose == ACTIVATION they
        are ALWAYS fatal (founder fail-visibly requirement for installs). For
        any other purpose, they are fatal only when the resolved playbook's
@@ -158,7 +178,8 @@ def resolve_provisioning(
        client_service_id, service_plan_id, download_mbps, upload_mbps (from
        the plan, NULL-safe), service_plan.provisioning_params merged in,
        plus per resolved position i (1-based): device{i}_item_id/_serial/
-       _mac/_type, plus a category-alias (e.g. cpe_router_serial) only when
+       _mac/_type/_category_tier (Cycle 7), plus a category-alias (e.g.
+       cpe_router_serial) only when
        that category is unique within the chain. Caller-passed variables (if
        any) override resolved ones (caller wins) — handled by the caller,
        not here.
@@ -202,6 +223,45 @@ def resolve_provisioning(
 
     for tdt in chain:
         device_type = tdt.device_type
+        category_tier = (
+            device_type.category_ref.tier
+            if device_type is not None and device_type.category_ref is not None
+            else None
+        )
+
+        # Cycle 7 (doc 25 §3 step 1): pinned shared device wins. Pinned items
+        # are exempt from the client/service candidate pool above — they are
+        # shared infrastructure (one OLT serves many subscribers), so they are
+        # loaded directly (company checked) instead of matched by assignment.
+        pinned_id = getattr(tdt, "inventory_item_id", None)
+        if pinned_id is not None:
+            item = db.get(InventoryItem, pinned_id)
+            if (
+                item is None
+                or item.company_id != client_service.company_id
+                or item.status not in (InventoryItemStatus.RESERVED, InventoryItemStatus.INSTALLED)
+            ):
+                errors.append({
+                    "code": "PINNED_DEVICE_UNAVAILABLE",
+                    "position": tdt.position,
+                    "device_type_id": str(tdt.device_type_id),
+                    "device_type_name": device_type.name if device_type else "",
+                    "inventory_item_id": str(pinned_id),
+                })
+                continue
+            resolved_items.append(ResolvedItem(
+                position=tdt.position,
+                device_type_id=tdt.device_type_id,
+                device_type_name=device_type.name if device_type else "",
+                category=device_type.category if device_type else None,
+                inventory_item_id=item.id,
+                serial_number=item.serial_number,
+                mac_address=item.mac_address,
+                category_tier=category_tier,
+                pinned=True,
+            ))
+            continue
+
         type_candidates = [c for c in candidates if c.device_type_id == tdt.device_type_id]
 
         if not type_candidates:
@@ -249,6 +309,7 @@ def resolve_provisioning(
             inventory_item_id=item.id,
             serial_number=item.serial_number,
             mac_address=item.mac_address,
+            category_tier=category_tier,
         ))
 
     if errors:
@@ -292,6 +353,8 @@ def resolve_provisioning(
         variables[f"device{i}_serial"] = ri.serial_number or ""
         variables[f"device{i}_mac"] = ri.mac_address or ""
         variables[f"device{i}_type"] = ri.device_type_name
+        # Cycle 7 (doc 25 §3): CORE/EDGE/empty for template convenience.
+        variables[f"device{i}_category_tier"] = ri.category_tier or ""
         if ri.category:
             key = ri.category.lower()
             if category_counts.get(key) == 1:

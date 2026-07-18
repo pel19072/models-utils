@@ -4,7 +4,7 @@
 
 The platform's core automation logic lives in this library:
 
-- `database_utils/utils/workflow_engine.py` (57.7 KB — the largest file in the
+- `database_utils/utils/workflow_engine.py` (58 KB — the largest file in the
   repo): trigger matching and asynchronous DAG execution of workflow steps
 - `database_utils/utils/provisioning_resolution.py`: resolution of a topology +
   purpose into a concrete playbook and per-chain-position devices
@@ -36,7 +36,11 @@ moved *down* from backend-erp in Cycle 3, so the engine's
      by `utils/ssrf.py` `validate_url_no_ssrf` (SEC-6)
    - `ENQUEUE_PROVISIONING` — enqueue a `ProvisioningJob`; supports the
      `use_topology` **purpose-resolution mode** (Cycle 3) which resolves the
-     playbook from the topology's purpose-keyed map instead of a hardcoded id
+     playbook from the topology's purpose-keyed map instead of a hardcoded id.
+     Its idempotency pre-check (`_find_queued_or_running_provisioning_job`)
+     treats QUEUED, RUNNING **and `PENDING_INFORM`** as in-flight (Cycle 7 fix,
+     doc 25 §6.3) — matching nc1a's partial-unique-index predicate, so a
+     re-enqueue while a job is parked dedupes instead of tripping the index
    - `CREATE_ORDER` — creates an order with **service-plan resolution** and a
      **billing denylist** (Cycle 2/3 additions preventing automation from
      touching billing-critical fields)
@@ -58,6 +62,18 @@ Given a topology and a purpose (`PURPOSE_ACTIVATION` / `PURPOSE_SUSPENSION` /
    (Cycle 3 `c3a`), and
 2. the **devices** per chain position (`TopologyDeviceType` chain model).
 
+Cycle 7 (doc 25 §3, `nc2a_core_config`) additions:
+
+- **Pinned positions**: a position with `topology_device_type.inventory_item_id`
+  set resolves to THAT item — shared core infrastructure (e.g. the topology's
+  OLT), exempt from client/service candidate matching. Company is checked and
+  the item's status must be RESERVED/INSTALLED, else the position fails with
+  **`PINNED_DEVICE_UNAVAILABLE`** (collected like MISSING_DEVICE, same fatality
+  rules). `ResolvedItem` gains `category_tier` and `pinned` fields.
+- **New emitted variable** per resolved position: `device{i}_category_tier`
+  (CORE/EDGE/empty); `_DEVICE_VARIABLE_PATTERN` recognizes the new suffix so
+  templates referencing it count as device variables.
+
 Callers: the workflow engine (`ENQUEUE_PROVISIONING` with `use_topology`) and
 backend-erp (provisioning worker + manual provision endpoint).
 
@@ -69,5 +85,8 @@ concrete workflows — this powers the founder "install automation" flow.
 
 ## Tests
 
-`tests/` covers the engine (9 tests), topology purpose resolution (16), and
-provisioning resolution (7), plus SSRF (2) — all on in-memory SQLite.
+`tests/` covers the engine (9 tests), topology purpose resolution (16),
+provisioning resolution (13 — incl. Cycle-7 pinned-position and category-tier
+cases), the ENQUEUE_PROVISIONING PENDING_INFORM dedupe
+(`test_workflow_dedupe.py`, 4), model↔migration constant parity
+(`test_core_config_constants.py`, 9), plus SSRF (2) — all on in-memory SQLite.

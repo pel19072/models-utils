@@ -491,12 +491,23 @@ RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance"]
 # c3b_device_categories_global_table.py's CATEGORIES literal — revisions are
 # immutable forever; this list may grow independently in later cycles
 # without a new migration (a future baseline category is added here only).
+# Cycle 7 (doc 25 §2.1, revision nc2a_core_config): 4th element = CORE/EDGE
+# tier (None = passives/unclassified); ONU's display name becomes
+# 'ONU / ONT' (key immutable — nc2a updates existing rows still named 'ONU',
+# this seed only affects fresh inserts). Tier converges for EXISTING rows via
+# the gated backfill in _seed_device_categories (fires only while NO row has
+# a tier yet — the pre-nc2a data signature) — never a DO UPDATE and never an
+# every-run UPDATE, so super-admin tier/name edits (including clearing a tier
+# back to NULL) survive every re-seed.
 DEVICE_CATEGORIES = [
-    ('ROUTER', 'Router', 10), ('SWITCH', 'Switch', 20), ('OLT', 'OLT', 30),
-    ('ONU', 'ONU', 40), ('SPLITTER', 'Splitter', 50), ('SPLICE_CLOSURE', 'Splice Closure', 60),
-    ('PATCH_PANEL', 'Patch Panel', 70), ('ACCESS_POINT', 'Access Point', 80),
-    ('CPE_ROUTER', 'CPE Router', 90), ('UPS', 'UPS', 100), ('ANTENNA', 'Antenna', 110),
-    ('RADIO', 'Radio', 120), ('OTHER', 'Other', 130),
+    ('ROUTER', 'Router', 10, 'CORE'), ('SWITCH', 'Switch', 20, 'CORE'),
+    ('OLT', 'OLT', 30, 'CORE'),
+    ('ONU', 'ONU / ONT', 40, 'EDGE'), ('SPLITTER', 'Splitter', 50, None),
+    ('SPLICE_CLOSURE', 'Splice Closure', 60, None),
+    ('PATCH_PANEL', 'Patch Panel', 70, None), ('ACCESS_POINT', 'Access Point', 80, 'EDGE'),
+    ('CPE_ROUTER', 'CPE Router', 90, 'EDGE'), ('UPS', 'UPS', 100, None),
+    ('ANTENNA', 'Antenna', 110, None),
+    ('RADIO', 'Radio', 120, None), ('OTHER', 'Other', 130, None),
 ]
 
 
@@ -724,13 +735,55 @@ def _seed_device_categories(connection: Connection) -> None:
         )
         return
 
-    for key, name, sort_order in DEVICE_CATEGORIES:
-        connection.execute(
-            text(
-                "INSERT INTO device_category (id, key, name, sort_order, is_active, is_system, created_at, updated_at) "
-                "VALUES (gen_random_uuid(), :key, :name, :sort_order, TRUE, TRUE, :created_at, :created_at) "
-                "ON CONFLICT (key) DO NOTHING"
-            ),
-            {"key": key, "name": name, "sort_order": sort_order, "created_at": now_gt()},
-        )
+    # Cycle 7 (doc 25 §2.1): column-existence gate, same migration-position
+    # logic as the table gate above — this seed also runs on pre-nc2a
+    # positions (stepped/partial upgrades) where device_category.tier does
+    # not exist yet.
+    has_tier = connection.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        "WHERE table_name = 'device_category' AND column_name = 'tier'"
+    )).scalar()
+
+    for key, name, sort_order, tier in DEVICE_CATEGORIES:
+        if has_tier:
+            connection.execute(
+                text(
+                    "INSERT INTO device_category (id, key, name, sort_order, tier, is_active, is_system, created_at, updated_at) "
+                    "VALUES (gen_random_uuid(), :key, :name, :sort_order, :tier, TRUE, TRUE, :created_at, :created_at) "
+                    "ON CONFLICT (key) DO NOTHING"
+                ),
+                {"key": key, "name": name, "sort_order": sort_order, "tier": tier, "created_at": now_gt()},
+            )
+        else:
+            connection.execute(
+                text(
+                    "INSERT INTO device_category (id, key, name, sort_order, is_active, is_system, created_at, updated_at) "
+                    "VALUES (gen_random_uuid(), :key, :name, :sort_order, TRUE, TRUE, :created_at, :created_at) "
+                    "ON CONFLICT (key) DO NOTHING"
+                ),
+                {"key": key, "name": name, "sort_order": sort_order, "created_at": now_gt()},
+            )
+
+    # Cycle 7 tier convergence for rows that predate nc2a: the nc2a backfill
+    # only runs at migration time, so a pre-nc2a prod dump loaded into an
+    # already-migrated schema (./scripts/load-prod-data.sh) leaves every tier
+    # NULL. Backfill ONLY in that state — no row classified anywhere — because
+    # a bare per-row tier-IS-NULL UPDATE cannot tell "never classified" apart
+    # from an admin clearing a tier back to NULL (DeviceCategoryUpdate
+    # explicitly supports clear-to-NULL for passives): once any tier is set,
+    # the seed never touches the column again and admin edits survive every
+    # re-seed (the insert-only DO NOTHING covenant above, extended to one
+    # column).
+    if has_tier:
+        any_classified = connection.execute(text(
+            "SELECT COUNT(*) FROM device_category WHERE tier IS NOT NULL"
+        )).scalar()
+        if not any_classified:
+            for key, _name, _sort_order, tier in DEVICE_CATEGORIES:
+                if tier is None:
+                    continue
+                connection.execute(
+                    text("UPDATE device_category SET tier = :tier WHERE key = :key AND tier IS NULL"),
+                    {"tier": tier, "key": key},
+                )
     logger.info(f"Seeded {len(DEVICE_CATEGORIES)} baseline device categories (insert-only, convergent)")

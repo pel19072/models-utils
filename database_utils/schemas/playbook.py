@@ -12,7 +12,7 @@ A playbook definition is uploadable JSON (or YAML converted client-side):
   "steps": [
     {
       "name": "register-onu",
-      "driver": "simulator",           // simulator | http | ssh | telnet | snmp | tr069
+      "driver": "simulator",           // simulator | http | ssh | telnet | snmp | tr069 | ping
       "template": "interface gpon 0/1\\n ont add {{onu_serial}} vlan {{vlan}}",
       "request": null,                  // http driver: {"method","path","headers","body"}
       "validation": {"expect_contains": "success", "expect_status": 200},
@@ -34,7 +34,10 @@ from database_utils.models.isp import (
     ProvisioningTrigger,
 )
 
-PLAYBOOK_DRIVERS = {"simulator", "http", "ssh", "telnet", "snmp", "tr069"}
+# Cycle 7 (doc 25 §4.3): "ping" joins the set — backend-erp's connectivity
+# probe driver (provisioning/drivers/ping.py), used by the per-company
+# core_connectivity_check system playbooks (doc 25 §5.1).
+PLAYBOOK_DRIVERS = {"simulator", "http", "ssh", "telnet", "snmp", "tr069", "ping"}
 _VAR_TYPES = {"TEXT", "NUMBER", "BOOLEAN"}
 
 
@@ -78,6 +81,9 @@ class PlaybookPrecondition(BaseModel):
     request: Optional[Dict[str, Any]] = None
     validation: PlaybookStepValidation  # REQUIRED: what "already satisfied" looks like
     when_met: str = "skip"
+    # Cycle 7 (doc 25 §4.1): same step-targeting surface as PlaybookStep —
+    # a precondition may probe the concrete device the action targets.
+    target_item_id: Optional[str] = None
 
     @field_validator("when_met")
     @classmethod
@@ -100,6 +106,11 @@ class PlaybookStep(BaseModel):
     request: Optional[Dict[str, Any]] = None  # http / tr069 drivers
     validation: Optional[PlaybookStepValidation] = None  # postcondition (canon C15)
     timeout_seconds: int = 30
+    # Cycle 7 (doc 25 §4.1): step targeting for the CLI/ping drivers — an
+    # inventory_item id or a "{{variable}}" the executor renders with the job
+    # variables (e.g. "{{device1_item_id}}"). Declared here so it round-trips
+    # through model_dump()/PlaybookOut instead of being silently dropped.
+    target_item_id: Optional[str] = None
     # --- Cycle 5 Phase 1 additive fields (canon C15) ---
     precondition: Optional[PlaybookPrecondition] = None
     # per-step compensation (saga-lite, doc 21 §3.7). Depth-1 only: an

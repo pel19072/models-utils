@@ -2,7 +2,7 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 36 revisions in
+Alembic-managed schema migrations for all models in this repo — 41 revisions in
 `alembic/versions/` — plus the idempotent seed scripts that run after every
 upgrade.
 
@@ -51,7 +51,7 @@ After `upgrade`, `env.py` runs `_run_seeds(connection)`:
 |---|---|
 | `alembic/seeds/rbac_seed.py` | Permissions and roles |
 | `alembic/seeds/tier_seed.py` | SaaS tiers |
-| `alembic/seeds/isp_seed.py` | ISP permissions, tier modules, purpose-based workflow-template blueprints, device_category baseline |
+| `alembic/seeds/isp_seed.py` | ISP permissions, tier modules, purpose-based workflow-template blueprints, device_category baseline (Cycle 7: entries carry a CORE/EDGE tier, column-existence-gated for pre-nc2a positions; a backfill classifies existing rows only while no row has a tier yet, so admin tier edits — including clear-to-NULL — survive re-seeds) |
 
 The modules are importable as `seeds.*` because `env.py` adds the alembic dir to
 `sys.path`. All seeds are idempotent (ON CONFLICT / upsert), so re-runs converge
@@ -71,6 +71,19 @@ from the start).
   `c2b_service_billing` (client_service absorbs recurring_order) →
   `c2c_topology_device_chain_playbook` → `c2d_graph_removal` → `c2e_step_exec_snapshot`
 - **Cycle 3**: `c3a_topology_purpose_playbooks`, `c3b_device_categories_global_table`
+- **Cycle 4 (insights)**: `c4a_insights_dashboards` → `c4b_drop_installation_address`
+- **Cycle 5 (network config)**: `nc1a` (five network tables + `ProvisioningJob`
+  columns + `PENDING_INFORM` via `ALTER TYPE … ADD VALUE` + 17 permissions) →
+  `nc1b` (append-only `device_action_log` trigger)
+- **Cycle 7 (core config)**: `nc2a_core_config` — hand-written (not
+  autogenerate), additive, guarded/idempotent with in-migration assertions:
+  `device_category.tier` (+ key-based backfill, ONU → 'ONU / ONT' rename),
+  `device_type.cli_platform`, the `inventory_item` mgmt surface,
+  `topology_device_type.inventory_item_id` (FK SET NULL + index),
+  `client_service.install_state`/`installed_at` (+ index); three new CHECK
+  constraints whose SQL fragments are kept byte-identical with
+  `models/isp.py` (guarded by `tests/test_core_config_constants.py`).
+  Fully reversible; backfill UPDATEs are convergent (second run = zero rows)
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
   indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
 
