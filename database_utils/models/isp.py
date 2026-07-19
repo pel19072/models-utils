@@ -769,7 +769,11 @@ class TopologyPlaybook(Base):
 
     __table_args__ = (
         UniqueConstraint("topology_id", "purpose", name="uq_topology_playbook_purpose"),
-        CheckConstraint("purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'", name="ck_topology_playbook_purpose_format"),
+        # The purpose-format CHECK (`purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'`,
+        # name ck_topology_playbook_purpose_format) is Postgres-only regex
+        # syntax; it lives in the c8a migration so real databases keep it,
+        # but is excluded from model metadata so SQLite create_all (test
+        # suites across all consumer services) does not choke on `~`.
     )
 
 
