@@ -3,7 +3,7 @@
 ## What models-utils is
 
 models-utils (pip package **`database-utils`**, Python module **`database_utils`**,
-v1.13.0) is the **shared data layer** of the Uplink ISP platform. It is a
+v1.14.0) is the **shared data layer** of the Uplink ISP platform. It is a
 pip-installable Python library — **not a running service**. There is no server,
 no port, and no entry point; it executes only inside its consumers and as an
 Alembic migration runner.
@@ -36,7 +36,7 @@ consuming backends. Its CI blocks PRs that change models without a revision.
    UUID v4 primary keys and `created_at`/`updated_at` timestamps.
 2. **Pydantic v2 schemas** — 42 modules shared between services
    ([schemas.md](schemas.md)).
-3. **Alembic migrations + idempotent seeds** — 41 revisions; RBAC, tier, and
+3. **Alembic migrations + idempotent seeds** — 42 revisions; RBAC, tier, and
    ISP catalog/template seeds run automatically after upgrade
    ([migrations.md](migrations.md)).
 4. **Cross-service utilities** — JWT, password hashing, permission checks,
@@ -64,7 +64,7 @@ Details in [connections.md](connections.md).
 
 ## Tests
 
-`tests/` holds 15 files, ~85 tests (`pytest.ini` sets `asyncio_mode = auto`),
+`tests/` holds 16 files, ~90 tests (`pytest.ini` sets `asyncio_mode = auto`),
 running against in-memory SQLite so CI needs only placeholder `POSTGRES_*` env.
 Coverage: workflow engine, topology purpose resolution, provisioning resolution
 (incl. Cycle-7 pinned positions), ENQUEUE_PROVISIONING dedupe, core-config

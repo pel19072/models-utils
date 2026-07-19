@@ -427,9 +427,10 @@ class DeviceCategory(Base):
     is the byte-identical successor to the old enum member names (ROUTER,
     SWITCH, ... OTHER) and is immutable after creation (enforced in
     schemas/device_category.py, not here — PG can't cheaply enforce
-    immutability). `device_type.category` / `playbook.target_category` keep
-    serializing this string via a model @property, so API response shapes
-    barely change across the enum->FK migration."""
+    immutability). `device_type.category` keeps serializing this string via a
+    model @property, so API response shapes barely change across the enum->FK
+    migration. (`playbook.target_category` was dropped in Cycle 8 /
+    revision c8a_playbook_topology — playbooks are topology-owned now.)"""
     __tablename__ = "device_category"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -788,13 +789,25 @@ class Playbook(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     version = Column(Integer, nullable=False, default=1)
-    target_vendor = Column(String, nullable=True)    # "huawei", "zte", "mikrotik", ...
-    # Cycle 3 E4: FK replacing the `devicecategory` enum (revision
-    # c3b_device_categories, enum -> FK backfill by key match). Stays
-    # nullable — a playbook need not target a specific category. RESTRICT:
-    # categories carry referential meaning (per doc 20a admin-categories §1).
-    target_category_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("device_category.id", ondelete="RESTRICT"), nullable=True
+    # Cycle 8 (doc 26 §2, revision c8a_playbook_topology): playbooks are now
+    # topology-owned. NULL = a system/global playbook (the seeded per-company
+    # core_connectivity_check_*); non-NULL = an inline playbook authored inside
+    # that topology's editor, one per purpose. The old target_vendor/
+    # target_category_id targeting columns are gone — the topology supplies the
+    # device context now (which/how many devices, of what category).
+    #
+    # CASCADE removes an inline playbook when its topology is deleted, but it is
+    # NOT sufficient on its own to guarantee an orphan-free delete: a
+    # provisioning_job references playbook.id ON DELETE RESTRICT (NOT NULL, and
+    # it has no topology FK, so it is never cascaded away). A topology whose
+    # inline playbook has ever run a job — including a Simulate/dry-run — is
+    # therefore deletable only after the backend topology-delete path first
+    # clears (deletes/detaches) the dependent provisioning_job rows. That
+    # RESTRICT backstop is deliberate (it preserves job history); the "inline
+    # playbook dies with its topology" contract is enforced by the delete path,
+    # not by this FK alone.
+    topology_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=True, index=True
     )
     is_active = Column(Boolean, nullable=False, default=True)
     definition = Column(JSON, nullable=False)
@@ -815,13 +828,7 @@ class Playbook(Base):
     company = relationship("Company", back_populates="playbooks")
     creator = relationship("User", foreign_keys=[created_by])
     jobs = relationship("ProvisioningJob", back_populates="playbook")
-    target_category_ref = relationship("DeviceCategory", lazy="joined")
-
-    @property
-    def target_category(self) -> Optional[str]:
-        """String key surface preserved across the enum->FK migration (Cycle
-        3 E4)."""
-        return self.target_category_ref.key if self.target_category_ref else None
+    topology = relationship("Topology", foreign_keys=[topology_id])
 
 
 class ProvisioningJob(Base):

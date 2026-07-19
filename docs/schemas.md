@@ -72,6 +72,23 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   (deliberately absent from `ClientServiceUpdate`; written only by backend-erp's
   `recompute_install_state`)
 
+### Cycle 8 (network UX, doc 26) — `playbook` schema changes
+
+Playbooks are now topology-owned, so `schemas/playbook.py` changes:
+
+- `PlaybookBase` drops `target_vendor` and `target_category`; `PlaybookCreate`
+  drops them from its optional overrides too
+- `PlaybookOut` drops `target_category_id` and gains `topology_id: Optional[UUID]`
+  (NULL = a system/global playbook; non-NULL = an inline playbook owned by that
+  topology, cascaded on topology delete)
+- `PlaybookStep` gains `target_position: Optional[int]` — the 1-based topology
+  chain position the step configures. A `field_validator` rejects `< 1`. When
+  set and `target_item_id` is unset, the renderer derives
+  `target_item_id = "{{device<N>_item_id}}"` (N = target_position) at render
+  time, so provisioning-resolution keeps emitting `device{i}_*` unchanged;
+  `target_item_id` still wins for power users / system playbooks
+- `PlaybookDefinition` is otherwise unchanged (steps still carry `target_item_id`)
+
 ## Environment Variables
 
 None — schemas are pure Python/Pydantic.

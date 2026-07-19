@@ -2,9 +2,9 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 41 revisions in
-`alembic/versions/` — plus the idempotent seed scripts that run after every
-upgrade.
+Alembic-managed schema migrations for all models in this repo — 42 revisions in
+`alembic/versions/` (head: `c8a_playbook_topology`) — plus the idempotent seed
+scripts that run after every upgrade.
 
 ## Goal
 
@@ -84,6 +84,25 @@ from the start).
   constraints whose SQL fragments are kept byte-identical with
   `models/isp.py` (guarded by `tests/test_core_config_constants.py`).
   Fully reversible; backfill UPDATEs are convergent (second run = zero rows)
+- **Cycle 8 (topology-owned playbooks)**: `c8a_playbook_topology` (head) —
+  hand-written (not autogenerate), nc2a-style guarded/idempotent ops
+  (`DROP … IF EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS`)
+  with in-migration assertions verifying each object's final state, so a re-run
+  is a no-op. **Destructive**: drops `playbook.target_vendor` and
+  `playbook.target_category_id` (+ its FK `fk_playbook_target_category_id` from
+  `c3b`) — safe because the consuming backend/frontend ship in the same release
+  and Cycles 1–8 have not reached prod. Adds `playbook.topology_id` (UUID FK →
+  `topology.id` **ON DELETE CASCADE**, nullable, indexed
+  `ix_playbook_topology_id`): NULL = a system/global playbook, non-NULL = an
+  inline playbook owned by that topology. No backfill (existing playbooks keep
+  `topology_id` NULL until the topology editor re-saves). The CASCADE removes an
+  inline playbook when its topology is deleted but does **not** on its own
+  guarantee an orphan-free delete — `provisioning_job.playbook_id` is
+  `ON DELETE RESTRICT` (NOT NULL, no topology FK), so the backend
+  topology-delete path must first clear dependent `provisioning_job` rows; the
+  RESTRICT backstop deliberately preserves job history. Downgrade re-adds the
+  dropped columns (shape only — a destructive drop's data is unrecoverable) with
+  the RESTRICT FK restored, and drops `topology_id`
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
   indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
 

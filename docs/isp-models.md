@@ -8,7 +8,10 @@ inventory, topology, and provisioning. Built across Cycles 2–3 of the Uplink
 ISP pivot (platform ADRs 002/003/005/006); Cycle 7 (core config, doc 25,
 revision `nc2a_core_config`) added the CORE/EDGE tier axis, the device
 management surface, topology pinning, and the subscriber install state machine
-— detailed in [network-models.md](network-models.md).
+— detailed in [network-models.md](network-models.md). Cycle 8 (network UX, doc
+26, revision `c8a_playbook_topology`) made playbooks **topology-owned**: the old
+`Playbook.target_vendor`/`target_category_id` targeting columns were dropped in
+favor of a nullable `Playbook.topology_id`.
 
 ## Models (in `database_utils/models/isp.py`; table names in parens)
 
@@ -50,7 +53,7 @@ The earlier free-form network graph (`network_node`/`network_link`) was
 
 | Model | Purpose |
 |---|---|
-| `Playbook` (playbook) | Declarative provisioning steps |
+| `Playbook` (playbook) | Declarative provisioning steps. Cycle 8 (`c8a`): **topology-owned** — `topology_id` (FK → topology, **ON DELETE CASCADE**, nullable, indexed): NULL = a system/global playbook (the seeded per-company `core_connectivity_check_*`), non-NULL = an inline playbook authored inside that topology's editor, one per purpose. The topology now supplies the device context, so the old `target_vendor`/`target_category_id` columns (+ the `target_category_ref` relationship and `target_category` @property) were removed. CASCADE cleans up an inline playbook on topology delete, but `provisioning_job.playbook_id` is `ON DELETE RESTRICT`, so the backend topology-delete path must clear dependent jobs first (the RESTRICT preserves job history) |
 | `ProvisioningJob` (provisioning_job) | Durable job queue row — `ProvisioningJobStatus`, `ProvisioningTrigger`; consumed by backend-erp's `provision-worker` process (SKIP LOCKED claiming) |
 
 ## Connections to Other Components
