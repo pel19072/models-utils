@@ -26,6 +26,35 @@ ALL_MODULES = ["core", "admin", "management", "automations",
                "inventory", "topologies", "provisioning"]
 
 
+def _enforce_free_trial_unlimited(connection: Connection) -> None:
+    """Converge the standing product policy: Free/Trial have NO resource
+    limits and every module (see revision t1_free_trial_unlimited).
+
+    Runs on every migrate — this makes the policy survive prod-data reloads
+    (scripts/load-prod-data.sh restores prod tier rows, which would otherwise
+    silently revert the t1 data migration). Idempotent by construction.
+    Remove this call (with a revision) when real Free/Trial limits return.
+    """
+    modules_json = str(ALL_MODULES).replace("'", '"')
+    result = connection.execute(
+        text(
+            "UPDATE tier "
+            "SET features = COALESCE(features::jsonb, '{}'::jsonb) "
+            "    || '{\"max_users\": -1, \"max_products\": -1, \"max_clients\": -1}'::jsonb, "
+            "    modules = :modules "
+            "WHERE name IN ('Free', 'Trial') "
+            "AND (features->>'max_users' IS DISTINCT FROM '-1' "
+            "     OR features->>'max_products' IS DISTINCT FROM '-1' "
+            "     OR features->>'max_clients' IS DISTINCT FROM '-1' "
+            "     OR modules IS NULL OR modules::jsonb <> (:modules)::jsonb)"
+        ),
+        {"modules": modules_json},
+    )
+    connection.commit()
+    if result.rowcount:
+        logger.info(f"✓ Converged {result.rowcount} tier(s) to the Free/Trial-unlimited policy")
+
+
 def seed_tier_data(connection: Connection) -> None:
     """
     Seed subscription tiers into the database.
@@ -63,6 +92,7 @@ def seed_tier_data(connection: Connection) -> None:
 
         if existing_tiers > 0 and tiers_with_billing > 0:
             logger.info(f"Tier data already seeded ({existing_tiers} tiers with billing data found). Skipping.")
+            _enforce_free_trial_unlimited(connection)
             return
 
         # Define tier data mapping (name -> data)
