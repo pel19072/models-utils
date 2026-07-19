@@ -19,7 +19,7 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 
 | Domain | Modules |
 |---|---|
-| Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login/Signup), `email_verification`, `password_reset` |
+| Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login + flat company-only Signup), `email_verification`, `password_reset` |
 | SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice`, `tier_change_request` |
 | CRM | `client`, `custom_field`, `order`, `order_item`, `payment`, `invoice`, `product` (legacy), `recurring_order` (legacy), `task`, `task_state`, `task_template`, `integration` |
 | ISP | `service_plan`, `client_service`, `inventory`, `topology`, `playbook`, `device_category`, `insight` (Cycle 4) |
@@ -88,6 +88,28 @@ Playbooks are now topology-owned, so `schemas/playbook.py` changes:
   time, so provisioning-resolution keeps emitting `device{i}_*` unchanged;
   `target_item_id` still wins for power users / system playbooks
 - `PlaybookDefinition` is otherwise unchanged (steps still carry `target_item_id`)
+
+### Auth overhaul — request-schema changes (no DB migration)
+
+Company-only signup with locale-aware transactional email:
+
+- `requests.py`: `SignupCompanyRequest` is now **flat and minimal** —
+  `company_name` (2..255), `name` (2..255), `email` (EmailStr), `password`
+  (min 8), `locale` (`Literal["es","en"]`, default `"es"`). The old nested
+  `{company: CompanyCreate, user: UserCreate}` shape and **`SignupUserRequest`
+  are deleted** (users are invitation-only; no self-serve user signup).
+- `email_verification.py`: `ResendConfirmationRequest` gains `locale`
+  (es/en, default es).
+- `password_reset.py`: `PasswordResetRequestSchema` gains `locale`;
+  `PasswordResetConfirmSchema.new_password` min length raised 6 → 8 (all
+  password minimums aligned at 8).
+- `invitation.py`: `InvitationCreate` gains `locale` (used for the invitation
+  email language); `InvitationAccept` is now `{token, name, password}` with
+  `password` min length 8 — the `age` field was **removed** (the accept
+  handler passes `age=0` explicitly; no model change).
+
+The `locale` values feed the localized email templates/subjects — see
+[email-service.md](email-service.md).
 
 ## Environment Variables
 

@@ -31,8 +31,8 @@ docker-compose service. May drift — verify against actual files.
 | `dependencies/audit.py` | `AuditContext`, `get_client_ip` (proxy-aware), `get_audit_context[_optional]` |
 | `middleware/logging_middleware.py` | `create_logging_middleware` — request-ID + JWT-context + duration ASGI middleware |
 | `constants/roles.py` | `Roles`: ADMIN / MANAGER / SALES / USER |
-| `services/email_service.py` | Abstract `EmailService` + SMTP impl (aiosmtplib); 7 transactional email kinds; selected via `EMAIL_PROVIDER`, `SMTP_USE_TLS` |
-| `templates/email/*.html` | 8 Jinja2 templates: base_layout, confirmation, invitation, join_request_decision, password_reset, payment_failed, payment_receipt, welcome |
+| `services/email_service.py` | Abstract `EmailService` + Mock + SMTP impl (aiosmtplib); 7 transactional email kinds; the 4 auth kinds (confirmation, invitation, password_reset, welcome) take `locale: str = "es"` as last keyword param with localized Uplink subjects (`_UPLINK_SUBJECTS` es/en dict); selected via `EMAIL_PROVIDER`, `SMTP_USE_TLS` |
+| `templates/email/*.html` | 13 Jinja2 templates: `base_uplink` (Uplink-branded shell) + es/en pairs for confirmation/invitation/password_reset/welcome; legacy `base_layout`, join_request_decision, payment_failed, payment_receipt. `render_email(name, locale)` resolves `{stem}.{locale}.html` → `{stem}.es.html` → `{stem}.html` |
 
 ### Models (`models/` — all UUID v4 PKs, created_at/updated_at; registered in `models/__init__.py` for Alembic autogenerate)
 
@@ -48,7 +48,7 @@ Key enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`, `PaymentM
 ### Schemas (`schemas/` — 42 modules, Pydantic v2; `__init__.py` star-imports + `model_rebuild()`)
 
 client, company, custom_field, invoice, notification, order, order_item, payment,
-permission, product, recurring_order, requests (Login/Signup), role, task,
+permission, product, recurring_order, requests (Login + flat company-only Signup), role, task,
 task_state, task_template, user, workflow, integration, service_plan,
 client_service, inventory, topology, playbook, workflow_template, tier,
 subscription, payment_method, billing_invoice, tier_change_request, invitation,
@@ -63,6 +63,13 @@ extends `device_category` (tier), `inventory` (cli_platform + mgmt surface),
 **Cycle 8** (c8a) further edits `playbook`: drops `target_vendor`/`target_category`
 (`PlaybookBase`) and `target_category_id` (`PlaybookOut`); adds `topology_id` to
 `PlaybookOut` and a 1-based `target_position` to `PlaybookStep`.
+**Auth overhaul** (no migration): `requests.SignupCompanyRequest` flattened to
+`{company_name, name, email, password (min 8), locale}` and `SignupUserRequest`
+**deleted** (users are invitation-only); `locale: Literal["es","en"] = "es"`
+added to `ResendConfirmationRequest`, `PasswordResetRequestSchema`, and
+`InvitationCreate`; `InvitationAccept` is `{token, name, password (min 8)}`
+(`age` removed); `PasswordResetConfirmSchema.new_password` min raised 6 → 8 —
+see [docs/schemas.md](docs/schemas.md) + [docs/email-service.md](docs/email-service.md).
 
 ### Utilities (`utils/` — 21 modules)
 
