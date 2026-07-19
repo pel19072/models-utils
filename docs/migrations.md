@@ -3,7 +3,7 @@
 ## Description
 
 Alembic-managed schema migrations for all models in this repo — 42 revisions in
-`alembic/versions/` (head: `t1_free_trial_unlimited`) — plus the idempotent seed
+`alembic/versions/` (head: `t2_grandfather_email_verified`) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -84,7 +84,8 @@ from the start).
   constraints whose SQL fragments are kept byte-identical with
   `models/isp.py` (guarded by `tests/test_core_config_constants.py`).
   Fully reversible; backfill UPDATEs are convergent (second run = zero rows)
-- **Free/Trial unlimited**: `t1_free_trial_unlimited` (head) — data migration; merges `{max_users,max_products,max_clients} = -1` into Free/Trial `tier.features` and grants the full module list. Product decision: free tier has NO limits until further notice. `tier_seed.py` seeds fresh DBs the same way (now also writes `tier.modules`).
+- **Grandfathered verification**: `t2_grandfather_email_verified` (head) — one-shot backfill marking every pre-overhaul user email-verified so the new login gate cannot lock out existing production users; irreversible by design.
+- **Free/Trial unlimited**: `t1_free_trial_unlimited` — data migration; merges `{max_users,max_products,max_clients} = -1` into Free/Trial `tier.features` and grants the full module list. Product decision: free tier has NO limits until further notice. `tier_seed.py` seeds fresh DBs the same way (now also writes `tier.modules`).
 - **Cycle 8 (topology-owned playbooks)**: `c8a_playbook_topology` —
   hand-written (not autogenerate), nc2a-style guarded/idempotent ops
   (`DROP … IF EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS`)
