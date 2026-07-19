@@ -38,6 +38,7 @@ class InvitationValidate(BaseModel):
     token: str
     valid: bool
     email: Optional[str] = None
+    name: Optional[str] = None  # inviter-provided display name, prefills the accept form
     company_name: Optional[str] = None
     expires_at: Optional[datetime] = None
     message: Optional[str] = None
