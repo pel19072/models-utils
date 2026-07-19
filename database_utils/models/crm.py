@@ -105,12 +105,12 @@ class ServiceAvailability(str, enum.Enum):
     SURVEY_REQUIRED = "SURVEY_REQUIRED"
 
 
-class InstallationStatus(str, enum.Enum):
-    NOT_INSTALLED = "NOT_INSTALLED"
-    SURVEY_SCHEDULED = "SURVEY_SCHEDULED"
-    INSTALL_SCHEDULED = "INSTALL_SCHEDULED"
-    INSTALLED = "INSTALLED"
-    CANCELLED = "CANCELLED"
+# InstallationStatus enum + client.installation_status/installation_date
+# REMOVED (revision cf1_drop_client_install_fields): a single stored
+# per-client install state is ambiguous under multi-service and was a stale
+# display cache — the truth lives on client_service.install_state (nc2a) and
+# adoption attestation (ba1, doc 30). Clients list/detail now derive
+# services_total/services_installed counts in backend-erp.
 
 
 # Association table for many-to-many relationship between Task and User (assignees)
@@ -143,11 +143,8 @@ class Client(Base):
         Enum(ServiceAvailability), nullable=False,
         default=ServiceAvailability.UNKNOWN, server_default='UNKNOWN'
     )
-    installation_status = Column(
-        Enum(InstallationStatus), nullable=False,
-        default=InstallationStatus.NOT_INSTALLED, server_default='NOT_INSTALLED'
-    )
-    installation_date = Column(DateTime(timezone=True), nullable=True)
+    # installation_status/installation_date dropped (cf1): install truth is
+    # per-service (client_service.install_state); lists derive count rollups.
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     advisor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)

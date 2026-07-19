@@ -15,9 +15,9 @@ by backend-erp (and cron-erp for recurring orders).
 
 | Model | Purpose |
 |-------|---------|
-| `Client` (client) | Tenant's subscriber/customer |
+| `Client` (client) | Tenant's subscriber/customer. `installation_status`/`installation_date` (and the `InstallationStatus` enum) were DROPPED by `cf1_drop_client_install_fields` — a single stored install state is ambiguous under multi-service; install truth is `client_service.install_state` ([isp-models.md](isp-models.md)) and the clients list/detail derive `services_total`/`services_installed` rollups in backend-erp |
 | `Product` (product) | **Legacy catalog item** — absorbed by the Cycle 2 catalog merge (`c2a`) into `ServicePlan` with hybrid `CatalogKind`; bridge-less legacy products are treated as SERVICE. Retained during the rollback window |
-| `Order` (order) | Customer order — enums include `OrderStatus`, `OrderType`, `PaymentStatus`, plus installation/serviceability fields (`ServiceAvailability`, `InstallationStatus`) |
+| `Order` (order) | Customer order — enums include `OrderStatus`, `OrderType`, `PaymentStatus` |
 | `OrderItem` (order_item) | Order line item (`product_id` deprecated but still honored) |
 | `RecurringOrder` (recurring_order) + `RecurringOrderItem` | **Legacy billing engine** (`RecurrenceEnum`) — `ClientService` absorbed its billing in Cycle 2 (`c2b`) but still dual-writes here during the rollback window; consumed by cron-erp |
 | `Invoice` (invoice) | Customer invoice |
@@ -48,8 +48,8 @@ by backend-erp (and cron-erp for recurring orders).
   [limitations.md](limitations.md))
 - Enums: `OrderStatus`, `OrderType`, `PaymentStatus`, `PaymentKind`,
   `PaymentMethodType`, `RecurrenceEnum`, `ServiceAvailability`,
-  `InstallationStatus`, `TaskStateColor`, `TaskLinkedObjectType`,
-  `IntegrationAuthType`
+  `TaskStateColor`, `TaskLinkedObjectType`, `IntegrationAuthType`
+  (`InstallationStatus` removed by `cf1_drop_client_install_fields`)
 - Task assignees: many-to-many with `User` via the `task_assignee` table
 
 ## Environment Variables

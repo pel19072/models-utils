@@ -275,17 +275,21 @@ TEMPLATE_REQUIRED_COLUMNS = {
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
 # resolved at install time; "{{trigger.*}}" placeholders stay for runtime.
 WORKFLOW_TEMPLATES = [
-    # v2 (doc 16 §5.4, installation-flow): PENDING_INSTALL-gated trigger so
-    # imports/backfills creating ACTIVE services never spawn install orders;
-    # s1 bills the installation fee (CREATE_ORDER), s2 opens the dispatch task
+    # v3 (client-install-field removal, revision cf1): the old s3 UPDATE_FIELD
+    # step (client.installation_status display cache) is GONE along with the
+    # column itself — s2 is now terminal; cf1's data pass deletes s3 from
+    # already-installed tenant copies. v2 history (doc 16 §5.4,
+    # installation-flow): PENDING_INSTALL-gated trigger so imports/backfills
+    # creating ACTIVE services never spawn install orders; s1 bills the
+    # installation fee (CREATE_ORDER), s2 opens the dispatch task
     # (CREATE_TASK, linked CLIENT_SERVICE — the Cycle-3 join key; ORDER linkage
-    # is forbidden), s3 syncs the client's installation_status display cache.
-    # Free installs = a Q0 fee product; the order still exists as history and
-    # is settled via settle-zero. Tenants must reinstall to pick up v2.
+    # is forbidden). Free installs = a Q0 fee product; the order still exists
+    # as history and is settled via settle-zero. Tenants must reinstall to
+    # pick up a new version.
     _wt(
         "new-installation", "New Installation",
-        "When a subscriber service is created pending installation, bill the installation fee, "
-        "open an installation task on the dispatch board and mark the client as scheduled.",
+        "When a subscriber service is created pending installation, bill the installation fee "
+        "and open an installation task on the dispatch board.",
         "installation",
         [
             {"key": "install_state_id", "label": "Board column for new installations", "type": "task_state", "required": True},
@@ -314,14 +318,8 @@ WORKFLOW_TEMPLATES = [
                  "assignee_source": "client_technician",
                  "assignee_ids": "{{param:fixed_assignee_ids}}",
                  "client_id": "{{trigger.after.client_id}}"}},
-            {"ref": "s3", "name": "Mark client install scheduled", "action_type": "UPDATE_FIELD",
-             "action_config": {
-                 "resource_type": "client",
-                 "resource_id_source": "custom",
-                 "resource_id": "{{trigger.after.client_id}}",
-                 "updates": {"installation_status": "INSTALL_SCHEDULED"}}},
         ],
-        [{"from": "s1", "to": "s2"}, {"from": "s2", "to": "s3"}],
+        [{"from": "s1", "to": "s2"}],
     ),
     # v2 (Cycle 3 E2, doc 20a workflow-provisioning §3): rewritten from an
     # explicit `activation_playbook_id` param to topology purpose resolution

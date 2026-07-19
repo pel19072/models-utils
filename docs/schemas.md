@@ -91,6 +91,18 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   (`results` + `adopted_count`/`error_count`) — the bulk response (per-row,
   never all-or-nothing)
 
+### Client install-field removal (doc 31) — `client` schema changes
+
+- `ClientBase`/`ClientUpdate` (and thus `ClientCreate`/`ClientOut`) drop
+  `installation_status`/`installation_date` — the columns and the
+  `InstallationStatus` enum were removed by `cf1_drop_client_install_fields`
+  (install truth is `client_service.install_state`)
+- `ClientOut` gains `services_total`/`services_installed` (`int`, default
+  `0`) — the services-summary rollup, Out-only and backend-COMPUTED by
+  backend-erp's clients list/detail endpoints from `client_service` rows
+  (`install_state='INSTALLED'` for the second count); never stored, never on
+  Create/Update (`activation_evidence` precedent)
+
 ### Cycle 8 (network UX, doc 26) — `playbook` schema changes
 
 Playbooks are now topology-owned, so `schemas/playbook.py` changes:
