@@ -201,6 +201,14 @@ _DEVICE_CATEGORY_TIER_CHECK = "tier IN ('CORE','EDGE')"
 _CLI_PROTOCOL_CHECK = "cli_protocol IN ('ssh','telnet')"
 _INSTALL_STATE_CHECK = "install_state IN ('NOT_INSTALLED','IN_PROGRESS','INSTALLED')"
 
+# ba1 (doc 30): values of the backend-computed ClientServiceOut.activation_evidence
+# derived field ('provisioned' = a SUCCEEDED non-dry-run activation job exists;
+# 'attested' = no real job, adopted_at is the ACTIVE reason for INSTALLED;
+# None = neither). Not a DB column — computed at serialization in backend-erp.
+ACTIVATION_EVIDENCE_PROVISIONED = "provisioned"
+ACTIVATION_EVIDENCE_ATTESTED = "attested"
+ACTIVATION_EVIDENCE_VALUES = (ACTIVATION_EVIDENCE_PROVISIONED, ACTIVATION_EVIDENCE_ATTESTED)
+
 
 class InsightChartType(str, enum.Enum):
     NUMBER = "NUMBER"
@@ -310,6 +318,17 @@ class ClientService(Base):
     # Stamped on the FIRST transition to INSTALLED (never cleared by a later
     # regression to NOT_INSTALLED — a historical fact, like activation_date).
     installed_at = Column(DateTime(timezone=True), nullable=True)
+    # Brownfield adoption (doc 30, revision ba1_attested_adoption): a
+    # persistent ATTESTATION FACT substituting for the missing SUCCEEDED
+    # activation job in install_state derivation (backend-erp
+    # utils/install_state.py _activation_ok checks real job evidence FIRST,
+    # adopted_at second). Never creates ProvisioningJob rows, never touches
+    # devices, never written together with install_state — install_state
+    # stays exclusively recompute_install_state's output. NEVER exposed on
+    # Create/Update schemas (migration_source precedent); written only by
+    # the adopt/un-adopt endpoints behind client_services.adopt.
+    adopted_at = Column(DateTime(timezone=True), nullable=True)
+    adoption_note = Column(String, nullable=True)
 
     # --- Cycle 2 D1 billing absorption (client_service absorbs recurring_order) ---
     # NULL recurrence/billing_status = billing not configured on this service
@@ -352,6 +371,12 @@ class ClientService(Base):
     recurring_order_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("recurring_order.id", ondelete="SET NULL"), nullable=True
     )
+    # SET NULL: deleting the attesting user must not erase the attestation
+    # fact (adopted_at/adoption_note survive; only authorship is lost) —
+    # mirrors ServiceSuspension.created_by (isp.py:410-415).
+    adopted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
 
     company = relationship("Company", back_populates="client_services")
     client = relationship("Client", back_populates="services")
@@ -362,6 +387,7 @@ class ClientService(Base):
         "ServiceSuspension", back_populates="client_service", cascade="all, delete-orphan"
     )
     equipment = relationship("InventoryItem", back_populates="client_service")
+    adopted_by = relationship("User", foreign_keys=[adopted_by_user_id])
 
     __table_args__ = (
         Index("ix_client_service_company_status", "company_id", "status"),
@@ -374,6 +400,13 @@ class ClientService(Base):
         ),
         # Cycle 7 (doc 25 §2.5): services-page install-state badge filter scan.
         Index("ix_client_service_company_install_state", "company_id", "install_state"),
+        # ba1: adoption-campaign scans + the adoption-template export
+        # (services lacking adoption). Partial — adopted rows are a small
+        # minority forever (uq_service_plan_product postgresql_where precedent).
+        Index(
+            "ix_client_service_adopted", "company_id",
+            postgresql_where=text("adopted_at IS NOT NULL"),
+        ),
         CheckConstraint(_INSTALL_STATE_CHECK, name="ck_client_service_install_state"),
     )
 

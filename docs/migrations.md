@@ -84,7 +84,19 @@ from the start).
   constraints whose SQL fragments are kept byte-identical with
   `models/isp.py` (guarded by `tests/test_core_config_constants.py`).
   Fully reversible; backfill UPDATEs are convergent (second run = zero rows)
-- **Grandfathered verification**: `t2_grandfather_email_verified` (head) — one-shot backfill marking every pre-overhaul user email-verified so the new login gate cannot lock out existing production users; irreversible by design.
+- **Grandfathered verification**: `t2_grandfather_email_verified` — one-shot backfill marking every pre-overhaul user email-verified so the new login gate cannot lock out existing production users; irreversible by design.
+- **Brownfield adoption (doc 30)**: `ba1_attested_adoption` (parent
+  `t2_grandfather_email_verified`, **new head**) — hand-written, nc2a-style
+  guarded/idempotent ops with post-upgrade assertions: additive
+  `client_service.adopted_at`/`adopted_by_user_id`/`adoption_note` columns +
+  FK `fk_client_service_adopted_by_user` (→ `"user"`, SET NULL) + partial
+  index `ix_client_service_adopted` (`company_id` WHERE `adopted_at IS NOT
+  NULL`) + idempotent `client_services.adopt` permission insert granted to
+  the global system ADMIN **only**. Total downgrade (deletes the permission +
+  grants, drops index/FK/columns — attestation data is lost on downgrade).
+  The seed changes ride this revision: `isp_seed.ADMIN_ONLY_PERMISSIONS` and
+  `rbac_seed.MANAGER_EXCLUDED_PERMISSIONS` keep MANAGER excluded at both
+  auto-grant sites (subset-pinned by `tests/test_attested_adoption.py`).
 - **Free/Trial unlimited**: `t1_free_trial_unlimited` — data migration; merges `{max_users,max_products,max_clients} = -1` into Free/Trial `tier.features` and grants the full module list. Product decision: free tier has NO limits until further notice. `tier_seed.py` seeds fresh DBs the same way (now also writes `tier.modules`).
 - **Cycle 8 (topology-owned playbooks)**: `c8a_playbook_topology` —
   hand-written (not autogenerate), nc2a-style guarded/idempotent ops

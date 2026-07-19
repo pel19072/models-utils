@@ -50,7 +50,7 @@ Correct order:
 - `database_utils/models/` — SQLAlchemy models (UUID PKs, created_at/updated_at), registered in `__init__.py` for Alembic autogenerate
   - `auth.py`: Tier, Company, User, Role, Permission, Notification, AuditLog, UserInvitation, EmailVerificationToken, PasswordResetToken, Subscription, PaymentMethod, BillingInvoice, TierChangeRequest
   - `crm.py`: Client, Product (legacy, absorbed by catalog merge), Order, OrderItem, RecurringOrder(+Item) (legacy billing, dual-written; consumed by cron-erp), Invoice, Payment (Cycle 1 ledger), custom fields, TaskState/Task/TaskTemplate, Integration
-  - `isp.py` (largest): ServicePlan, ClientService, ServiceSuspension, DeviceCategory, DeviceType, Warehouse, InventoryItem, EquipmentEvent, Topology, TopologyDeviceType, TopologyPlaybook (purpose-keyed), Playbook, ProvisioningJob; Cycle-4 insights, Cycle-5 network-config tables, Cycle-7 core-config columns (`device_category.tier`, `device_type.cli_platform`, inventory mgmt surface, `topology_device_type.inventory_item_id` pin, `client_service.install_state`/`installed_at`); Cycle-8 topology-owned playbooks (`playbook` drops `target_vendor`/`target_category_id`, gains `topology_id` nullable FK CASCADE) — see [docs/network-models.md](docs/network-models.md)
+  - `isp.py` (largest): ServicePlan, ClientService, ServiceSuspension, DeviceCategory, DeviceType, Warehouse, InventoryItem, EquipmentEvent, Topology, TopologyDeviceType, TopologyPlaybook (purpose-keyed), Playbook, ProvisioningJob; Cycle-4 insights, Cycle-5 network-config tables, Cycle-7 core-config columns (`device_category.tier`, `device_type.cli_platform`, inventory mgmt surface, `topology_device_type.inventory_item_id` pin, `client_service.install_state`/`installed_at`); Cycle-8 topology-owned playbooks (`playbook` drops `target_vendor`/`target_category_id`, gains `topology_id` nullable FK CASCADE); brownfield adoption attestation columns on ClientService (`adopted_at`/`adopted_by_user_id`/`adoption_note`, revision ba1) — see [docs/network-models.md](docs/network-models.md)
   - `workflow.py`: WorkflowTemplate, Workflow, WorkflowTrigger, WorkflowStep, WorkflowStepEdge, WorkflowExecution, WorkflowStepExecution
 - `database_utils/schemas/` — 42 Pydantic v2 modules; `__init__.py` star-imports all + `model_rebuild()`
 - `database_utils/utils/` — 21 modules; notable: `workflow_engine.py` (trigger matching + DAG execution), `provisioning_resolution.py` (topology→purpose→playbook; Cycle-7 pinned positions), `jwt_utils.py`, `permission_utils.py`, `audit_utils.py`, `ssrf.py`, `crypto.py`, `tier_limits.py`, `timezone_utils.py` (America/Guatemala)
@@ -58,9 +58,9 @@ Correct order:
 - `database_utils/middleware/` — request-ID/JWT-context logging ASGI middleware
 - `database_utils/services/email_service.py` + `database_utils/templates/email/` — transactional email (SMTP via aiosmtplib) + 8 Jinja2 templates (shipped via `[options.package_data]`)
 - `database_utils/database.py` — engine bootstrap from `DATABASE_URL`/`DB_URL`/`POSTGRES_*` (raises at import if none)
-- `alembic/` — 42 revisions (head: `c8a_playbook_topology`); `env.py` imports all model modules and runs seeds after upgrade
+- `alembic/` — 43 revisions (head: `ba1_attested_adoption`); `env.py` imports all model modules and runs seeds after upgrade
 - `alembic/seeds/` — idempotent seed scripts: `rbac_seed.py`, `tier_seed.py`, `isp_seed.py` (importable as `seeds.*` because `env.py` adds the alembic dir to `sys.path`)
-- `tests/` — 16 files, ~90 tests (`asyncio_mode = auto`, SQLite)
+- `tests/` — 17 files, ~100 tests (`asyncio_mode = auto`, SQLite)
 - `.github/workflows/` — `ci.yml` (migration guard + ruff advisory + pytest), `migrate.yml` (prod migration)
 - `Dockerfile` — exists solely for the compose `migrate` one-shot; production images never build it
 

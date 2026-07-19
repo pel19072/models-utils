@@ -63,6 +63,12 @@ ISP_PERMISSIONS = [
     # Cycle 2 D1: manual single-cycle billing generation (client_services
     # absorbs recurring_order's billing engine).
     {"name": "client_services.generate", "resource": "client_services", "action": "generate", "description": "Manually generate a billing cycle for a service"},
+    # Brownfield adoption (doc 30, revision ba1): attest a pre-existing
+    # service as installed. ADMIN-only — listed in ADMIN_ONLY_PERMISSIONS
+    # below so the MANAGER auto-inherit in _seed_permissions skips it
+    # (payments.refund precedent in rbac_seed). Deliberately granted to NO
+    # ISP base role and given NO legacy grant-copy source in rbac_seed step 4.
+    {"name": "client_services.adopt", "resource": "client_services", "action": "adopt", "description": "Attest a service as installed (brownfield adoption) - ADMIN only"},
     # Inventory
     {"name": "device_types.create", "resource": "device_types", "action": "create", "description": "Create device catalog entries"},
     {"name": "device_types.read", "resource": "device_types", "action": "read", "description": "View device catalog"},
@@ -123,6 +129,13 @@ ISP_PERMISSIONS = [
     {"name": "acs_registrations.delete", "resource": "acs_registrations", "action": "delete", "description": "Release/delete ACS device registrations"},
     {"name": "network_audit.read", "resource": "network_audit", "action": "read", "description": "View the append-only device action log"},
 ]
+
+# ADMIN-only permission names: excluded from the MANAGER auto-inherit below.
+# MUST stay a subset of rbac_seed.MANAGER_EXCLUDED_PERMISSIONS (the two
+# copies are pinned equal-by-membership in tests/test_attested_adoption.py —
+# seeds cannot import each other: tests load them by file path, nc2a
+# duplicated-fragment precedent).
+ADMIN_ONLY_PERMISSIONS = ("client_services.adopt",)
 
 # New ISP base roles (global: company_id NULL) and their permission grants.
 ISP_ROLES = {
@@ -531,8 +544,13 @@ def _seed_permissions(connection: Connection) -> None:
             ),
             {"created_at": now_gt(), **perm},
         )
-    # ADMIN and MANAGER inherit all new permissions (matching rbac_seed policy).
+    # ADMIN and MANAGER inherit all new permissions (matching rbac_seed
+    # policy) — except MANAGER skips the ADMIN_ONLY_PERMISSIONS keys.
+    all_names = [p["name"] for p in ISP_PERMISSIONS]
     for role_name in ("ADMIN", "MANAGER"):
+        names = all_names if role_name == "ADMIN" else [
+            n for n in all_names if n not in ADMIN_ONLY_PERMISSIONS
+        ]
         connection.execute(
             text(
                 "INSERT INTO role_permission (role_id, permission_id) "
@@ -540,7 +558,7 @@ def _seed_permissions(connection: Connection) -> None:
                 "WHERE r.name = :role AND r.company_id IS NULL AND p.name = ANY(:names) "
                 "ON CONFLICT DO NOTHING"
             ),
-            {"role": role_name, "names": [p["name"] for p in ISP_PERMISSIONS]},
+            {"role": role_name, "names": names},
         )
     logger.info(f"Seeded {len(ISP_PERMISSIONS)} ISP permissions")
 

@@ -72,6 +72,25 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   (deliberately absent from `ClientServiceUpdate`; written only by backend-erp's
   `recompute_install_state`)
 
+### Brownfield adoption (doc 30) — `client_service` schema changes
+
+- `ClientServiceOut` gains `adopted_at`/`adopted_by_user_id`/`adoption_note`
+  (Out-only, never on Create/Update — `migration_source` precedent) and
+  `activation_evidence` (Out-only, backend-COMPUTED — not a DB column; values
+  from `isp.ACTIVATION_EVIDENCE_VALUES`: `'provisioned'` | `'attested'` |
+  `None`; populated only on list/detail/adopt/un-adopt responses — `None`
+  elsewhere means "not computed", not "no evidence")
+- `ClientServiceAdoptIn` — `POST /client-services/{id}/adopt` body: `note`
+  required non-empty (stripping validator), `installed_at` optional historical
+  install date (applied only while the service's `installed_at` is NULL)
+- `ClientServiceAdoptBulkItem` (AdoptIn + `client_service_id`) and
+  `ClientServiceAdoptBulkIn` (`items`, 1–500) — `POST /client-services/adopt-bulk`
+  body
+- `ClientServiceAdoptBulkRowResult` (`status` `'adopted'`|`'error'`; `error`
+  `'NOT_FOUND'`|`'ALREADY_ADOPTED'`) and `ClientServiceAdoptBulkOut`
+  (`results` + `adopted_count`/`error_count`) — the bulk response (per-row,
+  never all-or-nothing)
+
 ### Cycle 8 (network UX, doc 26) — `playbook` schema changes
 
 Playbooks are now topology-owned, so `schemas/playbook.py` changes:

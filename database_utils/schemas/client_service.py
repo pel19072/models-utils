@@ -7,8 +7,10 @@ Out below intentionally omits it (it is an internal/audit-only column,
 readable only via direct DB inspection or a future admin-only export).
 `recurring_order_id` is dropped from ClientServiceUpdate: it is
 migration-critical bridge state, not user-editable data (amendment 1).
+The ba1 adopted_* fields follow the same rule: Out-only, never on any
+Create/Update schema.
 """
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -83,6 +85,18 @@ class ClientServiceOut(ClientServiceBase):
     # deliberately NOT on ClientServiceUpdate.
     install_state: str = "NOT_INSTALLED"
     installed_at: Optional[datetime] = None
+    # ba1 (doc 30): attested-adoption fact. Read-only — writable ONLY via the
+    # adopt/un-adopt endpoints (client_services.adopt permission); deliberately
+    # absent from ClientServiceCreate/Update (migration_source precedent).
+    adopted_at: Optional[datetime] = None
+    adopted_by_user_id: Optional[UUID] = None
+    adoption_note: Optional[str] = None
+    # Backend-COMPUTED, not a column: 'provisioned' | 'attested' | None (see
+    # models.isp.ACTIVATION_EVIDENCE_VALUES). Populated by backend-erp ONLY on
+    # list (batched +2 queries/page), detail, adopt and un-adopt responses;
+    # None elsewhere means 'not computed', not 'no evidence'. from_attributes
+    # falls back to the default when the ORM attribute is missing.
+    activation_evidence: Optional[str] = None
 
     # --- Billing (read-only here; settable via ClientServiceCreate or the
     # dedicated ClientServiceBillingUpdate / generate / regenerate-charges
@@ -112,6 +126,48 @@ class ClientServiceProvisionIn(BaseModel):
     @classmethod
     def _normalize(cls, v: str) -> str:
         return normalize_purpose(v)
+
+
+class ClientServiceAdoptIn(BaseModel):
+    """POST /client-services/{id}/adopt body (doc 30). note is REQUIRED and
+    non-empty — an attestation without provenance is worthless. installed_at:
+    optional HISTORICAL install date; applied only if the service's
+    installed_at is still NULL (a stamped first-install fact is never
+    rewritten)."""
+    note: str
+    installed_at: Optional[datetime] = None
+
+    @field_validator('note')
+    @classmethod
+    def _note_non_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError('adoption note must be non-empty')
+        return v
+
+
+class ClientServiceAdoptBulkItem(ClientServiceAdoptIn):
+    client_service_id: UUID
+
+
+class ClientServiceAdoptBulkIn(BaseModel):
+    """POST /client-services/adopt-bulk body — campaign tooling (doc 30)."""
+    items: list[ClientServiceAdoptBulkItem] = Field(min_length=1, max_length=500)
+
+
+class ClientServiceAdoptBulkRowResult(BaseModel):
+    """Per-row outcome — bulk adopt never aborts all-or-nothing (doc 30).
+    status 'adopted' | 'error'; error 'NOT_FOUND' | 'ALREADY_ADOPTED'."""
+    client_service_id: UUID
+    status: str
+    error: Optional[str] = None
+    install_state: Optional[str] = None
+
+
+class ClientServiceAdoptBulkOut(BaseModel):
+    results: list[ClientServiceAdoptBulkRowResult]
+    adopted_count: int = 0
+    error_count: int = 0
 
 
 class ServiceSuspensionCreate(BaseModel):

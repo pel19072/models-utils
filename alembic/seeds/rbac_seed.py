@@ -98,7 +98,16 @@ PERMISSIONS_DATA = [
         {"name": "integrations.delete", "resource": "integrations", "action": "delete", "description": "Delete external API integrations"},
 ]
 
-
+# Permission names withheld from the MANAGER auto-grants (initial seed AND
+# _ensure_convergent_rbac step 3). Includes seed-owned ADMIN-only keys from
+# other seed modules (isp_seed.ADMIN_ONLY_PERMISSIONS must be a subset —
+# pinned by tests/test_attested_adoption.py; seeds cannot import each other).
+MANAGER_EXCLUDED_PERMISSIONS = (
+    "orders.revert_payment",
+    "payments.refund",
+    "client_services.adopt",  # ba1: brownfield adoption is ADMIN-only
+)
+_MANAGER_EXCLUDED_SQL = ", ".join(f"'{n}'" for n in MANAGER_EXCLUDED_PERMISSIONS)
 
 
 def seed_rbac_data(connection: Connection) -> None:
@@ -213,12 +222,12 @@ def seed_rbac_data(connection: Connection) -> None:
         logger.info(f"✓ ADMIN role assigned {len(admin_permissions)} permissions")
 
         # MANAGER: All permissions except roles, permissions, company settings,
-        # and the ADMIN-only payment reversal keys (orders.revert_payment and its
-        # ledger successor payments.refund — mirrors the migration grant-copy).
+        # and the ADMIN-only keys in MANAGER_EXCLUDED_PERMISSIONS (payment
+        # reversal + brownfield adoption — mirrors the migration grant-copy).
         manager_permissions = connection.execute(
             text(
                 "SELECT id FROM permission WHERE resource NOT IN ('roles', 'permissions', 'company') "
-                "AND name NOT IN ('orders.revert_payment', 'payments.refund')"
+                f"AND name NOT IN ({_MANAGER_EXCLUDED_SQL})"
             )
         ).fetchall()
 
@@ -344,14 +353,14 @@ def _ensure_convergent_rbac(connection: Connection) -> None:
     )
 
     # 3. Global system MANAGER holds everything except role/permission/company
-    #    administration and the ADMIN-only payment reversal keys.
+    #    administration and the ADMIN-only MANAGER_EXCLUDED_PERMISSIONS keys.
     connection.execute(
         text(
             "INSERT INTO role_permission (role_id, permission_id) "
             "SELECT r.id, p.id FROM role r CROSS JOIN permission p "
             "WHERE r.name = 'MANAGER' AND r.company_id IS NULL "
             "AND p.resource NOT IN ('roles', 'permissions', 'company') "
-            "AND p.name NOT IN ('orders.revert_payment', 'payments.refund') "
+            f"AND p.name NOT IN ({_MANAGER_EXCLUDED_SQL}) "
             "ON CONFLICT DO NOTHING"
         )
     )
@@ -370,6 +379,10 @@ def _ensure_convergent_rbac(connection: Connection) -> None:
     #    join below is then simply a no-op) — kept so a future backend-erp
     #    revision that adds it converges automatically with zero further
     #    models-utils changes.
+    #
+    #    client_services.adopt deliberately has NO legacy source (doc 30):
+    #    adoption is a new ADMIN-only capability, never inherited from
+    #    recurring_orders grants.
     for source, target in (
         ("orders.update", "payments.record"),
         ("orders.read", "payments.read"),
