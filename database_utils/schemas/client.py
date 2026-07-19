@@ -2,9 +2,8 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
 
-from database_utils.models.crm import ServiceAvailability, InstallationStatus
+from database_utils.models.crm import ServiceAvailability
 
 from .user import UserOut
 
@@ -22,8 +21,6 @@ class ClientBase(BaseModel):
     longitude: Optional[float] = None
     gps_precision_m: Optional[float] = None
     service_availability: ServiceAvailability = ServiceAvailability.UNKNOWN
-    installation_status: InstallationStatus = InstallationStatus.NOT_INSTALLED
-    installation_date: Optional[datetime] = None
 
 
 class ClientCreate(ClientBase):
@@ -48,14 +45,20 @@ class ClientUpdate(BaseModel):
     longitude: Optional[float] = None
     gps_precision_m: Optional[float] = None
     service_availability: Optional[ServiceAvailability] = None
-    installation_status: Optional[InstallationStatus] = None
-    installation_date: Optional[datetime] = None
     custom_field_values: Optional[List["ClientCustomFieldValueInput"]] = None
 
 
 class ClientOut(ClientBase):
     id: UUID
     company_id: UUID
+    # Services summary rollup (cf1, replaces the dropped stored
+    # installation_status): read-only, COMPUTED by backend-erp's clients
+    # list/detail endpoints from client_service rows
+    # (install_state='INSTALLED' for the second count) — never stored,
+    # never on Create/Update. Defaults keep the schema valid for callers
+    # that hydrate straight from the ORM row.
+    services_total: int = 0
+    services_installed: int = 0
     advisor_id: Optional[UUID]
     advisor: Optional[UserOut] = None
     assigned_technician_id: Optional[UUID] = None

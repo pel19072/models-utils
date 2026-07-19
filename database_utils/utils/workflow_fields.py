@@ -39,8 +39,9 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "latitude", "type": "number", "fk_to": None},
         {"name": "longitude", "type": "number", "fk_to": None},
         {"name": "service_availability", "type": "string", "fk_to": None},
-        {"name": "installation_status", "type": "string", "fk_to": None},
-        {"name": "installation_date", "type": "date", "fk_to": None},
+        # installation_status/installation_date removed (cf1): the columns are
+        # dropped — install truth is client_service.install_state, and cf1's
+        # data pass deletes any installed UPDATE_FIELD step still writing them.
         {"name": "assigned_technician_id", "type": "uuid", "fk_to": None},
     ],
     "product": [
