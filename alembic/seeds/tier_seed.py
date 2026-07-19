@@ -20,6 +20,11 @@ from database_utils.utils.timezone_utils import now_gt
 
 logger = logging.getLogger(__name__)
 
+# Full module set (sidebar/permissions gating). Free/Trial get everything
+# while the "no limits on free tier" product decision stands.
+ALL_MODULES = ["core", "admin", "management", "automations",
+               "inventory", "topologies", "provisioning"]
+
 
 def seed_tier_data(connection: Connection) -> None:
     """
@@ -62,16 +67,19 @@ def seed_tier_data(connection: Connection) -> None:
 
         # Define tier data mapping (name -> data)
         tiers_data_map = {
+            # Free/Trial are currently UNLIMITED (all modules, no resource
+            # caps) by product decision — see revision t1_free_trial_unlimited.
             "Free": {
                 "price": 0,  # $0.00
                 "billing_cycle": "MONTHLY",
                 "features": {
-                    "max_users": 3,
-                    "max_products": 50,
-                    "max_clients": 100,
+                    "max_users": -1,
+                    "max_products": -1,
+                    "max_clients": -1,
                     "support": "Community",
                     "features": ["Basic CRM", "Dashboard", "Reports"]
                 },
+                "modules": ALL_MODULES,
                 "stripe_price_id": None,
                 "is_active": True
             },
@@ -79,13 +87,14 @@ def seed_tier_data(connection: Connection) -> None:
                 "price": 0,  # $0.00
                 "billing_cycle": "MONTHLY",
                 "features": {
-                    "max_users": 5,
-                    "max_products": 100,
-                    "max_clients": 200,
+                    "max_users": -1,
+                    "max_products": -1,
+                    "max_clients": -1,
                     "support": "Email",
                     "trial_days": 14,
                     "features": ["Full CRM", "Dashboard", "Advanced Reports", "API Access"]
                 },
+                "modules": ALL_MODULES,
                 "stripe_price_id": None,
                 "is_active": True
             },
@@ -212,8 +221,8 @@ def seed_tier_data(connection: Connection) -> None:
             tier_data = tiers_data_map[tier_name]
             connection.execute(
                 text(
-                    "INSERT INTO tier (id, created_at, name, price, billing_cycle, features, stripe_price_id, is_active) "
-                    "VALUES (gen_random_uuid(), :created_at, :name, :price, :billing_cycle, :features, :stripe_price_id, :is_active)"
+                    "INSERT INTO tier (id, created_at, name, price, billing_cycle, features, modules, stripe_price_id, is_active) "
+                    "VALUES (gen_random_uuid(), :created_at, :name, :price, :billing_cycle, :features, :modules, :stripe_price_id, :is_active)"
                 ),
                 {
                     'created_at': now_gt(),
@@ -221,6 +230,7 @@ def seed_tier_data(connection: Connection) -> None:
                     'price': tier_data['price'],
                     'billing_cycle': tier_data['billing_cycle'],
                     'features': str(tier_data['features']).replace("'", '"'),
+                    'modules': str(tier_data['modules']).replace("'", '"') if tier_data.get('modules') else None,
                     'stripe_price_id': tier_data['stripe_price_id'],
                     'is_active': tier_data['is_active']
                 }
