@@ -98,7 +98,8 @@ Notable revision chains (base: `f612571eaad0_initial_schema_with_uuid`):
 - **Cycle 4 insights**: insight dashboard/chart tables
 - **Cycle 5 network config**: `nc1a` (five network tables + `ProvisioningJob` columns + `PENDING_INFORM` via `ALTER TYPE … ADD VALUE` + 17 permissions) → `nc1b` (append-only `device_action_log` trigger)
 - **Cycle 7 core config**: `nc2a_core_config` (hand-written, additive, guarded/idempotent: `device_category.tier` + backfill, `device_type.cli_platform`, `inventory_item` mgmt surface, `topology_device_type.inventory_item_id` FK SET NULL, `client_service.install_state`/`installed_at`; three new CHECK constraints)
-- **Cycle 8 topology-owned playbooks**: `c8a_playbook_topology` (head; hand-written, guarded/idempotent with in-migration assertions) — drops `playbook.target_vendor` + `playbook.target_category_id` (+ its FK), adds `playbook.topology_id` (FK → topology ON DELETE CASCADE, nullable, indexed `ix_playbook_topology_id`); no backfill (topology_id NULL until the topology editor re-saves)
+- **Free/Trial unlimited**: `t1_free_trial_unlimited` (head) — data migration setting Free/Trial tier features to unlimited (-1) and modules to the full set; paired with the updated `tier_seed.py` (fresh installs seed the same, `modules` column now seeded)
+- **Cycle 8 topology-owned playbooks**: `c8a_playbook_topology` (hand-written, guarded/idempotent with in-migration assertions) — drops `playbook.target_vendor` + `playbook.target_category_id` (+ its FK), adds `playbook.topology_id` (FK → topology ON DELETE CASCADE, nullable, indexed `ix_playbook_topology_id`); no backfill (topology_id NULL until the topology editor re-saves)
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant indexes (`a1f2b3c4d5e6`), timezone fixes, task/workflow/integration modules
 
 ## Relationships
