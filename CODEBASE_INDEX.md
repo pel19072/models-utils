@@ -84,7 +84,7 @@ see [docs/schemas.md](docs/schemas.md) + [docs/email-service.md](docs/email-serv
 | Module | Role |
 |---|---|
 | `workflow_engine.py` (57.7 KB, largest file) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) |
-| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp); Cycle 7: pinned positions resolve to the topology's pinned item (`PINNED_DEVICE_UNAVAILABLE` on failure) + `device{i}_category_tier` variable |
+| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp); Cycle 7: pinned positions resolve to the topology's pinned item (`PINNED_DEVICE_UNAVAILABLE` on failure) ; doc 33: namespaced variable emission (`edge_devices[n]`/`core_devices[n]`/`chain[n]`/`service_plan`/`client`/`service`/`input`), flat names retired |
 | `jwt_utils.py` | HS256 create/decode; `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE`, `REFRESH_TOKEN_EXPIRE`; fails fast in production if `SECRET_KEY` unset |
 | `permission_utils.py` | `PermissionChecker` / require-permission dependencies |
 | `audit_utils.py` | log_create/update/delete/custom operation helpers |

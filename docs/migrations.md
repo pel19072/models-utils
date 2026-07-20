@@ -161,6 +161,21 @@ from the start).
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
   indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
 
+- **Namespaced playbook variables**: `pv1_namespaced_playbook_variables` — a
+  DATA-only revision (no DDL). Rewrites every `{{token}}` in
+  `playbook.definition` through the flat→namespaced name map, converts
+  `service_plan.provisioning_params` from `{"vlan": 110}` to
+  `[{key, value, description}]` rows, and prefixes workflow `action_config`
+  variable KEYS with `input.` (values may be `{{trigger.*}}` templates, a
+  different namespace, and are left alone). Rewritten playbooks get
+  `last_dry_run_version = NULL` so machine-edited device config must be
+  re-simulated before it runs live. Idempotent: a second run finds no legacy
+  tokens and leaves every row byte-identical. **Not reversible** — the flat
+  namespace was ambiguous by construction (which is why it was replaced), and
+  the retired unique-category aliases (`onu_serial`, …) cannot be recovered at
+  all; they are rewritten to a greppable `RETIRED_ALIAS.*` marker so they fail
+  loudly instead of resolving to nothing
+
 ## Key rules
 
 - **Not all migrations are reversible**: `c1e_install_actions` uses

@@ -70,7 +70,7 @@ Cycle 7 (doc 25 §3, `nc2a_core_config`) additions:
   the item's status must be RESERVED/INSTALLED, else the position fails with
   **`PINNED_DEVICE_UNAVAILABLE`** (collected like MISSING_DEVICE, same fatality
   rules). `ResolvedItem` gains `category_tier` and `pinned` fields.
-- **New emitted variable** per resolved position: `device{i}_category_tier`
+- **Emitted per resolved position** (doc 33): `edge_devices[n].*` / `core_devices[n].*` (0-based within tier) and `chain[n].*` (1-based absolute), each carrying `item_id`/`serial`/`mac`/`type`/`category_tier`/`position`
   (CORE/EDGE/empty); `_DEVICE_VARIABLE_PATTERN` recognizes the new suffix so
   templates referencing it count as device variables.
 
