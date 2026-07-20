@@ -1249,7 +1249,9 @@ def _execute_enqueue_provisioning_explicit(
     job = ProvisioningJob(
         company_id=company_id,
         playbook_id=playbook.id,
-        variables=resolved["variables"],
+        # doc 33: explicit-playbook mode runs no topology resolution, so every
+        # variable here is author input and takes the `input.*` namespace.
+        variables={input_key(str(k)): v for k, v in (resolved["variables"] or {}).items()},
         client_service_id=_owned_or_none(db, ClientService, resolved.get("client_service_id"), company_id),
         inventory_item_id=_owned_or_none(db, InventoryItem, resolved.get("inventory_item_id"), company_id),
         integration_id=_owned_or_none(db, Integration, config.get("integration_id"), company_id),
@@ -1283,7 +1285,7 @@ def _execute_enqueue_provisioning_topology(
         ClientService, InventoryItem, ProvisioningJob, ProvisioningTrigger, Topology, TopologyDeviceType,
     )
     from database_utils.models.crm import Integration
-    from database_utils.utils.provisioning_resolution import resolve_provisioning, ResolutionError
+    from database_utils.utils.provisioning_resolution import resolve_provisioning, ResolutionError, input_key
 
     rid = _uuid_or_none(config.get("client_service_id"))
     if rid is None:
@@ -1327,8 +1329,15 @@ def _execute_enqueue_provisioning_topology(
             f"{e.code} — {e.detail}. Errors: {json.dumps(e.errors)}"
         )
 
+    # doc 33: automation-authored variables are author input, so they land in
+    # the `input.*` namespace. Previously they were merged flat and could
+    # SHADOW a resolved system variable (a step named `variables: {serial: ...}`
+    # silently overrode the resolver's device serial); namespacing makes that
+    # impossible rather than merely discouraged.
     config_variables = config.get("variables") or {}
-    variables_final = {**resolution.variables, **config_variables}
+    variables_final = dict(resolution.variables)
+    for key, value in config_variables.items():
+        variables_final[input_key(str(key))] = value
 
     inventory_item_id_final = _owned_or_none(db, InventoryItem, config.get("inventory_item_id"), company_id)
     if inventory_item_id_final is None and resolution.resolved_items:

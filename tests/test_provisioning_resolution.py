@@ -62,7 +62,7 @@ def test_device_free_playbook_is_not_fatal():
         "steps": [{
             "name": "flip-vlan",
             "driver": "http",
-            "request": {"method": "POST", "path": "/api", "body": "{{client_service_id}}"},
+            "request": {"method": "POST", "path": "/api", "body": "{{service.id}}"},
         }]
     }
     assert _playbook_references_device_variables(_playbook(definition)) is False
@@ -70,16 +70,28 @@ def test_device_free_playbook_is_not_fatal():
 
 def test_positional_device_variable_reference_is_fatal():
     definition = {
-        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{device1_serial}}"}]
+        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{edge_devices[0].serial}}"}]
     }
     assert _playbook_references_device_variables(_playbook(definition)) is True
 
 
-def test_category_alias_reference_is_fatal():
+def test_chain_position_reference_is_fatal():
+    """The hidden absolute-position namespace is device-derived too — it is
+    what `target_position` step targeting compiles to."""
+    definition = {
+        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{chain[1].serial}}"}]
+    }
+    assert _playbook_references_device_variables(_playbook(definition)) is True
+
+
+def test_retired_category_alias_is_not_device_referencing():
+    """Unique-category aliases (cpe_router_serial, onu_mac, ...) are GONE
+    (doc 33). The name is now just an unresolvable token, not a device
+    reference — the executor's unresolved-token guard is what catches it."""
     definition = {
         "steps": [{"name": "s", "driver": "simulator", "template": "serial={{cpe_router_serial}}"}]
     }
-    assert _playbook_references_device_variables(_playbook(definition)) is True
+    assert _playbook_references_device_variables(_playbook(definition)) is False
 
 
 def test_unserializable_definition_fails_safe_as_device_referencing():
@@ -90,10 +102,10 @@ def test_unserializable_definition_fails_safe_as_device_referencing():
 
 
 def test_category_tier_variable_reference_is_fatal():
-    """Cycle 7 (doc 25 §3): device{i}_category_tier is device-derived — a
+    """Cycle 7 (doc 25 §3): a device's category_tier is device-derived — a
     playbook templating it needs the chain resolved."""
     definition = {
-        "steps": [{"name": "s", "driver": "ssh", "template": "tier={{device1_category_tier}}"}]
+        "steps": [{"name": "s", "driver": "ssh", "template": "tier={{core_devices[0].category_tier}}"}]
     }
     assert _playbook_references_device_variables(_playbook(definition)) is True
 
@@ -185,10 +197,13 @@ def test_pinned_position_resolves_without_client_matching():
     resolved = resolve_provisioning(db, svc)
 
     assert resolved.resolved_items[0].pinned is True
-    assert resolved.variables["device1_item_id"] == str(pinned.id)
-    assert resolved.variables["device1_serial"] == "OLT-001"
-    assert resolved.variables["device1_category_tier"] == "CORE"
-    assert resolved.variables["olt_serial"] == "OLT-001"  # unique-category alias
+    # Tier-indexed (what the operator sees) and absolute-position (what step
+    # targeting compiles to) both address the same device — doc 33.
+    assert resolved.variables["core_devices[0].item_id"] == str(pinned.id)
+    assert resolved.variables["chain[1].item_id"] == str(pinned.id)
+    assert resolved.variables["core_devices[0].serial"] == "OLT-001"
+    assert resolved.variables["core_devices[0].category_tier"] == "CORE"
+    assert "olt_serial" not in resolved.variables  # unique-category alias retired
 
 
 def test_pinned_item_wrong_status_is_pinned_device_unavailable():
@@ -252,8 +267,14 @@ def test_pinned_core_plus_client_matched_edge_mix():
     resolved = resolve_provisioning(db, svc)
 
     assert [ri.pinned for ri in resolved.resolved_items] == [True, False]
-    assert resolved.variables["device1_serial"] == "OLT-001"
-    assert resolved.variables["device1_category_tier"] == "CORE"
-    assert resolved.variables["device2_serial"] == "ONU-042"
-    assert resolved.variables["device2_category_tier"] == "EDGE"
-    assert resolved.variables["onu_serial"] == "ONU-042"
+    # Indexes are 0-based WITHIN a tier, so the CORE OLT and the EDGE ONT are
+    # both [0] — that is the whole point of the tier namespaces (doc 33).
+    assert resolved.variables["core_devices[0].serial"] == "OLT-001"
+    assert resolved.variables["core_devices[0].category_tier"] == "CORE"
+    assert resolved.variables["edge_devices[0].serial"] == "ONU-042"
+    assert resolved.variables["edge_devices[0].category_tier"] == "EDGE"
+    # Absolute chain positions stay 1-based and distinct.
+    assert resolved.variables["chain[1].serial"] == "OLT-001"
+    assert resolved.variables["chain[2].serial"] == "ONU-042"
+    # The unique-category alias is retired, not renamed.
+    assert "onu_serial" not in resolved.variables

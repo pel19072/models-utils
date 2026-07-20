@@ -37,6 +37,31 @@ Cycle 3 changes (doc 20/20a, E1/E2):
   ACTIVATION keeps the original founder hard-fail-visibly behavior
   unconditionally.
 
+Namespaced variables (doc 33, revision pv1 — founder decision 2026-07-20):
+every emitted variable now carries a namespace, replacing the flat
+device{i}_* names and the unique-category aliases (onu_serial, ...), which
+are GONE. Nothing bare survives, so a typo can never silently resolve to an
+unrelated value:
+
+  edge_devices[n].<attr> / core_devices[n].<attr>   n = 0-based WITHIN tier
+  chain[n].<attr>                                   n = 1-based absolute
+                                                    position; hidden from the
+                                                    editor, backs step
+                                                    targeting where only the
+                                                    chain position is known
+  service_plan.<field|param>                        plan fields + the plan's
+                                                    tenant-authored rows
+  client.<attr>                                     subscriber context (new)
+  service.<attr>                                    the client_service itself
+  input.<key>                                       author-declared playbook
+                                                    variables (applied at
+                                                    reference; the declared
+                                                    key itself stays bare)
+
+`variables` remains a FLAT dict — the KEYS are the full dotted/indexed
+strings. There is no nested structure to walk, which keeps the renderer a
+pure dictionary lookup (ADR-006: no expressions, no attribute access).
+
 Cycle 7 changes (doc 25 §3, revision nc2a_core_config):
 - Pinned positions: a chain position with topology_device_type
   .inventory_item_id set resolves to THAT item — shared core infrastructure
@@ -108,6 +133,40 @@ class ResolvedProvisioning:
     resolved_items: List[ResolvedItem] = field(default_factory=list)
 
 
+INPUT_NAMESPACE = "input"
+
+
+def input_key(key: str) -> str:
+    """The token an author-declared variable is referenced by (doc 33).
+
+    The declaration keeps its bare snake_case `key` — the authoring form and
+    its validator are untouched — and the namespace is applied at REFERENCE
+    time. Lives here, not in backend-erp's renderer, because the workflow
+    engine also produces author variables and models-utils cannot import
+    backend-erp (import direction is strictly downward)."""
+    return key if key.startswith(f"{INPUT_NAMESPACE}.") else f"{INPUT_NAMESPACE}.{key}"
+
+
+def iter_provisioning_params(params: Any):
+    """Yield (key, value) from ServicePlan.provisioning_params.
+
+    The stored shape is a LIST of {"key", "value", "description"} rows so the
+    UI can carry a human explanation per parameter. The pre-namespace shape
+    was a bare {"vlan": 110} dict; the `pv1` revision converts every row, but
+    this reader stays tolerant of both so a hand-written dict (or an xlsx
+    import) never explodes at provisioning time."""
+    if not params:
+        return
+    if isinstance(params, dict):
+        for key, value in params.items():
+            yield str(key), value
+        return
+    if isinstance(params, list):
+        for row in params:
+            if isinstance(row, dict) and row.get("key"):
+                yield str(row["key"]), row.get("value")
+
+
 def get_topology_playbook(topology: Topology, purpose: str) -> Optional[TopologyPlaybook]:
     """Look up the topology_playbook row bound to `purpose`, or None if the
     topology has no entry for it. Extracted as a tiny module-level helper
@@ -117,14 +176,19 @@ def get_topology_playbook(topology: Topology, purpose: str) -> Optional[Topology
     return next((tp for tp in topology.playbooks if tp.purpose == purpose), None)
 
 
-# Amendment 4: a device-derived variable is either a positional
-# device{i}_item_id/_serial/_mac/_type (Cycle 7 adds _category_tier, doc 25
-# §3) or a unique-category alias like cpe_router_serial/onu_mac (category
-# keys are open-ended super-admin data, so the suffix is what's matched — no
-# ordinary business variable name ends in _serial or _mac).
+# Amendment 4: a device-derived variable is any token in the tier-indexed
+# device namespaces, or the hidden absolute-position `chain[n]` alias.
+# (Pre-namespace this matched device{i}_* and unique-category aliases like
+# onu_serial; both are gone — see the module docstring.)
 _DEVICE_VARIABLE_PATTERN = re.compile(
-    r'\{\{\s*(device\d+_(?:item_id|serial|mac|type|category_tier)|[a-z0-9_]+_(?:serial|mac))\s*\}\}'
+    r'\{\{\s*(?:edge_devices|core_devices|chain)\[\d+\]\.[a-z][a-z0-9_]*\s*\}\}'
 )
+
+# Attributes emitted for every resolved device, in all three device
+# namespaces. Keep in sync with the editor catalog in frontend-erp
+# (lib/playbookVariables.ts) — the editor is the only place an operator
+# discovers these.
+DEVICE_ATTRIBUTES = ("item_id", "serial", "mac", "type", "category_tier", "position")
 
 
 def _playbook_references_device_variables(playbook: Playbook) -> bool:
@@ -328,38 +392,58 @@ def resolve_provisioning(
         # equipment state doesn't matter to this playbook.
 
     variables: Dict[str, Any] = {
-        "client_service_id": str(client_service.id),
+        "service.id": str(client_service.id),
     }
-    plan = client_service.service_plan
+
+    # getattr, not attribute access: resolution runs against detached/partial
+    # ClientService objects too (the workflow engine, tests), and a missing
+    # relationship must degrade to "no client variables", never crash a job.
+    client = getattr(client_service, "client", None)
+    if client is not None:
+        variables["client.id"] = str(client.id)
+        variables["client.name"] = client.name or ""
+        variables["client.email"] = client.email or ""
+        variables["client.phone"] = client.phone or ""
+        variables["client.address"] = client.address or ""
+
+    plan = getattr(client_service, "service_plan", None)
     if plan is not None:
-        variables["service_plan_id"] = str(plan.id)
+        variables["service_plan.id"] = str(plan.id)
+        variables["service_plan.name"] = plan.name or ""
         if plan.download_mbps is not None:
-            variables["download_mbps"] = plan.download_mbps
+            variables["service_plan.download_mbps"] = plan.download_mbps
         if plan.upload_mbps is not None:
-            variables["upload_mbps"] = plan.upload_mbps
-        if plan.provisioning_params:
-            variables.update(plan.provisioning_params)
+            variables["service_plan.upload_mbps"] = plan.upload_mbps
+        # Tenant-authored rows land under the plan's own namespace instead of
+        # being flattened into the global one, so a plan parameter can never
+        # collide with (or shadow) a system variable.
+        for key, value in iter_provisioning_params(plan.provisioning_params):
+            variables[f"service_plan.{key}"] = value
 
-    # Category alias only when unique within the chain (per doc 18a §5).
-    category_counts: Dict[str, int] = {}
+    # Devices are addressed by their index WITHIN a tier (0-based), because
+    # that is what an operator can actually see and reason about ("the second
+    # ONT"), plus a hidden absolute-position `chain[n]` alias (1-based) that
+    # backs step targeting, where only the chain position is in scope.
+    tier_counters: Dict[str, int] = {}
     for ri in resolved_items:
-        if ri.category:
-            key = ri.category.lower()
-            category_counts[key] = category_counts.get(key, 0) + 1
-
-    for ri in resolved_items:
-        i = ri.position + 1  # 1-based, per doc 18a §5
-        variables[f"device{i}_item_id"] = str(ri.inventory_item_id)
-        variables[f"device{i}_serial"] = ri.serial_number or ""
-        variables[f"device{i}_mac"] = ri.mac_address or ""
-        variables[f"device{i}_type"] = ri.device_type_name
-        # Cycle 7 (doc 25 §3): CORE/EDGE/empty for template convenience.
-        variables[f"device{i}_category_tier"] = ri.category_tier or ""
-        if ri.category:
-            key = ri.category.lower()
-            if category_counts.get(key) == 1:
-                variables[f"{key}_serial"] = ri.serial_number or ""
-                variables[f"{key}_mac"] = ri.mac_address or ""
+        attrs = {
+            "item_id": str(ri.inventory_item_id),
+            "serial": ri.serial_number or "",
+            "mac": ri.mac_address or "",
+            "type": ri.device_type_name,
+            "category_tier": ri.category_tier or "",
+            "position": ri.position + 1,
+        }
+        namespaces = [f"chain[{ri.position + 1}]"]
+        tier = (ri.category_tier or "").upper()
+        if tier in ("EDGE", "CORE"):
+            prefix = "edge_devices" if tier == "EDGE" else "core_devices"
+            index = tier_counters.get(prefix, 0)
+            tier_counters[prefix] = index + 1
+            namespaces.append(f"{prefix}[{index}]")
+        for namespace in namespaces:
+            for attr, value in attrs.items():
+                variables[f"{namespace}.{attr}"] = value
 
     return ResolvedProvisioning(
         playbook_id=playbook.id,
