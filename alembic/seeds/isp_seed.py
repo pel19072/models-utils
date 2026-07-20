@@ -286,6 +286,13 @@ WORKFLOW_TEMPLATES = [
     # is forbidden). Free installs = a Q0 fee product; the order still exists
     # as history and is settled via settle-zero. Tenants must reinstall to
     # pick up a new version.
+    # v4 (task-context cycle, doc 32): the installation-fee param is now a
+    # SERVICE PLAN (type "service_plan", item key service_plan_id — the
+    # engine's preferred resolution). The old product param blocked fresh
+    # tenants entirely: legacy products are retired (no create path), so a
+    # new company could never satisfy the required product UUID. Tenants on
+    # v3 keep their installed product_id copies (deprecated-but-honored
+    # during the rollback window).
     _wt(
         "new-installation", "New Installation",
         "When a subscriber service is created pending installation, bill the installation fee "
@@ -293,7 +300,7 @@ WORKFLOW_TEMPLATES = [
         "installation",
         [
             {"key": "install_state_id", "label": "Board column for new installations", "type": "task_state", "required": True},
-            {"key": "installation_fee_product_id", "label": "Installation fee product (use a Q0 product for free installs)", "type": "product", "required": True},
+            {"key": "installation_fee_plan_id", "label": "Installation fee catalog item (use a Q0 plan for free installs)", "type": "service_plan", "required": True},
             {"key": "fixed_assignee_ids", "label": "Fallback technicians when the client has no assigned technician", "type": "users", "required": False},
         ],
         [{"resource_type": "client_service", "event_type": "CREATED",
@@ -304,7 +311,7 @@ WORKFLOW_TEMPLATES = [
                  "order_type": "INSTALLATION",
                  "client_id": "{{trigger.after.client_id}}",
                  "client_service_id": "{{trigger.resource_id}}",
-                 "items": [{"product_id": "{{param:installation_fee_product_id}}", "quantity": 1}],
+                 "items": [{"service_plan_id": "{{param:installation_fee_plan_id}}", "quantity": 1}],
                  "due_date_offset_days": 0,
                  "idempotency_key": "install-order-{{trigger.resource_id}}"}},
             {"ref": "s2", "name": "Create installation task", "action_type": "CREATE_TASK",
