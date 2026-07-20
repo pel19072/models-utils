@@ -125,7 +125,7 @@ Playbooks are now topology-owned, so `schemas/playbook.py` changes:
   chain position the step configures. A `field_validator` rejects `< 1`. When
   set and `target_item_id` is unset, the renderer derives
   `target_item_id = "{{device<N>_item_id}}"` (N = target_position) at render
-  time, so provisioning-resolution keeps emitting `device{i}_*` unchanged;
+  time; doc 33: the derivation targets the absolute-position `chain[n]` namespace;
   `target_item_id` still wins for power users / system playbooks
 - `PlaybookDefinition` is otherwise unchanged (steps still carry `target_item_id`)
 

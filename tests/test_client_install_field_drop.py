@@ -55,8 +55,12 @@ def test_migration_dropped_constants():
 
 
 def test_single_head_file_scan():
-    """Quote-agnostic scan of every revision file: exactly one head, and it
-    is cf1_drop_client_install_fields."""
+    """Quote-agnostic scan of every revision file: exactly ONE head.
+
+    The head's NAME is deliberately not asserted — pinning it made this guard
+    fail on every subsequent revision, which taught people to edit the guard
+    rather than read it. The invariant worth protecting is that the migration
+    graph never branches."""
     revision_re = re.compile(r"^revision(?::\s*str)?\s*=\s*['\"]([^'\"]+)['\"]", re.M)
     down_re = re.compile(r"^down_revision[^=]*=\s*['\"]([^'\"]+)['\"]", re.M)
     revisions, parents = set(), set()
@@ -69,7 +73,7 @@ def test_single_head_file_scan():
         if down:  # the root revision has down_revision = None
             parents.add(down.group(1))
     heads = revisions - parents
-    assert heads == {"cf1_drop_client_install_fields"}
+    assert len(heads) == 1, f"migration graph has branched: {sorted(heads)}"
 
 
 # --- model surface ---

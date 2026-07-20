@@ -68,7 +68,7 @@ Also in Cycle 7 (same revision cycle, no DDL):
   system playbooks (doc 25 §4.3/§5.1).
 - `PlaybookStep.target_item_id` (+ same field on `PlaybookPrecondition`) — step
   targeting for the CLI/ping drivers: an inventory_item id or a `{{variable}}`
-  the executor renders (e.g. `{{device1_item_id}}`).
+  the executor renders (e.g. `{{chain[1].item_id}}` — doc 33).
 - Workflow-engine dedupe fix: the `ENQUEUE_PROVISIONING` in-flight pre-check now
   includes `PENDING_INFORM` (matching nc1a's idempotency-index predicate) — see
   [workflow-engine.md](workflow-engine.md).
