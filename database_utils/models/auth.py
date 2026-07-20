@@ -48,6 +48,11 @@ class Tier(Base):
     features = Column(JSON, nullable=True)  # {"max_users": 10, "max_products": 100, "support": "basic"}
     modules = Column(JSON, nullable=True)  # ["core", "admin", "management", "automations"]
     stripe_price_id = Column(String, nullable=True)  # Stripe Price ID for future integration
+    # Recurrente integration (tenant-pays-Uplink checkout). NULL price id =
+    # tier not purchasable online yet (frontend shows it as coming soon).
+    recurrente_product_id = Column(String, nullable=True)
+    recurrente_price_id = Column(String, nullable=True)          # monthly price
+    recurrente_price_yearly_id = Column(String, nullable=True)   # yearly price
     is_active = Column(Boolean, default=True, nullable=False)  # Can be assigned to new companies
 
     # Relationships
@@ -68,6 +73,8 @@ class Company(Base):
     tier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tier.id"), nullable=False)
     tax_id = Column(String, nullable=True)
     address = Column(String, nullable=True)
+    # Recurrente customer id — created lazily on the company's first checkout.
+    recurrente_customer_id = Column(String, nullable=True)
 
     # Relationships
     tier = relationship("Tier", back_populates="companies")
@@ -289,6 +296,12 @@ class Subscription(Base):
     stripe_subscription_id = Column(String, nullable=True, unique=True)
     stripe_customer_id = Column(String, nullable=True)
 
+    # Recurrente integration — set by the subscription.create webhook.
+    recurrente_subscription_id = Column(String, nullable=True, unique=True)
+    recurrente_checkout_id = Column(String, nullable=True)
+    card_last4 = Column(String, nullable=True)
+    card_brand = Column(String, nullable=True)
+
     # Relationships
     company = relationship("Company", back_populates="subscription")
     tier = relationship("Tier", back_populates="subscriptions")
@@ -357,6 +370,10 @@ class BillingInvoice(Base):
     stripe_invoice_id = Column(String, nullable=True, unique=True)
     stripe_payment_intent_id = Column(String, nullable=True)
 
+    # Recurrente integration — second idempotency layer for webhook-recorded
+    # charges (one invoice per Recurrente payment intent).
+    recurrente_intent_id = Column(String, nullable=True, unique=True)
+
     # Additional details
     billing_reason = Column(String, nullable=True)  # "subscription_cycle", "subscription_create", "manual"
     notes = Column(Text, nullable=True)
@@ -365,6 +382,16 @@ class BillingInvoice(Base):
     subscription = relationship("Subscription", back_populates="invoices")
     payment_method = relationship("PaymentMethod")
     marked_paid_by = relationship("User", foreign_keys=[marked_paid_by_user_id])
+
+
+class BillingWebhookEvent(Base):
+    """Idempotency log for Recurrente webhook deliveries — PK is the svix-id
+    delivery header, so a redelivered event is a no-op (oficina precedent)."""
+    __tablename__ = "billing_webhook_event"
+
+    svix_id = Column(String, primary_key=True)
+    event_type = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
 
 
 class TierChangeRequest(Base):
