@@ -28,7 +28,7 @@ input and now travel namespaced (`input.*`).
 Idempotent: re-running finds no legacy tokens and leaves every row
 byte-identical.
 
-Revision ID: pv1_namespaced_playbook_variables
+Revision ID: pv1_namespaced_variables
 Revises: tk1_new_installation_v4
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ import re
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'pv1_namespaced_playbook_variables'
+revision = 'pv1_namespaced_variables'
 down_revision = 'tk1_new_installation_v4'
 branch_labels = None
 depends_on = None
@@ -193,5 +193,5 @@ def downgrade() -> None:
     # unique legacy name, and the retired category aliases cannot be recovered
     # at all. Restore from a dump if this must be undone.
     raise NotImplementedError(
-        "pv1_namespaced_playbook_variables is not reversible — restore from a backup"
+        "pv1_namespaced_variables is not reversible — restore from a backup"
     )

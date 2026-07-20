@@ -161,7 +161,7 @@ from the start).
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
   indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
 
-- **Namespaced playbook variables**: `pv1_namespaced_playbook_variables` — a
+- **Namespaced playbook variables**: `pv1_namespaced_variables` — a
   DATA-only revision (no DDL). Rewrites every `{{token}}` in
   `playbook.definition` through the flat→namespaced name map, converts
   `service_plan.provisioning_params` from `{"vlan": 110}` to
