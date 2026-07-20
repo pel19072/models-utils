@@ -278,3 +278,103 @@ def test_pinned_core_plus_client_matched_edge_mix():
     assert resolved.variables["chain[2].serial"] == "ONU-042"
     # The unique-category alias is retired, not renamed.
     assert "onu_serial" not in resolved.variables
+
+
+# --- client custom attributes as variables (doc 33 follow-up) ---
+
+def _custom_value(key, value, field_type="TEXT"):
+    return SimpleNamespace(
+        value=value,
+        field_definition=SimpleNamespace(field_key=key, field_type=field_type),
+    )
+
+
+def _client(name="Ada Lovelace", custom=None):
+    return SimpleNamespace(
+        id=uuid.uuid4(), name=name, email="ada@example.com",
+        phone="+502 5555 0100", address="1 Analytical Way",
+        custom_field_values=custom or [],
+    )
+
+
+def _service_with_client(topology, client):
+    svc = _service(topology)
+    svc.client = client
+    return svc
+
+
+def _resolve_vars(custom):
+    """Resolve a minimal single-position service and return its variables."""
+    onu_type = _device_type("HG8245", "ONU", "EDGE")
+    tdt = _tdt(0, onu_type)
+    topology = _activation_topology([tdt])
+    svc = _service_with_client(topology, _client(custom=custom))
+    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
+                client_service_id=svc.id)
+    db = _FakeDb(candidates=[onu], items_by_id={})
+    return resolve_provisioning(db, svc).variables
+
+
+def test_client_custom_attributes_are_emitted():
+    """A tenant's own client attributes reach playbooks under client.*, the
+    same way a service plan's provisioning parameters reach service_plan.*."""
+    variables = _resolve_vars([_custom_value("ip_address", "10.10.9.88")])
+
+    assert variables["client.ip_address"] == "10.10.9.88"
+    # Built-ins still present alongside them.
+    assert variables["client.name"] == "Ada Lovelace"
+
+
+def test_number_and_boolean_custom_fields_get_their_natural_type():
+    """Values are stored as strings; a template should render 100, not 100.0,
+    and a boolean should not read as the literal string 'true'."""
+    variables = _resolve_vars([
+        _custom_value("vlan", "100", "NUMBER"),
+        _custom_value("ratio", "1.5", "NUMBER"),
+        _custom_value("is_vip", "true", "BOOLEAN"),
+        _custom_value("nope", "no", "BOOLEAN"),
+    ])
+
+    assert variables["client.vlan"] == 100
+    assert variables["client.ratio"] == 1.5
+    assert variables["client.is_vip"] is True
+    assert variables["client.nope"] is False
+
+
+def test_unparseable_number_falls_back_to_the_raw_string():
+    variables = _resolve_vars([_custom_value("vlan", "not-a-number", "NUMBER")])
+    assert variables["client.vlan"] == "not-a-number"
+
+
+def test_custom_field_cannot_shadow_a_builtin_client_field():
+    """A custom field keyed `name` must not replace the subscriber's actual
+    name in a template that already reads {{client.name}}."""
+    variables = _resolve_vars([_custom_value("name", "SHADOWED")])
+    assert variables["client.name"] == "Ada Lovelace"
+
+
+def test_key_the_token_grammar_cannot_express_is_skipped():
+    """field_key permits a leading digit, which the renderer's grammar does
+    not — emitting it would create a token nobody can reference."""
+    variables = _resolve_vars([_custom_value("5g_profile", "x")])
+    assert "client.5g_profile" not in variables
+
+
+def test_null_custom_value_renders_as_empty_string():
+    variables = _resolve_vars([_custom_value("note", None)])
+    assert variables["client.note"] == ""
+
+
+def test_missing_relationship_does_not_crash_resolution():
+    """Resolution runs against detached/partial objects too."""
+    onu_type = _device_type("HG8245", "ONU", "EDGE")
+    tdt = _tdt(0, onu_type)
+    topology = _activation_topology([tdt])
+    svc = _service_with_client(topology, SimpleNamespace(
+        id=uuid.uuid4(), name="No Rels", email=None, phone=None, address=None))
+    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
+                client_service_id=svc.id)
+
+    variables = resolve_provisioning(_FakeDb(candidates=[onu], items_by_id={}), svc).variables
+
+    assert variables["client.name"] == "No Rels"

@@ -51,7 +51,10 @@ unrelated value:
                                                     chain position is known
   service_plan.<field|param>                        plan fields + the plan's
                                                     tenant-authored rows
-  client.<attr>                                     subscriber context (new)
+  client.<attr>                                     subscriber context: built-in
+                                                    fields + the tenant's own
+                                                    custom client attributes
+                                                    (built-ins win a collision)
   service.<attr>                                    the client_service itself
   input.<key>                                       author-declared playbook
                                                     variables (applied at
@@ -165,6 +168,48 @@ def iter_provisioning_params(params: Any):
         for row in params:
             if isinstance(row, dict) and row.get("key"):
                 yield str(row["key"]), row.get("value")
+
+
+# A namespace segment the renderer can actually match. `field_key` is
+# validated as alnum+underscore and lowercased, which still permits a leading
+# digit ("5g_profile") — that would produce a token no one can reference, so
+# such keys are skipped rather than emitted as dead weight.
+_REFERENCEABLE_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _coerce_custom_value(value: Optional[str], field_type: Any) -> Any:
+    """Custom field values are all stored as strings; give NUMBER/BOOLEAN their
+    natural type so a template renders `100` rather than `100.0`, and so a
+    boolean reads as true/false instead of the literal string."""
+    if value is None:
+        return ""
+    kind = getattr(field_type, "value", field_type)
+    kind = str(kind).upper() if kind is not None else ""
+    if kind == "NUMBER":
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return value
+        return int(number) if number.is_integer() else number
+    if kind == "BOOLEAN":
+        return str(value).strip().lower() in ("true", "1", "yes", "y")
+    return value
+
+
+def iter_client_custom_fields(client: Any):
+    """Yield (field_key, typed value) for a client's custom attributes.
+
+    Reads the `client_custom_field_value` -> `custom_field_definition` join the
+    Client model already exposes as `custom_field_values`. Degrades to nothing
+    when the relationship is absent (detached/partial objects, tests) — a
+    missing attribute must never crash a provisioning job."""
+    for row in getattr(client, "custom_field_values", None) or []:
+        definition = getattr(row, "field_definition", None)
+        key = getattr(definition, "field_key", None)
+        if not key or not _REFERENCEABLE_KEY.match(key):
+            continue
+        yield key, _coerce_custom_value(getattr(row, "value", None),
+                                        getattr(definition, "field_type", None))
 
 
 def get_topology_playbook(topology: Topology, purpose: str) -> Optional[TopologyPlaybook]:
@@ -405,6 +450,16 @@ def resolve_provisioning(
         variables["client.email"] = client.email or ""
         variables["client.phone"] = client.phone or ""
         variables["client.address"] = client.address or ""
+        # The tenant's own client attributes, exactly as a service plan's
+        # provisioning parameters work — a per-subscriber value an operator
+        # defines in the CRM and templates in a playbook.
+        for key, value in iter_client_custom_fields(client):
+            token = f"client.{key}"
+            # Built-in fields win: a custom field keyed `name` must not shadow
+            # the subscriber's actual name in a template that already reads it.
+            if token in variables:
+                continue
+            variables[token] = value
 
     plan = getattr(client_service, "service_plan", None)
     if plan is not None:
