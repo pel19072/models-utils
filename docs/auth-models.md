@@ -28,6 +28,7 @@ both auth-erp (primary) and backend-erp (token/permission validation).
 | `PaymentMethod` (payment_method) | SaaS billing payment method |
 | `BillingInvoice` (billing_invoice) | SaaS subscription invoice |
 | `TierChangeRequest` (tier_change_request) | Tier change approval workflow |
+| `BillingWebhookEvent` (billing_webhook_event) | Recurrente webhook delivery idempotency log — `svix_id` string PK + `event_type`/`created_at` (rb1) |
 
 Note the two billing domains: these SaaS-billing models cover ISP companies
 paying Uplink; **subscriber** billing (ISP end-customers) lives in the CRM/ISP
@@ -61,6 +62,15 @@ models ([crm-models.md](crm-models.md), [isp-models.md](isp-models.md)).
   not in the auth model.
 - System role names live in `constants/roles.py` (`Roles`:
   ADMIN/MANAGER/SALES/USER)
+- **Recurrente gateway columns** (`rb1_recurrente_billing`, additive):
+  `Tier.recurrente_product_id`/`recurrente_price_id` (monthly)/
+  `recurrente_price_yearly_id` — a NULL price id means the tier is not
+  purchasable online; `Company.recurrente_customer_id` — created lazily on
+  first checkout; `Subscription.recurrente_subscription_id` (unique),
+  `recurrente_checkout_id`, `card_last4`, `card_brand` (display fields);
+  `BillingInvoice.recurrente_intent_id` (unique) — webhook charge idempotency.
+  `BillingWebhookEvent` provides the second idempotency layer: one row per
+  svix delivery id.
 
 ## Environment Variables
 

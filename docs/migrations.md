@@ -2,8 +2,8 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 46 revisions in
-`alembic/versions/` (head: `cf1_drop_client_install_fields`) — plus the idempotent seed
+Alembic-managed schema migrations for all models in this repo — 47 revisions in
+`alembic/versions/` (head: `rb1_recurrente_billing`) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -98,7 +98,7 @@ from the start).
   `rbac_seed.MANAGER_EXCLUDED_PERMISSIONS` keep MANAGER excluded at both
   auto-grant sites (subset-pinned by `tests/test_attested_adoption.py`).
 - **Client install-field removal (doc 31)**: `cf1_drop_client_install_fields`
-  (parent `ba1_attested_adoption`, **new head**) — hand-written, nc2a/ba1
+  (parent `ba1_attested_adoption`) — hand-written, nc2a/ba1
   house style. **Destructive one-shot** — safe this release only because prod
   is pre-cycle-1: the chain creates the columns in `cd2f0076c709` and drops
   them here in one linear pass. Data cleanup runs BEFORE the DDL: deletes
@@ -115,6 +115,16 @@ from the start).
   Guardrails incl. a quote-agnostic single-head file scan:
   `tests/test_client_install_field_drop.py`. The seed change rides this
   revision: `isp_seed` new-installation v3 drops step s3 + edge s2→s3.
+- **Recurrente tenant billing**: `rb1_recurrente_billing` (parent `cf1`,
+  **head**) — additive only. Adds the `recurrente_*` gateway columns:
+  `tier.recurrente_product_id`/`recurrente_price_id`/`recurrente_price_yearly_id`
+  (NULL price id = not purchasable online), `company.recurrente_customer_id`
+  (lazy, first checkout), `subscription.recurrente_subscription_id` (unique) +
+  `recurrente_checkout_id`/`card_last4`/`card_brand`, and
+  `billing_invoice.recurrente_intent_id` (unique — webhook charge idempotency).
+  Creates the `billing_webhook_event` table (`svix_id` string PK,
+  `event_type`, `created_at`) — webhook delivery idempotency log. Fully
+  reversible downgrade (drops table + columns).
 - **Free/Trial unlimited**: `t1_free_trial_unlimited` — data migration; merges `{max_users,max_products,max_clients} = -1` into Free/Trial `tier.features` and grants the full module list. Product decision: free tier has NO limits until further notice. `tier_seed.py` seeds fresh DBs the same way (now also writes `tier.modules`).
 - **Cycle 8 (topology-owned playbooks)**: `c8a_playbook_topology` —
   hand-written (not autogenerate), nc2a-style guarded/idempotent ops
