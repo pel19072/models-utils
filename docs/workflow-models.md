@@ -37,7 +37,12 @@ invoked by backend-erp after entity mutations.
   creates `ProvisioningJob` rows, optionally resolving playbooks via
   `utils/provisioning_resolution.py` (`use_topology` purpose mode)
 - **Seeds**: `alembic/seeds/isp_seed.py` seeds purpose-based workflow-template
-  blueprints
+  blueprints. The `new-installation` blueprint is at **v4** (ships with the
+  no-op `tk1_new_installation_v4` revision): its installation-fee param is type
+  `service_plan` (key `installation_fee_plan_id`) and the `CREATE_ORDER` item
+  uses `service_plan_id` — v3's required `product` param pointed at the retired
+  legacy Product catalog and blocked fresh tenants; installed v3 copies keep
+  running (`product_id` deprecated-but-honored during the rollback window)
 - **Workflow schemas** (`schemas/workflow.py`, `schemas/workflow_template.py`)
 
 ## Key Implementation Details

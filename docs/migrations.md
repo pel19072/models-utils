@@ -2,8 +2,8 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 47 revisions in
-`alembic/versions/` (head: `rb1_recurrente_billing`) — plus the idempotent seed
+Alembic-managed schema migrations for all models in this repo — 48 revisions in
+`alembic/versions/` (head: `tk1_new_installation_v4`) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -115,8 +115,8 @@ from the start).
   Guardrails incl. a quote-agnostic single-head file scan:
   `tests/test_client_install_field_drop.py`. The seed change rides this
   revision: `isp_seed` new-installation v3 drops step s3 + edge s2→s3.
-- **Recurrente tenant billing**: `rb1_recurrente_billing` (parent `cf1`,
-  **head**) — additive only. Adds the `recurrente_*` gateway columns:
+- **Recurrente tenant billing**: `rb1_recurrente_billing` (parent `cf1`) —
+  additive only. Adds the `recurrente_*` gateway columns:
   `tier.recurrente_product_id`/`recurrente_price_id`/`recurrente_price_yearly_id`
   (NULL price id = not purchasable online), `company.recurrente_customer_id`
   (lazy, first checkout), `subscription.recurrente_subscription_id` (unique) +
@@ -125,6 +125,19 @@ from the start).
   Creates the `billing_webhook_event` table (`svix_id` string PK,
   `event_type`, `created_at`) — webhook delivery idempotency log. Fully
   reversible downgrade (drops table + columns).
+- **New-installation template v4 (task-context cycle, doc 32)**:
+  `tk1_new_installation_v4` (parent `rb1_recurrente_billing`, **head**) —
+  schema **no-op** (`upgrade()`/`downgrade()` both pass); it exists so the
+  path-filtered prod `migrate.yml` workflow fires and replays seeds. The seed
+  change rides this revision: `isp_seed` bumps the `new-installation` blueprint
+  to v4 — the installation-fee param moves from the retired legacy Product
+  catalog to a **service plan** (param type `service_plan`, key
+  `installation_fee_plan_id`), and the `CREATE_ORDER` step item uses
+  `service_plan_id` (the engine's preferred resolution). The old required
+  `product` param blocked fresh tenants entirely (products have no create path
+  anymore, so the required product UUID could never be satisfied). Installed v3
+  tenant copies keep running — `product_id` items remain
+  deprecated-but-honored during the rollback window.
 - **Free/Trial unlimited**: `t1_free_trial_unlimited` — data migration; merges `{max_users,max_products,max_clients} = -1` into Free/Trial `tier.features` and grants the full module list. Product decision: free tier has NO limits until further notice. `tier_seed.py` seeds fresh DBs the same way (now also writes `tier.modules`).
 - **Cycle 8 (topology-owned playbooks)**: `c8a_playbook_topology` —
   hand-written (not autogenerate), nc2a-style guarded/idempotent ops
