@@ -248,8 +248,15 @@ def get_topology_playbook(topology: Topology, purpose: str) -> Optional[Topology
 # device namespaces, or the hidden absolute-position `chain[n]` alias.
 # (Pre-namespace this matched device{i}_* and unique-category aliases like
 # onu_serial; both are gone — see the module docstring.)
+# The optional `| filter ...` suffix (doc 34) must be tolerated here, or a
+# token carrying a filter reads as NOT device-derived and amendment 4 silently
+# downgrades a MISSING_DEVICE from fatal. Both of these patterns FAIL OPEN, so
+# forgetting the suffix is a correctness bug, not a syntax error.
+_FILTER_SUFFIX = r'(?:\s*\|[^{}\n]*)?'
+
 _DEVICE_VARIABLE_PATTERN = re.compile(
-    r'\{\{\s*(?:edge_devices|core_devices|chain)\[\d+\]\.[a-z][a-z0-9_]*\s*\}\}'
+    r'\{\{\s*(?:edge_devices|core_devices|chain)\[\d+\]\.[a-z][a-z0-9_]*'
+    + _FILTER_SUFFIX + r'\s*\}\}'
 )
 
 # Attributes emitted for every resolved device, in all three device
@@ -270,7 +277,9 @@ def _playbook_references_token(playbook: Playbook, token: str) -> bool:
         blob = json.dumps(playbook.definition)
     except (TypeError, ValueError):
         return True
-    return re.search(r"\{\{\s*" + re.escape(token) + r"\s*\}\}", blob) is not None
+    return re.search(
+        r"\{\{\s*" + re.escape(token) + _FILTER_SUFFIX + r"\s*\}\}", blob
+    ) is not None
 
 
 def _playbook_references_device_variables(playbook: Playbook) -> bool:
