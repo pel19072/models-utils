@@ -90,6 +90,100 @@ CANONICAL_TOPOLOGY_PURPOSES = (
 )
 TOPOLOGY_PURPOSE_PATTERN = r'^[A-Z][A-Z0-9_]{0,49}$'
 
+# Service-lifecycle cycle (doc 35): the status machine behind the per-purpose
+# lifecycle actions (activate / suspend / reactivate / cancel). Lives HERE, not
+# in backend-erp, because the workflow engine resolves the same purposes
+# (import direction is strictly downward — see CLAUDE.md).
+#
+# ACTIVATION maps to None ON PURPOSE (founder decision 5): activating a service
+# ENQUEUES ONLY. The status flip PENDING_INSTALL -> ACTIVE is written by
+# recompute_install_state (backend-erp/utils/install_state.py) once the install
+# state reaches INSTALLED — i.e. after the provisioning job succeeds. Encoding
+# it as None means a caller doing `new_status = PURPOSE_TO_STATUS[purpose]`
+# cannot accidentally short-circuit that and mark a service ACTIVE before the
+# network agrees.
+PURPOSE_TO_STATUS = {
+    PURPOSE_ACTIVATION: None,
+    PURPOSE_SUSPENSION: ClientServiceStatus.SUSPENDED,
+    PURPOSE_REACTIVATION: ClientServiceStatus.ACTIVE,
+    PURPOSE_DEPROVISION: ClientServiceStatus.CANCELLED,
+}
+
+# Legal status writes. CANCELLED is terminal — a cancelled service is never
+# revived (re-selling is a NEW client_service row); DELETE additionally refuses
+# any non-cancelled service, so cancel is the only way out.
+ALLOWED_TRANSITIONS = {
+    ClientServiceStatus.PENDING_INSTALL: {ClientServiceStatus.ACTIVE, ClientServiceStatus.CANCELLED},
+    ClientServiceStatus.ACTIVE: {ClientServiceStatus.SUSPENDED, ClientServiceStatus.CANCELLED},
+    ClientServiceStatus.SUSPENDED: {ClientServiceStatus.ACTIVE, ClientServiceStatus.CANCELLED},
+    ClientServiceStatus.CANCELLED: set(),
+}
+
+
+def purpose_allowed_for_status(purpose, current_status) -> bool:
+    """Is this lifecycle action legal against a service in `current_status`?
+
+    Single source of truth for both the backend pre-flight gate and the
+    frontend's per-purpose action buttons (founder decision 3: a button is
+    enabled only when the machine allows it AND a playbook exists for that
+    purpose — this answers the first half).
+
+    Four cases:
+      1. ACTIVATION — special-cased, because it writes no status and therefore
+         has no target to look up in ALLOWED_TRANSITIONS. Legal ONLY from
+         PENDING_INSTALL: an already-ACTIVE service gets no Activate button,
+         and re-activating a SUSPENDED service is REACTIVATION's job.
+      2. REACTIVATION — ALSO special-cased, and for a reason that is not
+         obvious: it is the exact inverse of SUSPENSION, so it is legal ONLY
+         from SUSPENDED. The generic rule (case 3) would wrongly allow it from
+         PENDING_INSTALL, because its target ACTIVE happens to be a legal
+         transition out of PENDING_INSTALL — that edge belongs to ACTIVATION
+         and is owned by recompute_install_state, NOT by a status write. Taking
+         the generic path there would mark a never-installed service ACTIVE and
+         start billing it (status/activation_date/billing_status/
+         next_generation_date all written) for an install that never happened
+         and a CPE that was never linked. The legacy
+         `POST /client-services/{id}/reactivate` endpoint has always rejected
+         this ("Only SUSPENDED services can be reactivated"); both paths share
+         `_apply_reactivation`, so they must agree.
+      3. Any other canonical purpose — legal iff its target status is a legal
+         transition out of `current_status`.
+      4. A tenant-defined custom purpose (purposes are extensible free strings,
+         see TOPOLOGY_PURPOSE_PATTERN) — falls through to True: it is
+         enqueue-only, writes no status, so there is no transition to police.
+         It MUST NOT raise; an unknown purpose is a normal tenant config, not a
+         bug.
+
+    Accepts `current_status` as a ClientServiceStatus or its string value, and
+    `purpose` in any case/spacing the normalizer would accept.
+    """
+    if purpose is None:
+        return False
+    key = str(getattr(purpose, 'value', purpose)).strip().upper().replace(' ', '_').replace('-', '_')
+
+    try:
+        status = ClientServiceStatus(getattr(current_status, 'value', current_status))
+    except ValueError:
+        return False
+
+    if key == PURPOSE_ACTIVATION:
+        return status == ClientServiceStatus.PENDING_INSTALL
+
+    if key == PURPOSE_REACTIVATION:
+        # Inverse of SUSPENSION — see case 2 in the docstring. Do NOT relax
+        # this to the generic ALLOWED_TRANSITIONS lookup: PENDING_INSTALL ->
+        # ACTIVE is a legal edge, but it is ACTIVATION's, and reaching it here
+        # bills a subscriber whose install never happened.
+        return status == ClientServiceStatus.SUSPENDED
+
+    if key not in PURPOSE_TO_STATUS:
+        return True  # custom purpose: enqueue-only, no status transition
+
+    target = PURPOSE_TO_STATUS[key]
+    if target is None:
+        return False  # unreachable today; a future None mapping is not a write
+    return target in ALLOWED_TRANSITIONS.get(status, set())
+
 
 class InventoryItemStatus(str, enum.Enum):
     IN_STOCK = "IN_STOCK"

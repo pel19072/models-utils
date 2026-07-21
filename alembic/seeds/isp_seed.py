@@ -263,13 +263,15 @@ TEMPLATE_REQUIRED_COLUMNS = {
     # topology_playbook table (revision c3a_topology_purpose) — never publish
     # before it exists.
     "installation-provisioning": [(TopologyPlaybook.__tablename__, "purpose")],
-    # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these three templates now
+    # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these templates now
     # UPDATE_FIELD client_service.billing_status instead of
     # recurring_order.status — the column only exists from c2b onward. v4
     # (Cycle 3 E2) adds the same topology_playbook.purpose gate as above.
+    # 'service-removal' had an identical entry, dropped with the template
+    # itself (service-lifecycle cycle) — this dict is only consulted per entry
+    # in WORKFLOW_TEMPLATES, so a key with no template is dead weight.
     "suspension": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
     "reactivation": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
-    "service-removal": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
 }
 
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
@@ -450,31 +452,23 @@ WORKFLOW_TEMPLATES = [
                                           "input.service_plan_id": "{{trigger.after.service_plan_id}}"}}}],
         [],
     ),
-    # v4: see the 'suspension' comment above — same rewrite (DEPROVISION),
-    # same gate, same amendment 4 device-free-playbook leniency. Also gains
-    # an idempotency key (v3 had none).
-    _wt(
-        "service-removal", "Service Removal",
-        "When a service is cancelled, cancel billing and run the topology's "
-        "DEPROVISION playbook.",
-        "billing",
-        [],
-        [{"resource_type": "client_service", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_to", "value": "CANCELLED"}}],
-        [
-            {"ref": "cancel_billing", "name": "Cancel recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
-                               "updates": {"billing_status": "CANCELLED"}}},
-            {"ref": "provision", "name": "Run deprovision playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {
-                 "use_topology": True,
-                 "purpose": "DEPROVISION",
-                 "client_service_id": "{{trigger.resource_id}}",
-                 "idempotency_key": "deprovision-{{trigger.resource_id}}",
-                 "max_attempts": 3}},
-        ],
-        [{"from": "cancel_billing", "to": "provision"}],
-    ),
+    # 'service-removal' REMOVED (service-lifecycle cycle, founder decision 8):
+    # cancelling a service now natively cancels billing and enqueues the
+    # topology's DEPROVISION playbook, in the cancel handler itself. Keeping
+    # the template would double-fire the deprovision job on every cancel for
+    # any tenant that had installed it. Retire-only, same treatment as
+    # fiber-cut/maintenance below: deleted from this list, key added to
+    # RETIRED_TEMPLATE_KEYS, and the retirement pass at the bottom of
+    # _seed_workflow_templates deactivates the TEMPLATE row on the next migrate
+    # (revision lc1_retire_removal_tmpl replays the seed in prod).
+    #
+    # The retirement pass does NOT touch already-installed tenant copies, and
+    # cannot: installing a template materializes an independent `workflow` row
+    # with no template_id/key back-reference, and find_matching_workflows
+    # filters on workflow.is_active alone. Deactivating those installed copies
+    # is done by lc1_retire_removal_tmpl's upgrade() — see that revision's
+    # docstring for the targeting rules and why a stale copy breaks the ADMIN
+    # force-cancel guarantee.
     _wt(
         "onu-replacement", "ONU / Equipment Replacement",
         "When customer equipment is reassigned to a service, run the equipment provisioning playbook with its serial.",
@@ -502,7 +496,7 @@ WORKFLOW_TEMPLATES = [
 # Keys the retirement pass must never touch even though they are not (yet)
 # published at every migration position — kept explicit so a future template
 # add/remove doesn't need to touch the retirement logic itself.
-RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance"]
+RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance", "service-removal"]
 
 # Cycle 3 E4 (doc 20a admin-categories-sidebar §6): the 13 baseline device
 # categories, duplicated (not imported) from revision
