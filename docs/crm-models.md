@@ -22,7 +22,7 @@ by backend-erp (and cron-erp for recurring orders).
 | `RecurringOrder` (recurring_order) + `RecurringOrderItem` | **Legacy billing engine** (`RecurrenceEnum`) — `ClientService` absorbed its billing in Cycle 2 (`c2b`) but still dual-writes here during the rollback window; consumed by cron-erp |
 | `Invoice` (invoice) | Customer invoice |
 | `Payment` (payment) | **Cycle 1 payment ledger** — `PaymentKind`, `PaymentMethodType` |
-| `CustomFieldDefinition` / `ClientCustomFieldValue` | Dynamic per-tenant client fields |
+| `CustomFieldDefinition` / `ClientCustomFieldValue` | Dynamic per-tenant client fields. Also a **provisioning input**: each value is emitted as the playbook variable `client.<field_key>` (doc 33 follow-up), so a subscriber's static IP or VLAN can be templated into device config. Values are stored as strings and coerced by `field_type` at resolution |
 | `TaskState` (task_state) | Kanban column (`TaskStateColor`) |
 | `Task` (task) | Work item; assignees via `task_assignee` M2M; `TaskLinkedObjectType` CLIENT/ORDER/RECURRING_ORDER |
 | `TaskTemplate` (task_template) | Task blueprint |

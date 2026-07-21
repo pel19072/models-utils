@@ -18,7 +18,7 @@ library, never the reverse).
 | Module | Purpose |
 |------|---------|
 | `workflow_engine.py` (58 KB) | Trigger matching + async DAG execution (`check_workflow_triggers`, `execute_workflow`, `execute_step`) — see [workflow-engine.md](workflow-engine.md) |
-| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp in Cycle 3; Cycle 7 adds pinned positions; doc 33 replaces the flat `device{i}_*` names with the namespaced `edge_devices[n]`/`core_devices[n]`/`chain[n]`/`service_plan`/`client`/`service`/`input` catalog) |
+| `provisioning_resolution.py` | Topology → purpose → playbook + per-chain-position device resolution (moved down from backend-erp in Cycle 3; Cycle 7 adds pinned positions; doc 33 replaces the flat `device{i}_*` names with the namespaced `edge_devices[n]`/`core_devices[n]`/`chain[n]`/`service_plan`/`client`/`service`/`input` catalog; `service_plan.*` and `client.*` are extended by the tenant's own plan parameters and client custom fields) |
 | `jwt_utils.py` | HS256 JWT create/decode. Env: `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE` (minutes, default 1440), `REFRESH_TOKEN_EXPIRE`. **Fails fast if `SECRET_KEY` is unset when `ENVIRONMENT=production`**; dev fallback otherwise |
 | `permission_utils.py` | `PermissionChecker` and require-permission FastAPI dependencies |
 | `audit_utils.py` | `log_create_operation` / `log_update_operation` / `log_delete_operation` / `log_custom_operation` helpers writing `AuditLog` rows |
