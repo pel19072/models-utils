@@ -82,7 +82,12 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   elsewhere means "not computed", not "no evidence")
 - `ClientServiceAdoptIn` — `POST /client-services/{id}/adopt` body: `note`
   required non-empty (stripping validator), `installed_at` optional historical
-  install date (applied only while the service's `installed_at` is NULL)
+  install date (applied only while the service's `installed_at` is NULL), and
+  `topology_id: Optional[UUID]` (service-lifecycle cycle, doc 35) — the topology
+  to assign DURING adoption. An adopted/brownfield service with no topology can
+  resolve no lifecycle playbook at all, so it would be uncancellable except
+  through the ADMIN force escape hatch. Inherited by
+  `ClientServiceAdoptBulkItem`, so the bulk campaign path accepts it too
 - `ClientServiceAdoptBulkItem` (AdoptIn + `client_service_id`) and
   `ClientServiceAdoptBulkIn` (`items`, 1–500) — `POST /client-services/adopt-bulk`
   body
