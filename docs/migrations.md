@@ -2,8 +2,8 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 48 revisions in
-`alembic/versions/` (head: `tk1_new_installation_v4`) — plus the idempotent seed
+Alembic-managed schema migrations for all models in this repo — 52 revisions in
+`alembic/versions/` (head: `lc1_retire_removal_tmpl`) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -51,7 +51,7 @@ After `upgrade`, `env.py` runs `_run_seeds(connection)`:
 |---|---|
 | `alembic/seeds/rbac_seed.py` | Permissions and roles |
 | `alembic/seeds/tier_seed.py` | SaaS tiers |
-| `alembic/seeds/isp_seed.py` | ISP permissions, tier modules, purpose-based workflow-template blueprints, device_category baseline (Cycle 7: entries carry a CORE/EDGE tier, column-existence-gated for pre-nc2a positions; a backfill classifies existing rows only while no row has a tier yet, so admin tier edits — including clear-to-NULL — survive re-seeds) |
+| `alembic/seeds/isp_seed.py` | ISP permissions, tier modules, purpose-based workflow-template blueprints (+ a convergent retirement pass that sets `is_active = FALSE` on every key in `RETIRED_TEMPLATE_KEYS` — `fiber-cut`, `maintenance`, `service-removal` — never DELETE, so run history survives; it reaches the TEMPLATE row only, not installed tenant copies), device_category baseline (Cycle 7: entries carry a CORE/EDGE tier, column-existence-gated for pre-nc2a positions; a backfill classifies existing rows only while no row has a tier yet, so admin tier edits — including clear-to-NULL — survive re-seeds) |
 
 The modules are importable as `seeds.*` because `env.py` adds the alembic dir to
 `sys.path`. All seeds are idempotent (ON CONFLICT / upsert), so re-runs converge
@@ -126,7 +126,7 @@ from the start).
   `event_type`, `created_at`) — webhook delivery idempotency log. Fully
   reversible downgrade (drops table + columns).
 - **New-installation template v4 (task-context cycle, doc 32)**:
-  `tk1_new_installation_v4` (parent `rb1_recurrente_billing`, **head**) —
+  `tk1_new_installation_v4` (parent `rb1_recurrente_billing`) —
   schema **no-op** (`upgrade()`/`downgrade()` both pass); it exists so the
   path-filtered prod `migrate.yml` workflow fires and replays seeds. The seed
   change rides this revision: `isp_seed` bumps the `new-installation` blueprint
@@ -182,6 +182,88 @@ from the start).
   `scope='service'`. `service_plan.provisioning_params` is NOT rewritten: its
   rows gain an optional `scope` and a row without one is plan-scoped, which is
   exactly what every pre-feature row is. Reversible (drops the column).
+
+- **Service lifecycle — topology backfill**: `bf1_topology_backfill` (parent
+  `sp1_service_params`) — DATA-only, no DDL (both columns ship with
+  `c8a_playbook_topology`). Sets `client_service.topology_id` from
+  `service_plan.default_topology_id` wherever it is NULL and the plan declares a
+  default. Motivation: before this cycle `topology_id` was set only by the create
+  path, so every service imported by the adoption campaign (doc 30) or created
+  before topologies existed carries NULL — and a NULL topology resolves no
+  playbook for any purpose, so the new pre-flight gate blocks
+  suspend/reactivate/cancel and DELETE refuses non-cancelled rows. Those services
+  are stranded, reachable only via the ADMIN force-cancel hatch. Idempotent: the
+  `topology_id IS NULL` predicate makes a re-run a no-op and never overwrites an
+  operator who later cleared or re-pointed a topology by hand. **Residuals are
+  expected, not a failure** — a service whose plan has no `default_topology_id`
+  cannot be repaired by any safe rule (picking an arbitrary topology would
+  silently provision the wrong device chain); the before/backfilled/residual
+  counts are printed so the operator knows how many rows still need a manual
+  assignment from the UI. `downgrade()` is a deliberate no-op: a backfilled
+  `topology_id` is indistinguishable from a hand-set one (no marker column), so
+  NULLing them back out would destroy real operator assignments and re-strand the
+  services this un-stranded.
+
+- **Service lifecycle — retire the 'service-removal' template**:
+  `lc1_retire_removal_tmpl` (parent `bf1_topology_backfill`, **head**).
+  Cancelling a service now natively cancels billing and enqueues the topology's
+  DEPROVISION playbook from the cancel handler; the `service-removal` template
+  did the same thing as a workflow triggered on `client_service.status changed_to
+  CANCELLED`, so leaving it live double-fires. **Two distinct things are
+  retired:**
+  1. The **template row** — by the seed: `service-removal` is removed from
+     `WORKFLOW_TEMPLATES` and added to `RETIRED_TEMPLATE_KEYS` in `isp_seed.py`;
+     the convergent retirement pass sets `workflow_template.is_active = FALSE`
+     (never DELETE — run history stays intact). Seeds run after upgrade via
+     `env.py`, and the revision exists at all so the path-filtered prod
+     `migrate.yml` fires (same pattern as `tk1_new_installation_v4`).
+  2. The **installed per-tenant `workflow` rows** — by `upgrade()` itself, and
+     *not* by the seed. Installing a template materializes an INDEPENDENT
+     `workflow` row: there is no `template_id`/key column on `workflow`, and
+     `find_matching_workflows` filters on `Workflow.is_active` alone and never
+     joins `workflow_template`. Deactivating the template therefore has zero
+     effect on tenants who already installed it. (Precedent:
+     `c2d_graph_removal` step 2.)
+
+  Why a stale copy is a correctness bug and not merely redundant: on a NORMAL
+  cancel the native job is already QUEUED when triggers fire, so the shared
+  `deprovision-{client_service_id}` idempotency key absorbs the duplicate. But an
+  **ADMIN force-cancel** (`force:true`, used when the topology has no DEPROVISION
+  playbook) deliberately enqueues NOTHING and audit-logs that fact — there is no
+  native job for the key to collide with, so the stale workflow fires a
+  deprovision against live equipment, violating the exact guarantee force-cancel
+  exists to make.
+
+  **Targeting is behavioural, not provenance-based.** A workflow is deactivated
+  iff it is currently active AND (a) it has a `client_service`/`UPDATED` trigger
+  whose `field_conditions` are `status changed_to CANCELLED`, AND (b) it has an
+  `ENQUEUE_PROVISIONING` step whose `action_config` either names purpose
+  `DEPROVISION`, or carries a `deprovision-%` `idempotency_key`, or **names no
+  purpose at all**. The last arm is required: installed workflows are FROZEN
+  copies taken at install time and never converge to a later template version, so
+  a tenant who installed before the Cycle-3 purpose gate and before v4 added an
+  idempotency key holds a step with neither field — and those are the worst to
+  miss, since with no idempotency key they double-enqueue on a normal cancel too.
+
+  **CAVEAT / RELEASE NOTE (the schema records no provenance):** this predicate
+  cannot distinguish an installed `service-removal` copy from a **hand-built
+  tenant workflow of the same shape**, and will deactivate that one too. This is
+  accepted on the merits — any active workflow that enqueues a DEPROVISION on
+  `status changed_to CANCELLED` is both redundant with the native cancel handler
+  and the force-cancel hazard above, regardless of author. The match is kept
+  narrow (both conditions required; only `ENQUEUE_PROVISIONING`/DEPROVISION steps
+  count) so a tenant workflow that merely *reacts* to cancellation — emails the
+  customer, closes a task, opens a ticket, updates billing — fails condition (b)
+  and is untouched. Tenants who had installed *Service Removal* will find it
+  deactivated; cancelling still cancels billing and runs the DEPROVISION playbook
+  natively, so no tenant action is needed. A hand-built workflow can be re-enabled
+  from the automations UI; the affected workflow ids are printed by the migration.
+
+  Re-runnable (statements only ever narrow to `is_active = TRUE`; sets
+  `lock_timeout = '5s'`). `downgrade()` is a no-op: the deactivated ids are not
+  persisted beyond the migration log, and a blanket reactivation would re-enable
+  workflows tenants had deliberately turned off (same posture as
+  `c2d_graph_removal`).
 
 ## Key rules
 

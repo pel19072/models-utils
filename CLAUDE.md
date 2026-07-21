@@ -58,7 +58,7 @@ Correct order:
 - `database_utils/middleware/` — request-ID/JWT-context logging ASGI middleware
 - `database_utils/services/email_service.py` + `database_utils/templates/email/` — transactional email (SMTP via aiosmtplib) + 8 Jinja2 templates (shipped via `[options.package_data]`)
 - `database_utils/database.py` — engine bootstrap from `DATABASE_URL`/`DB_URL`/`POSTGRES_*` (raises at import if none)
-- `alembic/` — 50 revisions (head: `sp1_service_params`); `env.py` imports all model modules and runs seeds after upgrade
+- `alembic/` — 52 revisions (head: `lc1_retire_removal_tmpl`); `env.py` imports all model modules and runs seeds after upgrade
 - `alembic/seeds/` — idempotent seed scripts: `rbac_seed.py`, `tier_seed.py`, `isp_seed.py` (importable as `seeds.*` because `env.py` adds the alembic dir to `sys.path`)
 - `tests/` — 17 files, ~100 tests (`asyncio_mode = auto`, SQLite)
 - `.github/workflows/` — `ci.yml` (migration guard + ruff advisory + pytest), `migrate.yml` (prod migration)

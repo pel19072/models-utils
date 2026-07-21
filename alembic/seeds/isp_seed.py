@@ -263,13 +263,14 @@ TEMPLATE_REQUIRED_COLUMNS = {
     # topology_playbook table (revision c3a_topology_purpose) — never publish
     # before it exists.
     "installation-provisioning": [(TopologyPlaybook.__tablename__, "purpose")],
-    # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these three templates now
+    # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these templates now
     # UPDATE_FIELD client_service.billing_status instead of
     # recurring_order.status — the column only exists from c2b onward. v4
     # (Cycle 3 E2) adds the same topology_playbook.purpose gate as above.
-    "suspension": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
-    "reactivation": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
-    "service-removal": [("client_service", "billing_status"), (TopologyPlaybook.__tablename__, "purpose")],
+    # 'service-removal', 'suspension' and 'reactivation' had identical entries,
+    # dropped with the templates themselves (service-lifecycle cycle) — this
+    # dict is only consulted per entry in WORKFLOW_TEMPLATES, so a key with no
+    # template is dead weight.
 }
 
 # Installable workflow templates (ADR-007). "{{param:KEY}}" placeholders are
@@ -372,70 +373,25 @@ WORKFLOW_TEMPLATES = [
                             "updates": {"status": "ACTIVE"}}}],
         [],
     ),
-    # v3 (Cycle 2 D1 §1b, doc 18 amendment 8): rewritten from
-    # recurring_order.status (via {{trigger.after.recurring_order_id}}) to
-    # client_service.billing_status (via {{trigger.resource_id}} — the SAME
-    # resource that fired the trigger, so resource_id_source is simply
-    # "trigger"). This mirrors the data-migration rewrite pass c2b runs
-    # against already-INSTALLED tenant copies; the blueprint here is what
-    # NEW installs pick up going forward. Gated by TEMPLATE_REQUIRED_COLUMNS
-    # so the v3 definition never publishes before client_service.billing_status
-    # exists (c2b).
-    # v4 (Cycle 3 E2, doc 20a workflow-provisioning §1/§3, amendment 4):
-    # rewritten from an explicit `suspend_playbook_id` param to topology
-    # purpose resolution (SUSPENSION). The trigger resource IS the
-    # client_service, so targeting is trivial ({{trigger.resource_id}}).
-    # Amendment 4: a device-chain resolution error (MISSING_DEVICE/
-    # AMBIGUOUS_DEVICE) is fatal only when the SUSPENSION playbook's own
-    # template references a device variable — a device-free suspend playbook
-    # (e.g. one that only calls an integration by client_service_id) still
-    # succeeds even with ambiguous/missing CPE inventory.
-    _wt(
-        "suspension", "Service Suspension",
-        "When a service is suspended, record history, pause its billing and run the "
-        "topology's SUSPENSION playbook.",
-        "billing",
-        [],
-        [{"resource_type": "client_service", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_to", "value": "SUSPENDED"}}],
-        [
-            {"ref": "pause_billing", "name": "Pause recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
-                               "updates": {"billing_status": "PAUSED"}}},
-            {"ref": "provision", "name": "Run suspension playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {
-                 "use_topology": True,
-                 "purpose": "SUSPENSION",
-                 "client_service_id": "{{trigger.resource_id}}",
-                 "idempotency_key": "suspend-{{trigger.resource_id}}",
-                 "max_attempts": 3}},
-        ],
-        [{"from": "pause_billing", "to": "provision"}],
-    ),
-    # v4: see the 'suspension' comment above — same rewrite (REACTIVATION),
-    # same gate, same amendment 4 device-free-playbook leniency.
-    _wt(
-        "reactivation", "Service Reactivation",
-        "When a suspended service is reactivated, resume billing and run the "
-        "topology's REACTIVATION playbook.",
-        "billing",
-        [],
-        [{"resource_type": "client_service", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_from", "value": "SUSPENDED"}}],
-        [
-            {"ref": "resume_billing", "name": "Resume recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
-                               "updates": {"billing_status": "ACTIVE"}}},
-            {"ref": "provision", "name": "Run reactivation playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {
-                 "use_topology": True,
-                 "purpose": "REACTIVATION",
-                 "client_service_id": "{{trigger.resource_id}}",
-                 "idempotency_key": "reactivate-{{trigger.resource_id}}",
-                 "max_attempts": 3}},
-        ],
-        [{"from": "resume_billing", "to": "provision"}],
-    ),
+    # 'suspension' and 'reactivation' REMOVED (service-lifecycle cycle) — the
+    # siblings of 'service-removal' above, retired for the same reason and by
+    # the same mechanism (revision lc2_retire_susp_react, which also
+    # deactivates already-installed tenant copies).
+    #
+    # Both halves of each template are now redundant:
+    #   1. The UPDATE_FIELD billing step — _apply_suspension/_apply_reactivation
+    #      in backend-erp set billing_status natively (PAUSED / ACTIVE, and
+    #      reactivation stamps next_generation_date when NULL so a reactivated
+    #      service does not bill an overdue backlog). Amendment 8's whole point:
+    #      billing must never depend on an installed automation.
+    #   2. The ENQUEUE_PROVISIONING step — the lifecycle endpoint enqueues the
+    #      topology's SUSPENSION/REACTIVATION playbook directly.
+    #
+    # Their v4 idempotency keys ('suspend-{id}'/'reactivate-{id}') would dedupe a
+    # duplicate enqueue ONLY while the native path composes byte-identical keys,
+    # and not at all for the pre-v4 installed shape, which carries no key. Retiring
+    # is the durable fix rather than a guarantee resting on two string literals in
+    # different repos staying in sync.
     _wt(
         "plan-change", "Plan Upgrade / Downgrade",
         "When a service's plan changes, run the plan-change playbook with the new plan id.",
@@ -450,31 +406,23 @@ WORKFLOW_TEMPLATES = [
                                           "input.service_plan_id": "{{trigger.after.service_plan_id}}"}}}],
         [],
     ),
-    # v4: see the 'suspension' comment above — same rewrite (DEPROVISION),
-    # same gate, same amendment 4 device-free-playbook leniency. Also gains
-    # an idempotency key (v3 had none).
-    _wt(
-        "service-removal", "Service Removal",
-        "When a service is cancelled, cancel billing and run the topology's "
-        "DEPROVISION playbook.",
-        "billing",
-        [],
-        [{"resource_type": "client_service", "event_type": "UPDATED",
-          "field_conditions": {"field": "status", "operator": "changed_to", "value": "CANCELLED"}}],
-        [
-            {"ref": "cancel_billing", "name": "Cancel recurring billing", "action_type": "UPDATE_FIELD",
-             "action_config": {"resource_type": "client_service", "resource_id_source": "trigger",
-                               "updates": {"billing_status": "CANCELLED"}}},
-            {"ref": "provision", "name": "Run deprovision playbook", "action_type": "ENQUEUE_PROVISIONING",
-             "action_config": {
-                 "use_topology": True,
-                 "purpose": "DEPROVISION",
-                 "client_service_id": "{{trigger.resource_id}}",
-                 "idempotency_key": "deprovision-{{trigger.resource_id}}",
-                 "max_attempts": 3}},
-        ],
-        [{"from": "cancel_billing", "to": "provision"}],
-    ),
+    # 'service-removal' REMOVED (service-lifecycle cycle, founder decision 8):
+    # cancelling a service now natively cancels billing and enqueues the
+    # topology's DEPROVISION playbook, in the cancel handler itself. Keeping
+    # the template would double-fire the deprovision job on every cancel for
+    # any tenant that had installed it. Retire-only, same treatment as
+    # fiber-cut/maintenance below: deleted from this list, key added to
+    # RETIRED_TEMPLATE_KEYS, and the retirement pass at the bottom of
+    # _seed_workflow_templates deactivates the TEMPLATE row on the next migrate
+    # (revision lc1_retire_removal_tmpl replays the seed in prod).
+    #
+    # The retirement pass does NOT touch already-installed tenant copies, and
+    # cannot: installing a template materializes an independent `workflow` row
+    # with no template_id/key back-reference, and find_matching_workflows
+    # filters on workflow.is_active alone. Deactivating those installed copies
+    # is done by lc1_retire_removal_tmpl's upgrade() — see that revision's
+    # docstring for the targeting rules and why a stale copy breaks the ADMIN
+    # force-cancel guarantee.
     _wt(
         "onu-replacement", "ONU / Equipment Replacement",
         "When customer equipment is reassigned to a service, run the equipment provisioning playbook with its serial.",
@@ -502,7 +450,18 @@ WORKFLOW_TEMPLATES = [
 # Keys the retirement pass must never touch even though they are not (yet)
 # published at every migration position — kept explicit so a future template
 # add/remove doesn't need to touch the retirement logic itself.
-RETIRED_TEMPLATE_KEYS = ["fiber-cut", "maintenance"]
+RETIRED_TEMPLATE_KEYS = [
+    "fiber-cut",
+    "maintenance",
+    # service-lifecycle cycle: superseded by native lifecycle handling. The
+    # TEMPLATE rows are deactivated by the convergent retirement pass below;
+    # already-INSTALLED tenant copies are deactivated by revisions
+    # lc1_retire_removal_tmpl / lc2_retire_susp_react, because an installed
+    # workflow is an independent row with no link back to its template.
+    "service-removal",
+    "suspension",
+    "reactivation",
+]
 
 # Cycle 3 E4 (doc 20a admin-categories-sidebar §6): the 13 baseline device
 # categories, duplicated (not imported) from revision

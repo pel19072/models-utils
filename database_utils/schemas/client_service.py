@@ -150,9 +150,14 @@ class ClientServiceAdoptIn(BaseModel):
     non-empty — an attestation without provenance is worthless. installed_at:
     optional HISTORICAL install date; applied only if the service's
     installed_at is still NULL (a stamped first-install fact is never
-    rewritten)."""
+    rewritten). topology_id: optional topology to assign DURING adoption
+    (service-lifecycle cycle, founder decision 9) — an adopted/brownfield
+    service with no topology can run no lifecycle playbook at all, so it would
+    be uncancellable except by the admin force escape hatch. Inherited by
+    ClientServiceAdoptBulkItem, so the bulk campaign path accepts it too."""
     note: str
     installed_at: Optional[datetime] = None
+    topology_id: Optional[UUID] = None
 
     @field_validator('note')
     @classmethod
