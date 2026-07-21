@@ -11,13 +11,13 @@ The ba1 adopted_* fields follow the same rule: Out-only, never on any
 Create/Update schema.
 """
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import datetime
 
 from database_utils.models.isp import ClientServiceStatus, PURPOSE_ACTIVATION, SuspensionReason
 from database_utils.models.crm import RecurrenceEnum, RecurringOrderStatus
-from .service_plan import ServicePlanOut
+from .service_plan import ProvisioningParam, ServicePlanOut, _coerce_params
 from .topology import normalize_purpose
 
 
@@ -28,7 +28,18 @@ class ClientServiceBase(BaseModel):
     # Nullable — legacy/non-provisioned services may have none.
     topology_id: Optional[UUID] = None
     connection_params: Optional[Dict[str, Any]] = None
+    # Per-service VALUES for the parameters this service's plan declares with
+    # scope='service' (doc 33 follow-up). The plan owns the declaration; only
+    # the value lives here. Reuses ServicePlan's row model so both sides of the
+    # feature validate keys identically; `description`/`scope` are ignored on
+    # this side (the declaration is authoritative).
+    provisioning_params: Optional[List[ProvisioningParam]] = None
     notes: Optional[str] = None
+
+    @field_validator("provisioning_params", mode="before")
+    @classmethod
+    def _accept_legacy_param_dict(cls, v):
+        return _coerce_params(v)
 
 
 class ClientServiceCreate(ClientServiceBase):
@@ -51,7 +62,13 @@ class ClientServiceUpdate(BaseModel):
     topology_id: Optional[UUID] = None
     activation_date: Optional[datetime] = None
     connection_params: Optional[Dict[str, Any]] = None
+    provisioning_params: Optional[List[ProvisioningParam]] = None
     notes: Optional[str] = None
+
+    @field_validator("provisioning_params", mode="before")
+    @classmethod
+    def _accept_legacy_param_dict(cls, v):
+        return _coerce_params(v)
 
 
 class ClientServiceBillingUpdate(BaseModel):

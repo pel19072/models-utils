@@ -176,6 +176,13 @@ from the start).
   all; they are rewritten to a greppable `RETIRED_ALIAS.*` marker so they fail
   loudly instead of resolving to nothing
 
+- **Per-service provisioning parameters**: `sp1_service_params` — purely
+  additive, one nullable JSON column `client_service.provisioning_params`
+  holding this service's values for the parameters its plan declares with
+  `scope='service'`. `service_plan.provisioning_params` is NOT rewritten: its
+  rows gain an optional `scope` and a row without one is plan-scoped, which is
+  exactly what every pre-feature row is. Reversible (drops the column).
+
 ## Key rules
 
 - **Not all migrations are reversible**: `c1e_install_actions` uses

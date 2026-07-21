@@ -378,3 +378,114 @@ def test_missing_relationship_does_not_crash_resolution():
     variables = resolve_provisioning(_FakeDb(candidates=[onu], items_by_id={}), svc).variables
 
     assert variables["client.name"] == "No Rels"
+
+
+# --- per-service provisioning parameter values (doc 33 follow-up) ---
+
+def _plan(params):
+    return SimpleNamespace(
+        id=uuid.uuid4(), name="Internet 25MB", download_mbps=25, upload_mbps=8,
+        provisioning_params=params,
+    )
+
+
+def _resolve_with_params(plan_params, service_params, template="noop"):
+    onu_type = _device_type("HG8245", "ONU", "EDGE")
+    tdt = _tdt(0, onu_type)
+    playbook = SimpleNamespace(
+        id=uuid.uuid4(), is_active=True,
+        definition={"steps": [
+            {"name": "s", "driver": "simulator", "template": template}]},
+    )
+    topology = SimpleNamespace(
+        name="FTTH", is_active=True,
+        playbooks=[SimpleNamespace(purpose="ACTIVATION", playbook=playbook)],
+        device_types=[tdt],
+    )
+    svc = _service(topology)
+    svc.service_plan = _plan(plan_params)
+    svc.provisioning_params = service_params
+    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
+                client_service_id=svc.id)
+    db = _FakeDb(candidates=[onu], items_by_id={})
+    return resolve_provisioning(db, svc)
+
+
+def test_plan_scoped_param_uses_the_plan_value():
+    resolved = _resolve_with_params(
+        [{"key": "vlan", "value": 110, "scope": "plan"}], None)
+    assert resolved.variables["service_plan.vlan"] == 110
+
+
+def test_row_without_scope_is_plan_scoped():
+    """Every row written before this feature has no scope — it must keep
+    behaving exactly as it did."""
+    resolved = _resolve_with_params([{"key": "vlan", "value": 110}], None)
+    assert resolved.variables["service_plan.vlan"] == 110
+
+
+def test_service_scoped_param_uses_this_service_value():
+    """Declared on the plan, valued on the service — and still resolved under
+    the PLAN's namespace, so the playbook never changes."""
+    resolved = _resolve_with_params(
+        [{"key": "pppoe_user", "scope": "service"}],
+        [{"key": "pppoe_user", "value": "juan.perez"}],
+    )
+    assert resolved.variables["service_plan.pppoe_user"] == "juan.perez"
+
+
+def test_missing_service_value_fails_when_the_playbook_reads_it():
+    with pytest.raises(ResolutionError) as exc:
+        _resolve_with_params(
+            [{"key": "pppoe_user", "scope": "service"}], None,
+            template="user {{service_plan.pppoe_user}}",
+        )
+    assert exc.value.code == "RESOLUTION_FAILED"
+    error = exc.value.errors[0]
+    assert error["code"] == "MISSING_SERVICE_PARAM"
+    assert error["key"] == "pppoe_user"
+    # The message names the plan that declared it, so the operator knows where
+    # the declaration lives and which service is missing the value.
+    assert "Internet 25MB" in error["detail"]
+
+
+def test_blank_string_counts_as_missing():
+    with pytest.raises(ResolutionError):
+        _resolve_with_params(
+            [{"key": "pppoe_user", "scope": "service"}],
+            [{"key": "pppoe_user", "value": "   "}],
+            template="user {{service_plan.pppoe_user}}",
+        )
+
+
+def test_missing_service_value_is_ignored_when_the_playbook_never_reads_it():
+    """A SUSPENSION-style playbook that does not template the parameter must
+    not be blocked because some unrelated parameter was left blank."""
+    resolved = _resolve_with_params(
+        [{"key": "pppoe_user", "scope": "service"},
+         {"key": "vlan", "value": 110, "scope": "plan"}],
+        None,
+        template="just flip the vlan {{service_plan.vlan}}",
+    )
+    assert "service_plan.pppoe_user" not in resolved.variables
+    assert resolved.variables["service_plan.vlan"] == 110
+
+
+def test_service_value_for_an_undeclared_key_is_ignored():
+    """The plan owns the declaration — a stray value on the service must not
+    invent a variable nobody declared."""
+    resolved = _resolve_with_params(
+        [{"key": "vlan", "value": 110}],
+        [{"key": "rogue", "value": "x"}],
+    )
+    assert "service_plan.rogue" not in resolved.variables
+
+
+def test_service_value_does_not_override_a_plan_scoped_param():
+    """Scope is the plan's decision. A per-service value for a shared
+    parameter is not a silent override."""
+    resolved = _resolve_with_params(
+        [{"key": "vlan", "value": 110, "scope": "plan"}],
+        [{"key": "vlan", "value": 999}],
+    )
+    assert resolved.variables["service_plan.vlan"] == 110

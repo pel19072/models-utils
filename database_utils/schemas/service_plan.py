@@ -6,7 +6,7 @@ is a dedicated marker column (doc 18 amendment 1/2) and is NEVER exposed on
 any schema here — it is internal audit state, not user-editable data.
 """
 from pydantic import BaseModel, ConfigDict, field_validator
-from typing import Any, List, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 from uuid import UUID
 from datetime import datetime
 import re
@@ -22,10 +22,19 @@ class ProvisioningParam(BaseModel):
     Surfaced to playbooks as `{{service_plan.<key>}}`. `description` exists so
     the playbook editor can explain what a parameter is for — the raw JSON
     blob this replaced carried no such affordance.
+
+    `scope` says WHERE the value lives:
+      - 'plan'    — one shared value here, used by every service on this plan
+      - 'service' — the plan only DECLARES the parameter; each ClientService
+                    supplies its own value in `client_service.provisioning_params`
+    Both resolve under `service_plan.<key>`, so a playbook never changes when a
+    parameter's scope flips. A row with no scope is plan-scoped, which is what
+    every row written before this feature is.
     """
     key: str
     value: Any = None
     description: Optional[str] = None
+    scope: Literal["plan", "service"] = "plan"
 
     @field_validator("key")
     @classmethod
