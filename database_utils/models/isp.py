@@ -237,8 +237,13 @@ class ServicePlan(Base):
     # Cycle 2). Nullable, no server_default — doc 16 §1/§2.2.
     price_cents = Column(BigInteger, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    # Vendor-agnostic provisioning intent consumed as playbook variables,
-    # e.g. {"speed_profile": "HOME_50M", "vlan": 110, "qos_class": "residential"}
+    # Vendor-agnostic provisioning intent consumed as playbook variables
+    # (doc 33). Rows: [{"key", "value", "description", "scope"}] where scope is
+    # 'plan' (default — one shared value for every service on this plan) or
+    # 'service' (the plan DECLARES the parameter; each ClientService supplies
+    # its own value in client_service.provisioning_params). Both reach a
+    # playbook as {{service_plan.<key>}}, so flipping a parameter's scope never
+    # requires editing a playbook.
     provisioning_params = Column(JSON, nullable=True)
     # Cycle 2 entity merge (D1/D2): what this plan bills for. NOT NULL with a
     # server_default so the additive c2a migration never blocks on existing
@@ -297,7 +302,16 @@ class ClientService(Base):
     activation_date = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     # Connection long-tail: {"pppoe_user": "...", "static_ip": "...", "onu_port": 2}
+    # Free-form and NOT a playbook variable source — see provisioning_params
+    # below for the declared, per-service parameter values.
     connection_params = Column(JSON, nullable=True)
+    # Per-service VALUES for the parameters this service's plan declares with
+    # scope='service' (doc 33 follow-up). Shape: [{"key": ..., "value": ...}].
+    # The plan owns the DECLARATION (key/description/scope); the service owns
+    # only the value, so a playbook references both shared and per-service
+    # parameters as {{service_plan.<key>}} and never has to change when a
+    # parameter's scope flips.
+    provisioning_params = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
     # Cycle 5 Phase 1 (functionality F1.4/F2.3, revision nc1a): learned network
     # identifiers written by the provisioning executor at job settlement

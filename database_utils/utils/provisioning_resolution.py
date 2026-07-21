@@ -150,24 +150,47 @@ def input_key(key: str) -> str:
     return key if key.startswith(f"{INPUT_NAMESPACE}.") else f"{INPUT_NAMESPACE}.{key}"
 
 
-def iter_provisioning_params(params: Any):
-    """Yield (key, value) from ServicePlan.provisioning_params.
+SCOPE_PLAN = "plan"
+SCOPE_SERVICE = "service"
 
-    The stored shape is a LIST of {"key", "value", "description"} rows so the
-    UI can carry a human explanation per parameter. The pre-namespace shape
-    was a bare {"vlan": 110} dict; the `pv1` revision converts every row, but
-    this reader stays tolerant of both so a hand-written dict (or an xlsx
-    import) never explodes at provisioning time."""
+
+def iter_provisioning_params(params: Any):
+    """Yield (key, value, scope) from a provisioning_params column.
+
+    The stored shape is a LIST of {"key", "value", "description", "scope"} rows
+    so the UI can carry a human explanation per parameter and mark which ones
+    are valued per service. The pre-namespace shape was a bare {"vlan": 110}
+    dict; the `pv1` revision converts every row, but this reader stays tolerant
+    of both so a hand-written dict (or an xlsx import) never explodes at
+    provisioning time. A row with no `scope` is plan-scoped, which is what
+    every row written before this feature is."""
     if not params:
         return
     if isinstance(params, dict):
         for key, value in params.items():
-            yield str(key), value
+            yield str(key), value, SCOPE_PLAN
         return
     if isinstance(params, list):
         for row in params:
             if isinstance(row, dict) and row.get("key"):
-                yield str(row["key"]), row.get("value")
+                scope = row.get("scope") or SCOPE_PLAN
+                yield str(row["key"]), row.get("value"), str(scope)
+
+
+def _service_param_values(client_service: Any) -> Dict[str, Any]:
+    """The per-service VALUES, keyed. The service supplies only values — the
+    plan owns the declaration — so anything here that the plan does not declare
+    is ignored rather than emitted as a stray variable."""
+    values: Dict[str, Any] = {}
+    for key, value, _scope in iter_provisioning_params(
+        getattr(client_service, "provisioning_params", None)
+    ):
+        values[key] = value
+    return values
+
+
+def _is_blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
 
 
 # A namespace segment the renderer can actually match. `field_key` is
@@ -234,6 +257,20 @@ _DEVICE_VARIABLE_PATTERN = re.compile(
 # (lib/playbookVariables.ts) — the editor is the only place an operator
 # discovers these.
 DEVICE_ATTRIBUTES = ("item_id", "serial", "mac", "type", "category_tier", "position")
+
+
+def _playbook_references_token(playbook: Playbook, token: str) -> bool:
+    """Whether the playbook's own definition templates this exact token.
+
+    Used to decide whether a missing per-service parameter is fatal: declaring
+    `pppoe_user` per-service must not block a SUSPENSION playbook that never
+    reads it. Same posture as `_playbook_references_device_variables` — fail
+    safe (treat as referenced) when the definition cannot be introspected."""
+    try:
+        blob = json.dumps(playbook.definition)
+    except (TypeError, ValueError):
+        return True
+    return re.search(r"\{\{\s*" + re.escape(token) + r"\s*\}\}", blob) is not None
 
 
 def _playbook_references_device_variables(playbook: Playbook) -> bool:
@@ -436,6 +473,7 @@ def resolve_provisioning(
         # is not blocked from suspending/deprovisioning a service whose
         # equipment state doesn't matter to this playbook.
 
+    missing_service_params: List[Dict[str, Any]] = []
     variables: Dict[str, Any] = {
         "service.id": str(client_service.id),
     }
@@ -472,7 +510,30 @@ def resolve_provisioning(
         # Tenant-authored rows land under the plan's own namespace instead of
         # being flattened into the global one, so a plan parameter can never
         # collide with (or shadow) a system variable.
-        for key, value in iter_provisioning_params(plan.provisioning_params):
+        #
+        # A `service`-scoped row is DECLARED by the plan but VALUED by this
+        # service, and still resolves under the plan's namespace: the playbook
+        # author writes {{service_plan.<key>}} either way and never has to edit
+        # a template when a parameter's scope changes.
+        service_values = _service_param_values(client_service)
+        for key, value, scope in iter_provisioning_params(plan.provisioning_params):
+            if scope == SCOPE_SERVICE:
+                value = service_values.get(key)
+                if _is_blank(value):
+                    # Recorded, not raised: whether this is fatal depends on
+                    # the playbook actually referencing it (checked below),
+                    # exactly as an unresolved device position does.
+                    missing_service_params.append({
+                        "code": "MISSING_SERVICE_PARAM",
+                        "key": key,
+                        "token": f"service_plan.{key}",
+                        "service_plan_name": plan.name,
+                        "detail": (
+                            f"'{key}' is declared per-service on plan "
+                            f"'{plan.name}' but this service has no value for it"
+                        ),
+                    })
+                    continue
             variables[f"service_plan.{key}"] = value
 
     # Devices are addressed by their index WITHIN a tier (0-based), because
@@ -499,6 +560,22 @@ def resolve_provisioning(
         for namespace in namespaces:
             for attr, value in attrs.items():
                 variables[f"{namespace}.{attr}"] = value
+
+    # A per-service parameter with no value is fatal only when the playbook
+    # actually reads it — the same rule that governs unresolved device
+    # positions (amendment 4). A SUSPENSION playbook that never templates
+    # {{service_plan.pppoe_user}} must not be blocked because some unrelated
+    # parameter was left blank.
+    referenced_missing = [
+        err for err in missing_service_params
+        if _playbook_references_token(playbook, err["token"])
+    ]
+    if referenced_missing:
+        raise ResolutionError(
+            "RESOLUTION_FAILED",
+            "One or more per-service provisioning parameters have no value",
+            errors=referenced_missing,
+        )
 
     return ResolvedProvisioning(
         playbook_id=playbook.id,
