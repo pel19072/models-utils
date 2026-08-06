@@ -587,6 +587,16 @@ class DeviceCategory(Base):
     # nc2a backfills CORE <- ROUTER/SWITCH/OLT, EDGE <- ONU/CPE_ROUTER/
     # ACCESS_POINT by key.
     tier = Column(String(10), nullable=True)
+    # Cycle 10 (doc 35 §2.3, revision ng1_network_graph): signal-passive gear.
+    # A passive node IS on the configuration path — it is shown, it matters for
+    # troubleshooting and impact — but it is never configured.
+    #
+    # This is an explicit flag rather than an inference from "no playbook bound"
+    # because absence of a playbook cannot distinguish "expected, it is a
+    # splitter" from "someone forgot to bind an ACTIVATION playbook to this
+    # OLT". The first is a calm grey chip; the second is a hard resolution
+    # error. Same reasoning as `tier`: SaaS-admin editable, key stays immutable.
+    is_passive = Column(Boolean, nullable=False, default=False, server_default='false')
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
 
@@ -1015,6 +1025,80 @@ class Playbook(Base):
     creator = relationship("User", foreign_keys=[created_by])
     jobs = relationship("ProvisioningJob", back_populates="playbook")
     topology = relationship("Topology", foreign_keys=[topology_id])
+
+
+# ---------------------------------------------------------------------------
+# Playbook binding (Cycle 10, doc 35 §2.4, revision ng1_network_graph)
+#
+# A playbook runs on exactly ONE device, so it binds to the equipment rather
+# than to a path: an OLT is configured the same way regardless of whose traffic
+# crosses it. Resolution per node per purpose is:
+#
+#     node override  ->  device-type default  ->  none
+#
+# Binding lives in its own table rather than as a column on `playbook` so one
+# playbook can serve several device types (one "MikroTik core config" for two
+# router models) — which the retired `playbook.topology_id` ownership model
+# made impossible.
+# ---------------------------------------------------------------------------
+
+class DeviceTypePlaybook(Base):
+    """The type-level default playbook for a purpose."""
+    __tablename__ = "device_type_playbook"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    device_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("device_type.id", ondelete="RESTRICT"), nullable=False
+    )
+    purpose = Column(String(50), nullable=False)
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    device_type = relationship("DeviceType")
+    playbook = relationship("Playbook")
+
+    # The purpose-format CHECK (`purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'`) is applied
+    # in ng1 only, never in metadata — SQLite's create_all cannot parse `~`, and
+    # the test suite builds its schema that way. Precedent:
+    # ck_topology_playbook_purpose_format.
+    __table_args__ = (
+        UniqueConstraint("device_type_id", "purpose",
+                         name="uq_device_type_playbook_purpose"),
+    )
+
+
+class InventoryItemPlaybook(Base):
+    """A single node's override of its device type's default."""
+    __tablename__ = "inventory_item_playbook"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="CASCADE"), nullable=False
+    )
+    purpose = Column(String(50), nullable=False)
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    inventory_item = relationship("InventoryItem")
+    playbook = relationship("Playbook")
+
+    __table_args__ = (
+        UniqueConstraint("inventory_item_id", "purpose", name="uq_item_playbook_purpose"),
+    )
 
 
 class ProvisioningJob(Base):
