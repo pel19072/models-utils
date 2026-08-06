@@ -963,6 +963,95 @@ class InventoryItemPlaybook(Base):
     )
 
 
+class ProvisioningRun(Base):
+    """One service-path provisioning run: several devices, several playbooks.
+
+    Cycle 10 (doc 35 §5). A run used to be a single ProvisioningJob executing
+    one topology-wide playbook whose steps carried `target_position`. With
+    playbooks bound per device type, a run spans SEVERAL playbooks — and a
+    single job cannot honestly represent that: `playbook_id` is a single NOT
+    NULL FK, and `uq_provisioning_job_device_lock` is keyed per device, so one
+    job touching three devices could only ever hold one of the three locks.
+
+    So the run is the container and each configured device gets its own child
+    job. Children are created LAZILY, one at a time, in `plan` order: at most
+    one child of a run is QUEUED or RUNNING at once. That needs no new
+    ProvisioningJobStatus value (a "BLOCKED" state would touch every status
+    consumer in three services) and no change to the worker's claim query.
+
+    Three things this buys that the old single-job chain could not:
+      - the per-device lock is finally correct — each child locks exactly the
+        device it configures
+      - retry and cancel become per-device
+      - PENDING_INFORM applies to the CPE child alone instead of stalling the
+        whole path
+    """
+    __tablename__ = "provisioning_run"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    purpose = Column(String(50), nullable=False)
+    dry_run = Column(Boolean, nullable=False, default=False, server_default='false')
+    status = Column(
+        Enum(ProvisioningJobStatus, name="provisioningjobstatus"), nullable=False,
+        default=ProvisioningJobStatus.QUEUED, server_default='QUEUED',
+    )
+    # The whole resolved path INCLUDING passive nodes, snapshotted at creation:
+    # the run detail view must show what the path was when it ran, not what it
+    # is now. [{position, item_id, serial, device_type_name, category_key,
+    #           category_tier, is_passive, playbook_id, playbook_source}]
+    path = Column(JSON, nullable=False)
+    # The ordered subset that will actually be configured, leaf -> root:
+    # [{item_id, playbook_id, category_key}]
+    plan = Column(JSON, nullable=False)
+    # {"shared": {...}, "device": {item_id: {...}}} — resolved ONCE at run
+    # creation. advance_run builds later children from this rather than
+    # re-resolving, so a re-parent landing mid-run cannot silently redirect the
+    # remaining steps to a different set of devices than the ones the operator
+    # saw and approved.
+    frames = Column(JSON, nullable=False, default=dict)
+    idempotency_key = Column(String, nullable=True)
+    triggered_by = Column(
+        Enum(ProvisioningTrigger), nullable=False,
+        default=ProvisioningTrigger.USER, server_default='USER',
+    )
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_service_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("client_service.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    client_service = relationship("ClientService")
+    jobs = relationship(
+        "ProvisioningJob", back_populates="run", order_by="ProvisioningJob.run_position",
+    )
+
+    __table_args__ = (
+        # Mirrors uq_provisioning_job_company_idem: a re-fire while a run is
+        # still in flight dedupes instead of opening a second one.
+        Index(
+            "uq_provisioning_run_company_idem",
+            "company_id", "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "idempotency_key IS NOT NULL AND status IN "
+                "('QUEUED','RUNNING','PENDING_INFORM')"
+            ),
+        ),
+        Index("ix_provisioning_run_service", "client_service_id", "created_at"),
+    )
+
+
 class ProvisioningJob(Base):
     """Durable execution queue row. Claimed by the provisioning worker via
     SELECT ... FOR UPDATE SKIP LOCKED; retried with backoff up to max_attempts."""
@@ -1023,8 +1112,18 @@ class ProvisioningJob(Base):
     triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
+    # Cycle 10 (doc 35 §5). NULL for every job that is not part of a service
+    # path run — explicit-playbook jobs, ACS reboot/factory-reset, core
+    # connectivity probes. Those are unchanged and must stay standalone.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("provisioning_run.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    # 0-based index into ProvisioningRun.plan, i.e. leaf -> root order.
+    run_position = Column(Integer, nullable=True)
 
     company = relationship("Company", back_populates="provisioning_jobs")
+    run = relationship("ProvisioningRun", back_populates="jobs")
     playbook = relationship("Playbook", back_populates="jobs")
     client_service = relationship("ClientService")
     inventory_item = relationship("InventoryItem")

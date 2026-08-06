@@ -1149,9 +1149,9 @@ def _execute_enqueue_provisioning(
 
     Two mutually exclusive modes:
 
-    Mode A — topology purpose resolution (Cycle 3 E2, `use_topology`):
+    Mode A — service-path resolution (Cycle 10, doc 35, `use_service_path`):
     {
-      "use_topology": true,
+      "use_service_path": true,
       "purpose": "ACTIVATION",              # default ACTIVATION; free-form E1
                                              # custom purposes allowed
       "client_service_id": "{{trigger.after.linked_object_id}}",  # REQUIRED
@@ -1159,13 +1159,16 @@ def _execute_enqueue_provisioning(
       "idempotency_key": "activate-{{trigger.after.linked_object_id}}",
       "max_attempts": 3
     }
-    database_utils.utils.provisioning_resolution.resolve_provisioning picks
-    the playbook AND resolves the device chain from the client's assigned
-    inventory — MISSING_DEVICE/AMBIGUOUS_DEVICE/PURPOSE_NOT_CONFIGURED/
-    PLAYBOOK_INACTIVE/TOPOLOGY_NOT_SET/TOPOLOGY_INACTIVE all FAIL the step
-    visibly (founder hard requirement: resolution failures are never
-    silent). A task/event with no resolvable CLIENT_SERVICE target is NOT an
-    error — it is a non-matching event (see the skip rule below).
+    database_utils.utils.provisioning_resolution.resolve_provisioning walks the
+    service's network path and picks a playbook per device — CPE_NOT_SET /
+    CPE_NOT_ATTACHED / PLAYBOOK_NOT_BOUND / PLAYBOOK_INACTIVE all FAIL the step
+    visibly (founder hard requirement: resolution failures are never silent).
+    A task/event with no resolvable CLIENT_SERVICE target is NOT an error — it
+    is a non-matching event (see the skip rule below).
+
+    Mode A opens a ProvisioningRun, not a single job: a path spans several
+    devices and therefore several playbooks. The run queues its first child;
+    the worker advances the rest.
 
     Mode B — explicit playbook (pre-Cycle-3 shape, unchanged):
     {
@@ -1178,28 +1181,33 @@ def _execute_enqueue_provisioning(
       "max_attempts": 3
     }
 
-    Cycle 2 D6: the 'network_node_id' config key is REMOVED along with the
-    network graph (revision c2d_graph_removal) — provisioning jobs target
-    client_service_id/inventory_item_id only; the topology chain resolved for
-    a job is recorded in `variables` instead (database_utils.utils.
-    provisioning_resolution), giving auditability without a graph.
-
     NOTE: `config` here is ALREADY template-resolved — execute_step calls
     _resolve_template(step.action_config, context) before dispatching to any
-    action handler, so use_topology/purpose/client_service_id/
+    action handler, so use_service_path/purpose/client_service_id/
     idempotency_key arrive pre-resolved. Mode B keeps its own
     `_resolve_template` subset-resolution below for its pre-Cycle-3 shape
     (idempotent re-resolution of an already-resolved string is a no-op) but
     it is not required for mode A.
     """
-    use_topology = bool(config.get("use_topology"))
-    if use_topology and config.get("playbook_id"):
+    if "use_topology" in config:
+        # A tenant workflow that survived ng2 untouched. Failing the step
+        # visibly is the point: silently treating it as mode B would enqueue
+        # nothing and look like a healthy no-op forever.
         raise ValueError(
-            "ENQUEUE_PROVISIONING: 'use_topology' and 'playbook_id' are mutually exclusive"
+            "ENQUEUE_PROVISIONING: 'use_topology' was retired with the topology "
+            "chain (doc 35). Use 'use_service_path': true — the playbooks are "
+            "resolved per device by walking the service's network path."
         )
 
-    if use_topology:
-        return _execute_enqueue_provisioning_topology(db, config, company_id)
+    use_service_path = bool(config.get("use_service_path"))
+    if use_service_path and config.get("playbook_id"):
+        raise ValueError(
+            "ENQUEUE_PROVISIONING: 'use_service_path' and 'playbook_id' are "
+            "mutually exclusive"
+        )
+
+    if use_service_path:
+        return _execute_enqueue_provisioning_path(db, config, company_id)
     return _execute_enqueue_provisioning_explicit(db, config, context, company_id)
 
 
@@ -1218,7 +1226,7 @@ def _execute_enqueue_provisioning_explicit(
     if not playbook_id:
         raise ValueError(
             "ENQUEUE_PROVISIONING step requires 'playbook_id' in action_config "
-            "(or 'use_topology': true)"
+            "(or 'use_service_path': true)"
         )
 
     playbook = db.query(Playbook).filter(
@@ -1265,27 +1273,26 @@ def _execute_enqueue_provisioning_explicit(
     return {"enqueued": True, "job_id": str(job.id), "playbook_id": str(playbook.id)}
 
 
-def _execute_enqueue_provisioning_topology(
+def _execute_enqueue_provisioning_path(
     db: Session,
     config: dict,
     company_id: UUID,
 ) -> dict:
-    """Mode A: use_topology resolution (Cycle 3 E2 §1). `config` is already
+    """Mode A: service-path resolution (doc 35 §5). `config` is already
     template-resolved by execute_step (see the docstring above) — no second
     _resolve_template pass is needed here.
 
     Ordering (doc 20a workflow-provisioning verifier fix on step ordering):
-    skip rule -> idempotency dedupe -> resolve_provisioning -> insert. The
-    idempotency key never depends on resolution output, so a re-fire while a
-    job is already QUEUED/RUNNING must dedupe even if inventory drifted in
-    between (e.g. a second candidate device was added) — resolving first
+    skip rule -> idempotency dedupe -> resolve -> open run. The idempotency key
+    never depends on resolution output, so a re-fire while a run is already in
+    flight must dedupe even if the graph drifted in between — resolving first
     would turn a harmless dedupe into a spurious FAILED execution.
     """
-    from database_utils.models.isp import (
-        ClientService, InventoryItem, ProvisioningJob, ProvisioningTrigger, Topology, TopologyDeviceType,
+    from database_utils.models.isp import ClientService, ProvisioningTrigger
+    from database_utils.utils.provisioning_resolution import (
+        ResolutionError, input_key,
     )
-    from database_utils.models.crm import Integration
-    from database_utils.utils.provisioning_resolution import resolve_provisioning, ResolutionError, input_key
+    from database_utils.utils.provisioning_runs import create_run, find_in_flight_run
 
     rid = _uuid_or_none(config.get("client_service_id"))
     if rid is None:
@@ -1299,17 +1306,15 @@ def _execute_enqueue_provisioning_topology(
 
     idempotency_key = config.get("idempotency_key") or None
     if idempotency_key:
-        existing = _find_queued_or_running_provisioning_job(db, company_id, idempotency_key)
+        existing = find_in_flight_run(db, company_id, idempotency_key)
         if existing:
             return {"enqueued": False, "deduped": True,
-                    "job_id": str(existing.id), "idempotency_key": idempotency_key}
+                    "run_id": str(existing.id), "idempotency_key": idempotency_key}
 
     svc = (
         db.query(ClientService)
         .options(
-            joinedload(ClientService.topology).joinedload(Topology.device_types)
-            .joinedload(TopologyDeviceType.device_type),
-            joinedload(ClientService.topology).joinedload(Topology.playbooks),
+            joinedload(ClientService.cpe_item),
             joinedload(ClientService.service_plan),
         )
         .filter(ClientService.id == rid, ClientService.company_id == company_id)
@@ -1321,49 +1326,34 @@ def _execute_enqueue_provisioning_topology(
         # also a skip, never a data leak.
         return {"enqueued": False, "skipped": True, "reason": "NO_CLIENT_SERVICE_TARGET"}
 
+    # doc 33: automation-authored variables are author input, so they land in
+    # the `input.*` namespace. Merged flat they could SHADOW a resolved system
+    # variable (a step named `variables: {serial: ...}` silently overriding the
+    # resolver's device serial); namespacing makes that impossible rather than
+    # merely discouraged.
+    extra = {
+        input_key(str(key)): value
+        for key, value in (config.get("variables") or {}).items()
+    }
+
     try:
-        resolution = resolve_provisioning(db, svc, purpose=purpose)
+        run = create_run(
+            db, svc, purpose=purpose,
+            triggered_by=ProvisioningTrigger.WORKFLOW,
+            idempotency_key=idempotency_key,
+            extra_variables=extra,
+        )
     except ResolutionError as e:
         raise ValueError(
             f"Provisioning resolution failed for service {rid} (purpose={purpose}): "
             f"{e.code} — {e.detail}. Errors: {json.dumps(e.errors)}"
         )
 
-    # doc 33: automation-authored variables are author input, so they land in
-    # the `input.*` namespace. Previously they were merged flat and could
-    # SHADOW a resolved system variable (a step named `variables: {serial: ...}`
-    # silently overrode the resolver's device serial); namespacing makes that
-    # impossible rather than merely discouraged.
-    config_variables = config.get("variables") or {}
-    variables_final = dict(resolution.variables)
-    for key, value in config_variables.items():
-        variables_final[input_key(str(key))] = value
-
-    inventory_item_id_final = _owned_or_none(db, InventoryItem, config.get("inventory_item_id"), company_id)
-    if inventory_item_id_final is None and resolution.resolved_items:
-        # Mirrors the manual /provision endpoint: the LAST chain item (the CPE).
-        inventory_item_id_final = resolution.resolved_items[-1].inventory_item_id
-
-    job = ProvisioningJob(
-        company_id=company_id,
-        playbook_id=resolution.playbook_id,
-        variables=variables_final,
-        client_service_id=svc.id,
-        inventory_item_id=inventory_item_id_final,
-        integration_id=_owned_or_none(db, Integration, config.get("integration_id"), company_id),
-        idempotency_key=idempotency_key,
-        max_attempts=int(config.get("max_attempts", 3)),
-        triggered_by=ProvisioningTrigger.WORKFLOW,
-    )
-    db.add(job)
-    db.flush()
-
     return {
         "enqueued": True,
-        "job_id": str(job.id),
-        "playbook_id": str(resolution.playbook_id),
+        "run_id": str(run.id),
         "purpose": purpose,
-        "topology_id": str(svc.topology_id),
+        "devices": len(run.plan or []),
     }
 
 
