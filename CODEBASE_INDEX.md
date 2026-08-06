@@ -67,8 +67,10 @@ state).
 renamed `PLAYBOOK_PURPOSE_PATTERN`); `playbook` loses `PlaybookOut.topology_id`
 and `PlaybookStep.target_position` — a playbook binds to one device type and runs
 on one device, so the executor defaults the step target to `{{device.item_id}}`.
-*Known drift:* `client_service` and `service_plan` still declare inert
-`topology_id`/`default_topology_id` fields with no backing column — see
+`client_service` swaps `topology_id` for `cpe_item_id` + write-only
+`cpe_parent_id` (Base/Update) and adds read-only `path_changed_at` (Out);
+`ClientServiceAdoptIn` drops `topology_id`. *Known drift:* `service_plan` still
+declares an inert `default_topology_id` with no backing column — see
 [docs/limitations.md](docs/limitations.md).
 **Brownfield adoption** (ba1) adds no modules — `client_service` gains the
 read-only adoption fields (`adopted_at`/`adopted_by_user_id`/`adoption_note` +

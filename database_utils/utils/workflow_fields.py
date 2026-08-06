@@ -103,7 +103,7 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "service_plan_id", "type": "uuid", "fk_to": "service_plan"},
         # Cycle 2 D5: replaces network_node_id (removed, revision
         # c2d_graph_removal).
-        {"name": "topology_id", "type": "uuid", "fk_to": "topology"},
+        {"name": "cpe_item_id", "type": "uuid", "fk_to": "inventory_item"},
         # Cycle 2 D1 billing absorption (doc 18 amendment 8): writable — the
         # rewritten suspension/reactivation/service-removal templates
         # UPDATE_FIELD billing_status directly (replacing the pre-merge

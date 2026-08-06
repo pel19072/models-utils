@@ -87,12 +87,11 @@ matters when reading `__init__.py`:
   elsewhere means "not computed", not "no evidence")
 - `ClientServiceAdoptIn` — `POST /client-services/{id}/adopt` body: `note`
   required non-empty (stripping validator), `installed_at` optional historical
-  install date (applied only while the service's `installed_at` is NULL). It also
-  still declares `topology_id: Optional[UUID]` from the service-lifecycle cycle,
-  which is now **inert** — the column and the `topology` table were dropped by
-  `ng2_topology_drop`; the graph equivalent is assigning a CPE
-  (`client_service.cpe_item_id`) and attaching it to a parent. Inherited by
-  `ClientServiceAdoptBulkItem`, so the bulk campaign path accepts it too
+  install date (applied only while the service's `installed_at` is NULL). The
+  service-lifecycle cycle's `topology_id` field was removed again in Cycle 10 —
+  where the CPE sits in the plant is stated by attaching the node, not by the
+  attestation. Inherited by `ClientServiceAdoptBulkItem`, so the bulk campaign
+  path accepts the same shape
 - `ClientServiceAdoptBulkItem` (AdoptIn + `client_service_id`) and
   `ClientServiceAdoptBulkIn` (`items`, 1–500) — `POST /client-services/adopt-bulk`
   body
@@ -137,8 +136,8 @@ matters when reading `__init__.py`:
 
 `schemas/playbook.py`:
 
-- **hosts `normalize_purpose(v)`** now — `strip → upper → replace ' '/'-' with
-  '_' → regex-validate against `PLAYBOOK_PURPOSE_PATTERN`` (renamed from
+- **hosts `normalize_purpose(v)`** now — strip → upper → replace `' '`/`'-'`
+  with `'_'` → regex-validate against `PLAYBOOK_PURPOSE_PATTERN` (renamed from
   `TOPOLOGY_PURPOSE_PATTERN`, `models/isp.py`). Deliberately module-level and
   importable: the provision endpoint body schema
   (`ClientServiceProvisionIn`), the binding endpoints and the engine's
@@ -154,20 +153,35 @@ matters when reading `__init__.py`:
   to address: the executor defaults the step target to `{{device.item_id}}` and
   `target_item_id` remains the power-user override.
 
-> **Known drift — the schema layer still carries vestigial topology fields.**
-> `ClientServiceBase.topology_id`, `ClientServiceUpdate.topology_id`,
-> `ClientServiceAdoptIn.topology_id` and
-> `ServicePlanBase/Update.default_topology_id` are **still declared** in
-> `schemas/client_service.py` and `schemas/service_plan.py`, and
-> `utils/workflow_fields.py` still lists `client_service.topology_id`
-> (`fk_to: "topology"`) as a trigger-context field. The backing **columns and
-> tables are gone** (`ng2_topology_drop`), so these are accepted-but-ignored
-> request fields that can never round-trip and a trigger field that can never
-> match. Nothing reads them; they are inert rather than dangerous, but they are
-> not intended and should be removed in a follow-up. Recorded here so the wiki
-> does not claim a cleanliness the code does not have.
+`schemas/client_service.py`:
+
+- `ClientServiceBase` drops `topology_id` and gains the **two network inputs**:
+  - `cpe_item_id: Optional[UUID]` — the subscriber's edge device. Nullable,
+    because a brownfield service attested from the field legitimately has no
+    equipment record.
+  - `cpe_parent_id: Optional[UUID]` — **write-only**. It attaches the CPE under
+    that node in the same request so the two inputs land together or not at all,
+    but it is a property of the *item*, not of the service, and is never echoed
+    back on `ClientServiceOut`.
+- `ClientServiceUpdate` swaps `topology_id` for the same two fields.
+- `ClientServiceOut` gains `path_changed_at: Optional[datetime]` —
+  machine-written, never accepted on an Update schema.
+- `ClientServiceAdoptIn` **drops `topology_id`**: attestation records that a
+  service was *already installed*, while where its CPE sits in the plant is a
+  separate physical fact stated by attaching the node.
+
+> **Known drift — two vestigial topology surfaces remain.**
+> `ServicePlanBase`/`ServicePlanUpdate.default_topology_id` is still declared in
+> `schemas/service_plan.py`, and `utils/workflow_fields.py` still lists
+> `client_service.topology_id` (`fk_to: "topology"`) as a trigger-context field.
+> The backing **column and table are gone** (`ng2_topology_drop`), so the first
+> is an accepted-but-ignored request field that can never round-trip and the
+> second is a trigger field that can never match. Nothing reads them; they are
+> inert rather than dangerous, but they are not intended and should be removed in
+> a follow-up. Recorded here so the wiki does not claim a cleanliness the code
+> does not have.
 >
-> No Pydantic schema exists for `ProvisioningRun` yet — backend-erp shapes the
+> No Pydantic schema exists for `ProvisioningRun` — backend-erp shapes the
 > `/automations/runs` response itself.
 
 ### Auth overhaul — request-schema changes (no DB migration)

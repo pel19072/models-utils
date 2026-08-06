@@ -71,13 +71,12 @@ chosen in doc 35, and each is a thing a real carrier can walk into.
   named device-type chains: the chains carried per-topology playbook bindings and
   pinned positions the graph does not encode. Restore from a backup taken before
   the release.
-- **Vestigial topology fields survive in the schema layer.**
-  `ClientServiceBase`/`ClientServiceUpdate`/`ClientServiceAdoptIn.topology_id`,
+- **Two vestigial topology surfaces survive.**
   `ServicePlanBase`/`ServicePlanUpdate.default_topology_id` and
   `workflow_fields.py`'s `client_service.topology_id` (`fk_to: "topology"`)
   are still declared even though the columns and the `topology` table are gone.
-  They are inert — accepted-but-ignored request fields and a trigger field that
-  can never match — but they are drift, and they should be removed in a
+  They are inert — an accepted-but-ignored request field and a trigger field
+  that can never match — but they are drift, and they should be removed in a
   follow-up.
 
 ## CI / packaging

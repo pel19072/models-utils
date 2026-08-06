@@ -1,7 +1,7 @@
 # schemas/service_plan.py
 """
 Cycle 2 D1/D2/D5: ServicePlan absorbs Product (kind/stock) and gains
-default_topology_id (D5, pre-fills a new service's topology). `migration_source`
+`migration_source`
 is a dedicated marker column (doc 18 amendment 1/2) and is NEVER exposed on
 any schema here — it is internal audit state, not user-editable data.
 """
@@ -70,8 +70,6 @@ class ServicePlanBase(BaseModel):
     # derivation). Absorbed-from-Product: stock (NULL = not stock-tracked).
     kind: CatalogKind = CatalogKind.SERVICE
     stock: Optional[int] = None
-    # D5: pre-fills a new client_service's topology_id on create.
-    default_topology_id: Optional[UUID] = None
 
     @field_validator("provisioning_params", mode="before")
     @classmethod
@@ -96,7 +94,6 @@ class ServicePlanUpdate(BaseModel):
     product_id: Optional[UUID] = None
     kind: Optional[CatalogKind] = None
     stock: Optional[int] = None
-    default_topology_id: Optional[UUID] = None
 
     @field_validator("provisioning_params", mode="before")
     @classmethod

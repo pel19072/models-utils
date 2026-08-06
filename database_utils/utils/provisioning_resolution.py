@@ -85,9 +85,10 @@ from database_utils.utils.network_graph import GraphError, resolve_path
 class ResolutionError(Exception):
     """Raised when a client service's provisioning cannot be resolved.
 
-    `errors` is a list of {code, position?, device_type_id?, device_type_name?,
-    candidates?} dicts — collected across ALL chain positions so the caller
-    (technician) sees the whole shopping list, not one error per retry.
+    `errors` is a list of {code, position?, item_id?, device_type_id?,
+    device_type_name?, category?} dicts — collected across EVERY node on the
+    resolved path so the caller (technician) sees the whole shopping list, not
+    one error per retry.
     """
 
     def __init__(self, code: str, detail: str, errors: Optional[List[Dict[str, Any]]] = None):
