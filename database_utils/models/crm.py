@@ -7,7 +7,6 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from database_utils.database import Base
 from ..utils.timezone_utils import now_gt
 
-from datetime import datetime
 import enum
 import uuid
 

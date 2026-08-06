@@ -161,7 +161,7 @@ async def get_current_user(
         # Convert string UUID back to UUID object for database query
         try:
             user_id = uuid.UUID(user_id_str)
-        except (ValueError, AttributeError) as e:
+        except (ValueError, AttributeError):
             logger.error(f"Invalid UUID format in token: {user_id_str}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

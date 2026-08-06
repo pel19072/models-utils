@@ -8,7 +8,7 @@ import pytest
 
 from database_utils.models.isp import (
     ALLOWED_TRANSITIONS,
-    CANONICAL_TOPOLOGY_PURPOSES,
+    CANONICAL_PLAYBOOK_PURPOSES,
     ClientServiceStatus,
     PURPOSE_ACTIVATION,
     PURPOSE_DEPROVISION,
@@ -33,7 +33,7 @@ def test_activation_maps_to_no_status_write():
 
 
 def test_purpose_to_status_covers_every_canonical_purpose():
-    assert set(PURPOSE_TO_STATUS) == set(CANONICAL_TOPOLOGY_PURPOSES)
+    assert set(PURPOSE_TO_STATUS) == set(CANONICAL_PLAYBOOK_PURPOSES)
 
 
 def test_purpose_to_status_targets():

@@ -25,7 +25,6 @@ from database_utils.utils.logging_utils import (
     get_app_logger
 )
 from database_utils.utils.jwt_utils import decode_token
-from database_utils.utils.permission_utils import PermissionChecker
 from database_utils.utils.telemetry_utils import set_request_span_attributes
 
 
@@ -143,12 +142,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Process request and measure time
         start_time = time.time()
         response = None
-        error = None
 
         try:
             response = await call_next(request)
         except Exception as e:
-            error = e
             duration_ms = (time.time() - start_time) * 1000
 
             # Log error with full context

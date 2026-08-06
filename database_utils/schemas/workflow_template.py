@@ -1,6 +1,6 @@
 # schemas/workflow_template.py
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 

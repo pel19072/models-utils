@@ -81,7 +81,7 @@ def _seed_categories():
 
 def test_seed_tiers_are_check_legal_and_match_backfill():
     categories = _seed_categories()
-    by_key = {key: tier for key, _name, _sort, tier in categories}
+    by_key = {key: tier for key, _name, _sort, tier, _passive in categories}
     assert all(t in (None, "CORE", "EDGE") for t in by_key.values())
     assert {k for k, t in by_key.items() if t == "CORE"} == {"ROUTER", "SWITCH", "OLT"}
     assert {k for k, t in by_key.items() if t == "EDGE"} == {"ONU", "CPE_ROUTER", "ACCESS_POINT"}
@@ -89,5 +89,5 @@ def test_seed_tiers_are_check_legal_and_match_backfill():
 
 def test_seed_onu_display_name_updated():
     categories = _seed_categories()
-    names = {key: name for key, name, _sort, _tier in categories}
+    names = {key: name for key, name, _sort, _tier, _passive in categories}
     assert names["ONU"] == "ONU / ONT"

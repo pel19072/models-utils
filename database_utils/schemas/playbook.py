@@ -24,15 +24,36 @@ A playbook definition is uploadable JSON (or YAML converted client-side):
 
 Templates use {{variable}} substitution only — no expressions, no code execution.
 """
+import re
+
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
 from database_utils.models.isp import (
+    PLAYBOOK_PURPOSE_PATTERN,
     ProvisioningJobStatus,
     ProvisioningTrigger,
 )
+
+
+def normalize_purpose(v: str) -> str:
+    """strip -> upper -> regex-validate.
+
+    Deliberately module-level and importable: the provision endpoint body
+    schema (ClientServiceProvisionIn), the binding endpoints, and the engine's
+    ENQUEUE_PROVISIONING config path all share this exact normalization, so a
+    tenant typing 'Activation' or 'activation ' always matches the seeded
+    'ACTIVATION' binding (doc 20a verifier fix on purpose string matching).
+
+    Moved here from the deleted schemas/topology.py in Cycle 10 — purposes now
+    key playbook bindings, not topologies (doc 35 §2.4).
+    """
+    p = v.strip().upper().replace(' ', '_').replace('-', '_')
+    if not re.match(PLAYBOOK_PURPOSE_PATTERN, p):
+        raise ValueError(f"purpose must match {PLAYBOOK_PURPOSE_PATTERN} (got '{v}')")
+    return p
 
 # Cycle 7 (doc 25 §4.3): "ping" joins the set — backend-erp's connectivity
 # probe driver (provisioning/drivers/ping.py), used by the per-company
@@ -108,16 +129,14 @@ class PlaybookStep(BaseModel):
     timeout_seconds: int = 30
     # Cycle 7 (doc 25 §4.1): step targeting for the CLI/ping drivers — an
     # inventory_item id or a "{{variable}}" the executor renders with the job
-    # variables (e.g. "{{device1_item_id}}"). Declared here so it round-trips
-    # through model_dump()/PlaybookOut instead of being silently dropped.
+    # variables. Declared here so it round-trips through model_dump()/
+    # PlaybookOut instead of being silently dropped.
+    #
+    # Cycle 10 (doc 35 §4.4): target_position is GONE. A playbook now binds to
+    # one device type and therefore runs on exactly one device, so there is no
+    # chain slot left to address; the executor defaults the target to
+    # {{device.item_id}} and target_item_id remains the power-user override.
     target_item_id: Optional[str] = None
-    # Cycle 8 (doc 26 §2): 1-based topology chain position this step configures
-    # (e.g. 1 = the first device type in the chain). The visual editor speaks
-    # "position"; when set and target_item_id is unset, the renderer derives
-    # target_item_id = "{{device<N>_item_id}}" (N = target_position) at render
-    # time, so provisioning-resolution keeps emitting device{i}_* unchanged.
-    # target_item_id still wins for power users / system playbooks.
-    target_position: Optional[int] = None
     # --- Cycle 5 Phase 1 additive fields (canon C15) ---
     precondition: Optional[PlaybookPrecondition] = None
     # per-step compensation (saga-lite, doc 21 §3.7). Depth-1 only: an
@@ -129,15 +148,6 @@ class PlaybookStep(BaseModel):
     def validate_driver(cls, v: str) -> str:
         if v not in PLAYBOOK_DRIVERS:
             raise ValueError(f"driver must be one of {sorted(PLAYBOOK_DRIVERS)}")
-        return v
-
-    @field_validator("target_position")
-    @classmethod
-    def validate_target_position(cls, v: Optional[int]) -> Optional[int]:
-        # 1-based chain position (doc 26 §2): position 0 or negative is never a
-        # valid device slot.
-        if v is not None and v < 1:
-            raise ValueError("target_position must be >= 1 (1-based chain position)")
         return v
 
     @model_validator(mode="after")
@@ -191,8 +201,10 @@ class PlaybookDefinition(BaseModel):
 class PlaybookBase(BaseModel):
     name: str
     description: Optional[str] = None
-    # Cycle 8 (doc 26 §2): target_vendor/target_category are gone — playbooks
-    # are topology-owned, the topology supplies the device context.
+    # Cycle 8 dropped target_vendor/target_category; Cycle 10 (doc 35 §2.4)
+    # replaced topology ownership with device_type_playbook /
+    # inventory_item_playbook bindings, so a playbook row is once again a plain
+    # company-scoped library entry with no ownership column of its own.
     is_active: bool = True
     definition: PlaybookDefinition
 
@@ -213,9 +225,6 @@ class PlaybookOut(PlaybookBase):
     company_id: UUID
     version: int
     created_at: datetime
-    # Cycle 8 (doc 26 §2): NULL = a system/global playbook; non-NULL = an
-    # inline playbook owned by that topology (cascades on topology delete).
-    topology_id: Optional[UUID] = None
     # Cycle 5 Phase 1 (canon C7): the playbook version whose dry-run last
     # SUCCEEDED. A live job is accepted iff this equals `version`.
     last_dry_run_version: Optional[int] = None

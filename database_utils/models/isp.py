@@ -74,23 +74,24 @@ class SuspensionReason(str, enum.Enum):
 # pre-Cycle-3 usage (e.g. `DeviceCategory.OTHER`) fails loudly at import/
 # attribute-access time instead of silently degrading.
 
-# Cycle 3 E1 (revision c3a_topology_purpose): canonical topology-playbook
-# purposes. Plain strings, NOT a PG enum — tenants may define custom purposes
-# (uppercase snake, CHECK-enforced in the topology_playbook table). Integrity
-# is enforced instead by a DB CHECK constraint, UNIQUE(topology_id, purpose),
-# and the shared Pydantic normalizer (schemas/topology.py: strip -> upper ->
-# regex). These constants are the single source of truth shared by models,
-# the workflow engine (ENQUEUE_PROVISIONING use_topology mode), and seeds.
+# Canonical playbook purposes (Cycle 3 E1; re-homed onto device-type bindings
+# in Cycle 10, doc 35 §2.4). Plain strings, NOT a PG enum — tenants may define
+# custom purposes (uppercase snake, CHECK-enforced on the binding tables).
+# Integrity is enforced instead by a DB CHECK constraint, the per-binding
+# UNIQUE, and the shared Pydantic normalizer (schemas/playbook.py:
+# strip -> upper -> regex). These constants are the single source of truth
+# shared by models, the workflow engine (ENQUEUE_PROVISIONING use_service_path
+# mode), and seeds.
 PURPOSE_ACTIVATION = 'ACTIVATION'
 PURPOSE_SUSPENSION = 'SUSPENSION'
 PURPOSE_REACTIVATION = 'REACTIVATION'
 PURPOSE_DEPROVISION = 'DEPROVISION'
-CANONICAL_TOPOLOGY_PURPOSES = (
+CANONICAL_PLAYBOOK_PURPOSES = (
     PURPOSE_ACTIVATION, PURPOSE_SUSPENSION, PURPOSE_REACTIVATION, PURPOSE_DEPROVISION
 )
-TOPOLOGY_PURPOSE_PATTERN = r'^[A-Z][A-Z0-9_]{0,49}$'
+PLAYBOOK_PURPOSE_PATTERN = r'^[A-Z][A-Z0-9_]{0,49}$'
 
-# Service-lifecycle cycle (doc 35): the status machine behind the per-purpose
+# Service-lifecycle cycle: the status machine behind the per-purpose
 # lifecycle actions (activate / suspend / reactivate / cancel). Lives HERE, not
 # in backend-erp, because the workflow engine resolves the same purposes
 # (import direction is strictly downward — see CLAUDE.md).
@@ -149,7 +150,7 @@ def purpose_allowed_for_status(purpose, current_status) -> bool:
       3. Any other canonical purpose — legal iff its target status is a legal
          transition out of `current_status`.
       4. A tenant-defined custom purpose (purposes are extensible free strings,
-         see TOPOLOGY_PURPOSE_PATTERN) — falls through to True: it is
+         see PLAYBOOK_PURPOSE_PATTERN) — falls through to True: it is
          enqueue-only, writes no status, so there is no transition to police.
          It MUST NOT raise; an unknown purpose is a normal tenant config, not a
          bug.
@@ -361,15 +362,9 @@ class ServicePlan(Base):
     product_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("product.id", ondelete="SET NULL"), nullable=True
     )
-    # D5: pre-fills a new service's topology so the tech only picks on
-    # exceptions. SET NULL — a plan must never block deleting a topology.
-    default_topology_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("topology.id", ondelete="SET NULL"), nullable=True
-    )
 
     company = relationship("Company", back_populates="service_plans")
     product = relationship("Product")
-    default_topology = relationship("Topology", foreign_keys=[default_topology_id])
     client_services = relationship("ClientService", back_populates="service_plan")
 
     __table_args__ = (
@@ -426,6 +421,13 @@ class ClientService(Base):
     # Stamped on the FIRST transition to INSTALLED (never cleared by a later
     # regression to NOT_INSTALLED — a historical fact, like activation_date).
     installed_at = Column(DateTime(timezone=True), nullable=True)
+    # Cycle 10 (doc 35 §5.2): set when someone re-parented a node above this
+    # service's CPE, so the configuration path it was provisioned against is no
+    # longer the path it sits on. Cleared by a SUCCEEDED non-dry-run ACTIVATION
+    # run. This NEVER triggers provisioning on its own — pushing config to live
+    # carrier gear as a side effect of an org-chart edit is the wrong blast
+    # radius; the operator confirms.
+    path_changed_at = Column(DateTime(timezone=True), nullable=True)
     # Brownfield adoption (doc 30, revision ba1_attested_adoption): a
     # persistent ATTESTATION FACT substituting for the missing SUCCEEDED
     # activation job in install_state derivation (backend-erp
@@ -467,11 +469,14 @@ class ClientService(Base):
     service_plan_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("service_plan.id", ondelete="RESTRICT"), nullable=False
     )
-    # D5: named chain of device types + bound playbook. RESTRICT — deleting a
-    # topology in use is a 409, never a silent unlink (replaces network_node_id,
-    # dropped in c2d_graph_removal).
-    topology_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("topology.id", ondelete="RESTRICT"), nullable=True
+    # Cycle 10 (doc 35 §2.5): the subscriber's edge device. This and the item's
+    # own `parent_id` are the ONLY two network inputs a service takes; the whole
+    # configuration path is derived by walking the graph from here to the root.
+    # SET NULL rather than RESTRICT: an RMA'd ONT should not block deleting the
+    # inventory row, and a service without a CPE is a legible state (it simply
+    # cannot be provisioned, reported as CPE_NOT_SET).
+    cpe_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True
     )
     # Billing link into the legacy recurring-order engine. Still dual-written
     # during the Cycle-2 rollback window (doc 18 amendment 1) but is NEVER
@@ -489,17 +494,23 @@ class ClientService(Base):
     company = relationship("Company", back_populates="client_services")
     client = relationship("Client", back_populates="services")
     service_plan = relationship("ServicePlan", back_populates="client_services")
-    topology = relationship("Topology", back_populates="client_services")
     recurring_order = relationship("RecurringOrder")
     suspensions = relationship(
         "ServiceSuspension", back_populates="client_service", cascade="all, delete-orphan"
     )
-    equipment = relationship("InventoryItem", back_populates="client_service")
+    # Two FK paths now join these tables: this one (items assigned to a service)
+    # and cpe_item_id (the one item that IS the service's edge). Both are named
+    # explicitly or SQLAlchemy cannot pick a join condition.
+    equipment = relationship(
+        "InventoryItem", back_populates="client_service",
+        foreign_keys="InventoryItem.client_service_id",
+    )
+    cpe_item = relationship("InventoryItem", foreign_keys=[cpe_item_id])
     adopted_by = relationship("User", foreign_keys=[adopted_by_user_id])
 
     __table_args__ = (
         Index("ix_client_service_company_status", "company_id", "status"),
-        Index("ix_client_service_topology_id", "topology_id"),
+        Index("ix_client_service_cpe_item_id", "cpe_item_id"),
         # The cron due-scan replacement for ix_recurring_order_status_company
         # (revision c2b_service_billing).
         Index(
@@ -587,6 +598,16 @@ class DeviceCategory(Base):
     # nc2a backfills CORE <- ROUTER/SWITCH/OLT, EDGE <- ONU/CPE_ROUTER/
     # ACCESS_POINT by key.
     tier = Column(String(10), nullable=True)
+    # Cycle 10 (doc 35 §2.3, revision ng1_network_graph): signal-passive gear.
+    # A passive node IS on the configuration path — it is shown, it matters for
+    # troubleshooting and impact — but it is never configured.
+    #
+    # This is an explicit flag rather than an inference from "no playbook bound"
+    # because absence of a playbook cannot distinguish "expected, it is a
+    # splitter" from "someone forgot to bind an ACTIVATION playbook to this
+    # OLT". The first is a calm grey chip; the second is a hard resolution
+    # error. Same reasoning as `tier`: SaaS-admin editable, key stays immutable.
+    is_passive = Column(Boolean, nullable=False, default=False, server_default='false')
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
 
@@ -723,12 +744,38 @@ class InventoryItem(Base):
     client_service_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("client_service.id", ondelete="SET NULL"), nullable=True
     )
+    # --- network graph (doc 35 §2.1, revision ng1_network_graph) --------------
+    # The company's plant is a tree of inventory items. `network_attached` marks
+    # an item as part of that tree at all; a root is attached with no parent;
+    # warehouse stock is simply not attached. Two flags rather than one because
+    # `parent_id IS NULL` alone cannot distinguish "this is the core router"
+    # from "this ONT is still in the van".
+    #
+    # RESTRICT on delete is deliberate: deleting an OLT must not silently
+    # promote the 400 subscribers behind it to roots. Detach or re-parent the
+    # children first — the API says so, and trg_inventory_item_detach_guard
+    # enforces it.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    network_attached = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     company = relationship("Company", back_populates="inventory_items")
     device_type = relationship("DeviceType", back_populates="items")
     warehouse = relationship("Warehouse", back_populates="items")
     client = relationship("Client", back_populates="equipment")
-    client_service = relationship("ClientService", back_populates="equipment")
+    # Two FK paths now join inventory_item and client_service (this one, and
+    # client_service.cpe_item_id pointing back) — both sides must name theirs.
+    client_service = relationship(
+        "ClientService", back_populates="equipment", foreign_keys=[client_service_id],
+    )
+    parent = relationship(
+        "InventoryItem", remote_side=[id], back_populates="children",
+    )
+    children = relationship("InventoryItem", back_populates="parent")
     events = relationship(
         "EquipmentEvent", back_populates="item",
         cascade="all, delete-orphan", foreign_keys="EquipmentEvent.item_id",
@@ -745,6 +792,21 @@ class InventoryItem(Base):
         Index("ix_inventory_item_company_status", "company_id", "status"),
         # Cycle 7 (doc 25 §2.3).
         CheckConstraint(_CLI_PROTOCOL_CHECK, name="ck_inventory_item_cli_protocol"),
+        # Cycle 10 / doc 35 §2.1. Cycles, cross-tenant parents and the depth cap
+        # are guarded by trg_inventory_item_graph_guard (ng1) — a CHECK cannot
+        # express reachability. These two are the parts a CHECK *can* state.
+        CheckConstraint(
+            "parent_id IS NULL OR network_attached",
+            name="ck_inventory_item_parent_attached",
+        ),
+        CheckConstraint(
+            "parent_id IS NULL OR parent_id <> id",
+            name="ck_inventory_item_not_self_parent",
+        ),
+        Index(
+            "ix_inventory_item_company_attached", "company_id",
+            postgresql_where=text("network_attached"),
+        ),
     )
 
 
@@ -791,134 +853,6 @@ class EquipmentEvent(Base):
 
 
 # ---------------------------------------------------------------------------
-# Topology (Cycle 2 D5, purpose-keyed playbooks added Cycle 3 E1): named
-# ordered chain of device types + purpose -> playbook map (TopologyPlaybook).
-# Replaces the free-form network graph (network_node/network_node_type/
-# network_link, removed in revision c2d_graph_removal). Concrete devices
-# resolve from the client's assigned inventory by TYPE at provisioning time
-# (database_utils/utils/provisioning_resolution.py — moved in from backend-erp
-# services/provisioning_resolution.py, Cycle 3 E2) — no coordinate/graph UI.
-# ---------------------------------------------------------------------------
-
-class Topology(Base):
-    """A named, ordered chain of device types (e.g. Router -> ONU -> Customer
-    Router) with purpose-keyed playbooks (Cycle 3 E1, revision
-    c3a_topology_purpose — replaces the single playbook_id/playbook shape;
-    the pre-c3a playbook_id migrates as this topology's ACTIVATION entry).
-
-    Invariant: every topology has an ACTIVATION entry (enforced in
-    schemas/router, not the DB — relied on by the c3a downgrade, which is
-    total only when every topology has exactly one to restore playbook_id
-    from)."""
-    __tablename__ = "topology"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
-    name = Column(String, nullable=False)
-    description = Column(String, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default='true')
-
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    company = relationship("Company", back_populates="topologies")
-    device_types = relationship(
-        "TopologyDeviceType", back_populates="topology",
-        cascade="all, delete-orphan", order_by="TopologyDeviceType.position",
-    )
-    # Cycle 3 E1: purpose -> playbook map (topology_playbook). Ordered by
-    # purpose so ACTIVATION (alphabetically first among the canonical set)
-    # renders first in list contexts.
-    playbooks = relationship(
-        "TopologyPlaybook", back_populates="topology",
-        cascade="all, delete-orphan", order_by="TopologyPlaybook.purpose",
-    )
-    client_services = relationship("ClientService", back_populates="topology")
-
-    __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_topology_company_name"),
-    )
-
-
-class TopologyDeviceType(Base):
-    """One position in a topology's device chain. `position` is 0-based
-    provisioning order (router first, CPE last)."""
-    __tablename__ = "topology_device_type"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    position = Column(Integer, nullable=False)
-
-    topology_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=False
-    )
-    # RESTRICT: a device type referenced by a topology chain cannot be deleted
-    # out from under it (matches inventory_item.device_type_id RESTRICT).
-    device_type_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("device_type.id", ondelete="RESTRICT"), nullable=False
-    )
-    # Cycle 7 (doc 25 §2.4, revision nc2a_core_config): pins the concrete
-    # SHARED device serving this chain position (e.g. this topology's OLT).
-    # Pinned items are exempt from client/service candidate matching in
-    # provisioning resolution (§3 — shared infrastructure, not CPE). SET NULL:
-    # retiring the item must never block, resolution then fails visibly with
-    # MISSING_DEVICE. Same-company + device_type match + CORE-tier category
-    # are router/schema validation, not DB constraints (doc 25 §2.4).
-    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("inventory_item.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-
-    topology = relationship("Topology", back_populates="device_types")
-    device_type = relationship("DeviceType")
-    inventory_item = relationship("InventoryItem")
-
-    __table_args__ = (
-        UniqueConstraint("topology_id", "position", name="uq_topology_position"),
-        # One occurrence of a type per chain: match-by-type resolution (D5) is
-        # deterministic only if a type cannot appear twice in the same chain.
-        UniqueConstraint("topology_id", "device_type_id", name="uq_topology_device_type"),
-    )
-
-
-class TopologyPlaybook(Base):
-    """One purpose -> playbook binding for a topology (Cycle 3 E1, revision
-    c3a_topology_purpose). A single Playbook may serve as e.g. ACTIVATION for
-    topology A and REACTIVATION for topology B — purpose is a property of the
-    binding, not of the Playbook itself (Playbook is unchanged)."""
-    __tablename__ = "topology_playbook"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt, onupdate=now_gt)
-
-    topology_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    # Uppercase snake; canonical set in CANONICAL_TOPOLOGY_PURPOSES, but
-    # tenants may define custom purposes (CHECK-enforced, not enum-enforced).
-    purpose = Column(String(50), nullable=False)
-    # RESTRICT mirrors provisioning_job.playbook_id; playbooks.py's DELETE
-    # guard counts these rows (distinct topology_id) alongside jobs.
-    playbook_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-
-    topology = relationship("Topology", back_populates="playbooks")
-    playbook = relationship("Playbook")
-
-    __table_args__ = (
-        UniqueConstraint("topology_id", "purpose", name="uq_topology_playbook_purpose"),
-        # The purpose-format CHECK (`purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'`,
-        # name ck_topology_playbook_purpose_format) is Postgres-only regex
-        # syntax; it lives in the c8a migration so real databases keep it,
-        # but is excluded from model metadata so SQLite create_all (test
-        # suites across all consumer services) does not choke on `~`.
-    )
-
-
-# ---------------------------------------------------------------------------
 # Provisioning automation (ADR-005/006)
 # ---------------------------------------------------------------------------
 
@@ -934,26 +868,6 @@ class Playbook(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     version = Column(Integer, nullable=False, default=1)
-    # Cycle 8 (doc 26 §2, revision c8a_playbook_topology): playbooks are now
-    # topology-owned. NULL = a system/global playbook (the seeded per-company
-    # core_connectivity_check_*); non-NULL = an inline playbook authored inside
-    # that topology's editor, one per purpose. The old target_vendor/
-    # target_category_id targeting columns are gone — the topology supplies the
-    # device context now (which/how many devices, of what category).
-    #
-    # CASCADE removes an inline playbook when its topology is deleted, but it is
-    # NOT sufficient on its own to guarantee an orphan-free delete: a
-    # provisioning_job references playbook.id ON DELETE RESTRICT (NOT NULL, and
-    # it has no topology FK, so it is never cascaded away). A topology whose
-    # inline playbook has ever run a job — including a Simulate/dry-run — is
-    # therefore deletable only after the backend topology-delete path first
-    # clears (deletes/detaches) the dependent provisioning_job rows. That
-    # RESTRICT backstop is deliberate (it preserves job history); the "inline
-    # playbook dies with its topology" contract is enforced by the delete path,
-    # not by this FK alone.
-    topology_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("topology.id", ondelete="CASCADE"), nullable=True, index=True
-    )
     is_active = Column(Boolean, nullable=False, default=True)
     definition = Column(JSON, nullable=False)
     # Cycle 5 Phase 1 (canon C7, revision nc1a): stamped with `version` when a
@@ -973,7 +887,169 @@ class Playbook(Base):
     company = relationship("Company", back_populates="playbooks")
     creator = relationship("User", foreign_keys=[created_by])
     jobs = relationship("ProvisioningJob", back_populates="playbook")
-    topology = relationship("Topology", foreign_keys=[topology_id])
+
+
+# ---------------------------------------------------------------------------
+# Playbook binding (Cycle 10, doc 35 §2.4, revision ng1_network_graph)
+#
+# A playbook runs on exactly ONE device, so it binds to the equipment rather
+# than to a path: an OLT is configured the same way regardless of whose traffic
+# crosses it. Resolution per node per purpose is:
+#
+#     node override  ->  device-type default  ->  none
+#
+# Binding lives in its own table rather than as a column on `playbook` so one
+# playbook can serve several device types (one "MikroTik core config" for two
+# router models) — which the retired `playbook.topology_id` ownership model
+# made impossible.
+# ---------------------------------------------------------------------------
+
+class DeviceTypePlaybook(Base):
+    """The type-level default playbook for a purpose."""
+    __tablename__ = "device_type_playbook"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    device_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("device_type.id", ondelete="RESTRICT"), nullable=False
+    )
+    purpose = Column(String(50), nullable=False)
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    device_type = relationship("DeviceType")
+    playbook = relationship("Playbook")
+
+    # The purpose-format CHECK (`purpose ~ '^[A-Z][A-Z0-9_]{0,49}$'`) is applied
+    # in ng1 only, never in metadata — SQLite's create_all cannot parse `~`, and
+    # the test suite builds its schema that way. Precedent:
+    # ck_topology_playbook_purpose_format.
+    __table_args__ = (
+        UniqueConstraint("device_type_id", "purpose",
+                         name="uq_device_type_playbook_purpose"),
+    )
+
+
+class InventoryItemPlaybook(Base):
+    """A single node's override of its device type's default."""
+    __tablename__ = "inventory_item_playbook"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="CASCADE"), nullable=False
+    )
+    purpose = Column(String(50), nullable=False)
+    playbook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("playbook.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    inventory_item = relationship("InventoryItem")
+    playbook = relationship("Playbook")
+
+    __table_args__ = (
+        UniqueConstraint("inventory_item_id", "purpose", name="uq_item_playbook_purpose"),
+    )
+
+
+class ProvisioningRun(Base):
+    """One service-path provisioning run: several devices, several playbooks.
+
+    Cycle 10 (doc 35 §5). A run used to be a single ProvisioningJob executing
+    one topology-wide playbook whose steps carried `target_position`. With
+    playbooks bound per device type, a run spans SEVERAL playbooks — and a
+    single job cannot honestly represent that: `playbook_id` is a single NOT
+    NULL FK, and `uq_provisioning_job_device_lock` is keyed per device, so one
+    job touching three devices could only ever hold one of the three locks.
+
+    So the run is the container and each configured device gets its own child
+    job. Children are created LAZILY, one at a time, in `plan` order: at most
+    one child of a run is QUEUED or RUNNING at once. That needs no new
+    ProvisioningJobStatus value (a "BLOCKED" state would touch every status
+    consumer in three services) and no change to the worker's claim query.
+
+    Three things this buys that the old single-job chain could not:
+      - the per-device lock is finally correct — each child locks exactly the
+        device it configures
+      - retry and cancel become per-device
+      - PENDING_INFORM applies to the CPE child alone instead of stalling the
+        whole path
+    """
+    __tablename__ = "provisioning_run"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_gt,
+                        onupdate=now_gt)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    purpose = Column(String(50), nullable=False)
+    dry_run = Column(Boolean, nullable=False, default=False, server_default='false')
+    status = Column(
+        Enum(ProvisioningJobStatus, name="provisioningjobstatus"), nullable=False,
+        default=ProvisioningJobStatus.QUEUED, server_default='QUEUED',
+    )
+    # The whole resolved path INCLUDING passive nodes, snapshotted at creation:
+    # the run detail view must show what the path was when it ran, not what it
+    # is now. [{position, item_id, serial, device_type_name, category_key,
+    #           category_tier, is_passive, playbook_id, playbook_source}]
+    path = Column(JSON, nullable=False)
+    # The ordered subset that will actually be configured, leaf -> root:
+    # [{item_id, playbook_id, category_key}]
+    plan = Column(JSON, nullable=False)
+    # {"shared": {...}, "device": {item_id: {...}}} — resolved ONCE at run
+    # creation. advance_run builds later children from this rather than
+    # re-resolving, so a re-parent landing mid-run cannot silently redirect the
+    # remaining steps to a different set of devices than the ones the operator
+    # saw and approved.
+    frames = Column(JSON, nullable=False, default=dict)
+    idempotency_key = Column(String, nullable=True)
+    triggered_by = Column(
+        Enum(ProvisioningTrigger), nullable=False,
+        default=ProvisioningTrigger.USER, server_default='USER',
+    )
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_service_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("client_service.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    client_service = relationship("ClientService")
+    jobs = relationship(
+        "ProvisioningJob", back_populates="run", order_by="ProvisioningJob.run_position",
+    )
+
+    __table_args__ = (
+        # Mirrors uq_provisioning_job_company_idem: a re-fire while a run is
+        # still in flight dedupes instead of opening a second one.
+        Index(
+            "uq_provisioning_run_company_idem",
+            "company_id", "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "idempotency_key IS NOT NULL AND status IN "
+                "('QUEUED','RUNNING','PENDING_INFORM')"
+            ),
+        ),
+        Index("ix_provisioning_run_service", "client_service_id", "created_at"),
+    )
 
 
 class ProvisioningJob(Base):
@@ -1036,8 +1112,18 @@ class ProvisioningJob(Base):
     triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
+    # Cycle 10 (doc 35 §5). NULL for every job that is not part of a service
+    # path run — explicit-playbook jobs, ACS reboot/factory-reset, core
+    # connectivity probes. Those are unchanged and must stay standalone.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("provisioning_run.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    # 0-based index into ProvisioningRun.plan, i.e. leaf -> root order.
+    run_position = Column(Integer, nullable=True)
 
     company = relationship("Company", back_populates="provisioning_jobs")
+    run = relationship("ProvisioningRun", back_populates="jobs")
     playbook = relationship("Playbook", back_populates="jobs")
     client_service = relationship("ClientService")
     inventory_item = relationship("InventoryItem")

@@ -11,13 +11,11 @@ import sys
 import time
 import traceback
 import uuid
-from datetime import datetime
 from typing import Any, Dict, Optional, Callable, Union
 from functools import wraps
 from contextvars import ContextVar
 
 from fastapi import Request
-from sqlalchemy.orm import Session
 from database_utils.utils.timezone_utils import now_gt
 
 # Context variables for request-scoped data

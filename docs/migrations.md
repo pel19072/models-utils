@@ -2,8 +2,8 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 52 revisions in
-`alembic/versions/` (head: `lc1_retire_removal_tmpl`) — plus the idempotent seed
+Alembic-managed schema migrations for all models in this repo — 55 revisions in
+`alembic/versions/` (head: **`ng2_topology_drop`**) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -79,7 +79,8 @@ from the start).
   autogenerate), additive, guarded/idempotent with in-migration assertions:
   `device_category.tier` (+ key-based backfill, ONU → 'ONU / ONT' rename),
   `device_type.cli_platform`, the `inventory_item` mgmt surface,
-  `topology_device_type.inventory_item_id` (FK SET NULL + index),
+  `topology_device_type.inventory_item_id` (FK SET NULL + index — dropped with
+  its table by `ng2_topology_drop`),
   `client_service.install_state`/`installed_at` (+ index); three new CHECK
   constraints whose SQL fragments are kept byte-identical with
   `models/isp.py` (guarded by `tests/test_core_config_constants.py`).
@@ -157,7 +158,11 @@ from the start).
   topology-delete path must first clear dependent `provisioning_job` rows; the
   RESTRICT backstop deliberately preserves job history. Downgrade re-adds the
   dropped columns (shape only — a destructive drop's data is unrecoverable) with
-  the RESTRICT FK restored, and drops `topology_id`
+  the RESTRICT FK restored, and drops `topology_id`.
+  **Half of this is now history**: the `target_vendor`/`target_category_id` drop
+  stands, but `playbook.topology_id` (and the `topology` table it referenced) was
+  dropped again by `ng2_topology_drop` — playbook ownership lives in the
+  `device_type_playbook` / `inventory_item_playbook` binding tables
 - **ISP core**: `cd2f0076c709_isp_platform_core_service_plans_`; plus tenant
   indexes (`a1f2b3c4d5e6`), timezone fixes, and task/workflow/integration modules
 
@@ -184,7 +189,11 @@ from the start).
   exactly what every pre-feature row is. Reversible (drops the column).
 
 - **Service lifecycle — topology backfill**: `bf1_topology_backfill` (parent
-  `sp1_service_params`) — DATA-only, no DDL (both columns ship with
+  `sp1_service_params`). **Historical — the column it backfills was dropped by
+  `ng2_topology_drop`**, so on any database migrated past `ng2` this revision has
+  no lasting effect. Kept in the chain (revisions are never rewritten) and
+  documented because a partial upgrade can still stop on it. DATA-only, no DDL
+  (both columns ship with
   `c8a_playbook_topology`). Sets `client_service.topology_id` from
   `service_plan.default_topology_id` wherever it is NULL and the plan declares a
   default. Motivation: before this cycle `topology_id` was set only by the create
@@ -205,9 +214,9 @@ from the start).
   services this un-stranded.
 
 - **Service lifecycle — retire the 'service-removal' template**:
-  `lc1_retire_removal_tmpl` (parent `bf1_topology_backfill`, **head**).
-  Cancelling a service now natively cancels billing and enqueues the topology's
-  DEPROVISION playbook from the cancel handler; the `service-removal` template
+  `lc1_retire_removal_tmpl` (parent `bf1_topology_backfill`).
+  Cancelling a service now natively cancels billing and enqueues the service's
+  DEPROVISION playbook(s) from the cancel handler; the `service-removal` template
   did the same thing as a workflow triggered on `client_service.status changed_to
   CANCELLED`, so leaving it live double-fires. **Two distinct things are
   retired:**
@@ -228,8 +237,8 @@ from the start).
   Why a stale copy is a correctness bug and not merely redundant: on a NORMAL
   cancel the native job is already QUEUED when triggers fire, so the shared
   `deprovision-{client_service_id}` idempotency key absorbs the duplicate. But an
-  **ADMIN force-cancel** (`force:true`, used when the topology has no DEPROVISION
-  playbook) deliberately enqueues NOTHING and audit-logs that fact — there is no
+  **ADMIN force-cancel** (`force:true`, used when the service's path resolves no
+  DEPROVISION playbook) deliberately enqueues NOTHING and audit-logs that fact — there is no
   native job for the key to collide with, so the stale workflow fires a
   deprovision against live equipment, violating the exact guarantee force-cancel
   exists to make.
@@ -265,10 +274,90 @@ from the start).
   workflows tenants had deliberately turned off (same posture as
   `c2d_graph_removal`).
 
+- **Service lifecycle — retire the 'suspension'/'reactivation' templates**:
+  `lc2_retire_susp_react` (parent `lc1_retire_removal_tmpl`). The sibling of
+  `lc1`, same mechanism and same reasoning: both templates have the identical
+  shape (trigger on a `client_service` status change, then
+  `ENQUEUE_PROVISIONING` with the purpose-resolution mode), and the lifecycle
+  endpoint now enqueues those playbooks directly — so leaving them installed
+  double-fires a device operation on every suspend and every reactivate. Both
+  halves are redundant: the billing step is done natively by
+  `_apply_suspension`/`_apply_reactivation` in backend-erp (verified against the
+  handlers before the revision was written — had the native path not resumed
+  billing, retiring 'reactivation' would have silently broken billing
+  resumption), and the provisioning step is superseded by the endpoint. Relying
+  on the templates' idempotency keys instead would rest on two string literals in
+  different repos staying byte-identical forever, and does not hold at all for
+  the pre-v4 installed shape, which has no key.
+
+### Cycle 10 — the company network graph (doc 35)
+
+Two revisions on `lc2_retire_susp_react`, deliberately split so a reviewer can
+read "what appears" and "what disappears" independently. Full structural detail
+in [network-models.md](network-models.md).
+
+- **`ng1_network_graph`** — strictly **additive**: nothing is dropped, nothing is
+  rewritten, nothing is even read. Adds `inventory_item.parent_id` (self-FK
+  RESTRICT) + `network_attached` with two CHECKs and two indexes;
+  `device_category.is_passive`; the `device_type_playbook` and
+  `inventory_item_playbook` binding tables; `client_service.cpe_item_id` +
+  `path_changed_at`; the `provisioning_run` table plus
+  `provisioning_job.run_id`/`run_position`; and the two plpgsql guards
+  `trg_inventory_item_graph_guard` (self-parent, cross-tenant parent, detached
+  parent, cycle, depth ≥ 32) and `trg_inventory_item_detach_guard` (detaching a
+  node that still has children). Reusing the existing `provisioningjobstatus` /
+  `provisioningtrigger` PG enums needs `PGEnum(..., create_type=False)` — a plain
+  `sa.Enum` would try to `CREATE TYPE` and fail with DuplicateObject. The
+  triggers and the two purpose-format CHECKs live **only in the revision**, never
+  in SQLAlchemy metadata: consuming test suites build schemas with SQLite
+  `create_all`, which parses neither plpgsql nor the PG regex operator `~`
+  (precedent: `ck_topology_playbook_purpose_format`, `nc1b`).
+
+- **`ng2_topology_drop`** (**head**) — the destructive half, three phases in this
+  order and no other, and **irreversible**: `downgrade()` raises
+  `NotImplementedError` because a graph cannot be turned back into a set of named
+  chains (they carried per-topology playbook bindings and pinned positions the
+  graph does not encode).
+  1. **Guards, before anything is touched.** Raise on any `playbook.definition`
+     still containing `chain[`, `edge_devices[`, `core_devices[`,
+     `RETIRED_ALIAS` or `target_position` (listing the offending ids), and on any
+     `client_service` with `topology_id IS NOT NULL AND cpe_item_id IS NULL`.
+     *Why raise rather than repair:* doc 35 forbids a compatibility shim, and a
+     playbook still written against `chain[n]` would not fail loudly at run time
+     — the renderer guard catches the unrendered token only after the job has
+     been queued, claimed and partially executed. Stopping the release is cheaper
+     than discovering it on a customer's OLT. And **there is deliberately no
+     chain → graph backfill**: a chain names device *types*, a graph names device
+     *instances*; deriving one from the other would invent parent edges and
+     fabricate physical facts about someone's plant.
+  2. **Idempotent rewrite.** `workflow_step.action_config` and
+     `workflow_template.definition`: the `ENQUEUE_PROVISIONING` config key
+     `"use_topology"` → `"use_service_path"`, predicate-guarded
+     (`WHERE ... LIKE '%use_topology%'`) so a second run matches nothing and
+     leaves every row byte-identical. Only the key changes.
+  3. **Drops**, columns before tables (a referencing FK would block
+     `DROP TABLE topology`): `client_service.topology_id` + its index,
+     `service_plan.default_topology_id`, `playbook.topology_id`, then
+     `topology_playbook`, `topology_device_type`, `topology`. Every step is
+     existence-guarded, so a re-run is a no-op.
+
+  Production (verified 2026-08-06) is at `a1f2b3c4d5e6` with 38 tables and **no
+  ISP schema at all**, so both guards are vacuous there — the tables they inspect
+  are created empty by earlier revisions in the same release chain. They exist
+  for the local/staging databases carrying Cycles 1–9 data.
+
+  Seed side: `isp_seed.DEVICE_CATEGORIES` rows widen to
+  `(key, name, sort_order, tier, is_passive)`, and the passive classification
+  follows the `tier` precedent exactly — it fires only while **no** row anywhere
+  is classified, so a super-admin who deliberately marks a splitter active (a
+  tenant with managed splitters reporting optical power would) is never reverted
+  on the next migrate.
+
 ## Key rules
 
 - **Not all migrations are reversible**: `c1e_install_actions` uses
-  `ALTER TYPE ... ADD VALUE`, which has no downgrade. Check each revision's
+  `ALTER TYPE ... ADD VALUE`, which has no downgrade, and `ng2_topology_drop`
+  raises from `downgrade()` by design. Check each revision's
   `downgrade()` before assuming rollback is possible
 - Additive changes (new columns/tables): safe to apply before consuming
   service code ships

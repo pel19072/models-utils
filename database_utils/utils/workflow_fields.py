@@ -4,7 +4,7 @@ Workflow field metadata: hardcoded allowlist of editable fields per resource typ
 Used by the workflow UI to populate field dropdowns in triggers and steps,
 and by the engine to validate field access.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 
 # Each entry: {"name": "<column_name>", "type": "<field_type>", "fk_to": "<resource_type>" | None}
@@ -103,7 +103,7 @@ RESOURCE_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "service_plan_id", "type": "uuid", "fk_to": "service_plan"},
         # Cycle 2 D5: replaces network_node_id (removed, revision
         # c2d_graph_removal).
-        {"name": "topology_id", "type": "uuid", "fk_to": "topology"},
+        {"name": "cpe_item_id", "type": "uuid", "fk_to": "inventory_item"},
         # Cycle 2 D1 billing absorption (doc 18 amendment 8): writable — the
         # rewritten suspension/reactivation/service-removal templates
         # UPDATE_FIELD billing_status directly (replacing the pre-merge

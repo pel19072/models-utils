@@ -18,15 +18,22 @@ from datetime import datetime
 from database_utils.models.isp import ClientServiceStatus, PURPOSE_ACTIVATION, SuspensionReason
 from database_utils.models.crm import RecurrenceEnum, RecurringOrderStatus
 from .service_plan import ProvisioningParam, ServicePlanOut, _coerce_params
-from .topology import normalize_purpose
+from .playbook import normalize_purpose
 
 
 class ClientServiceBase(BaseModel):
     client_id: UUID
     service_plan_id: UUID
-    # D5: replaces network_node_id (removed in revision c2d_graph_removal).
-    # Nullable — legacy/non-provisioned services may have none.
-    topology_id: Optional[UUID] = None
+    # Cycle 10 (doc 35 §2.5): the subscriber's edge device. This plus that
+    # item's own parent in the network graph are the ONLY two network inputs a
+    # service takes; the whole configuration path is derived by walking from
+    # here to the root. Nullable — a brownfield service attested from the field
+    # legitimately has no equipment record.
+    cpe_item_id: Optional[UUID] = None
+    # Attaches the CPE under this node in the same request, so the two inputs
+    # land together or not at all. Write-only: it is a property of the ITEM, not
+    # of the service, and is never echoed back on ClientServiceOut.
+    cpe_parent_id: Optional[UUID] = None
     connection_params: Optional[Dict[str, Any]] = None
     # Per-service VALUES for the parameters this service's plan declares with
     # scope='service' (doc 33 follow-up). The plan owns the declaration; only
@@ -59,7 +66,8 @@ class ClientServiceCreate(ClientServiceBase):
 class ClientServiceUpdate(BaseModel):
     status: Optional[ClientServiceStatus] = None
     service_plan_id: Optional[UUID] = None
-    topology_id: Optional[UUID] = None
+    cpe_item_id: Optional[UUID] = None
+    cpe_parent_id: Optional[UUID] = None
     activation_date: Optional[datetime] = None
     connection_params: Optional[Dict[str, Any]] = None
     provisioning_params: Optional[List[ProvisioningParam]] = None
@@ -102,6 +110,10 @@ class ClientServiceOut(ClientServiceBase):
     # deliberately NOT on ClientServiceUpdate.
     install_state: str = "NOT_INSTALLED"
     installed_at: Optional[datetime] = None
+    # Cycle 10 (doc 35 §5.2): set when a re-parent changed this service's
+    # configuration path, so the UI can offer a re-provision. Machine-written,
+    # never accepted on an Update schema.
+    path_changed_at: Optional[datetime] = None
     # ba1 (doc 30): attested-adoption fact. Read-only — writable ONLY via the
     # adopt/un-adopt endpoints (client_services.adopt permission); deliberately
     # absent from ClientServiceCreate/Update (migration_source precedent).
@@ -150,14 +162,15 @@ class ClientServiceAdoptIn(BaseModel):
     non-empty — an attestation without provenance is worthless. installed_at:
     optional HISTORICAL install date; applied only if the service's
     installed_at is still NULL (a stamped first-install fact is never
-    rewritten). topology_id: optional topology to assign DURING adoption
-    (service-lifecycle cycle, founder decision 9) — an adopted/brownfield
-    service with no topology can run no lifecycle playbook at all, so it would
-    be uncancellable except by the admin force escape hatch. Inherited by
-    ClientServiceAdoptBulkItem, so the bulk campaign path accepts it too."""
+    rewritten).
+
+    Cycle 10 removed the topology_id field: attestation records that a service
+    was ALREADY installed, while where its CPE sits in the plant is a separate
+    physical fact stated by attaching the node. Inherited by
+    ClientServiceAdoptBulkItem, so the bulk campaign path accepts the same
+    shape."""
     note: str
     installed_at: Optional[datetime] = None
-    topology_id: Optional[UUID] = None
 
     @field_validator('note')
     @classmethod

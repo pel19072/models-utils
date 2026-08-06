@@ -2,7 +2,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
 from enum import Enum
-from pydantic import BaseModel, computed_field, Field, ConfigDict
+from pydantic import BaseModel, computed_field, ConfigDict
 from .order_item import OrderItemInput, OrderItemOut
 from .client import ClientOut
 import calendar

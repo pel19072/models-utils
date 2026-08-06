@@ -6,7 +6,6 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from database_utils.database import Base
 from ..utils.timezone_utils import now_gt
 
-from datetime import datetime
 from typing import Optional
 import uuid
 
@@ -103,7 +102,6 @@ class Company(Base):
     inventory_items = relationship("InventoryItem", back_populates="company", cascade="all, delete-orphan")
     # Cycle 2 D6: network_node_types/network_nodes rels removed with the graph
     # (revision c2d_graph_removal); topologies (D5) is the replacement.
-    topologies = relationship("Topology", back_populates="company", cascade="all, delete-orphan")
     playbooks = relationship("Playbook", back_populates="company", cascade="all, delete-orphan")
     provisioning_jobs = relationship("ProvisioningJob", back_populates="company", cascade="all, delete-orphan")
     # Cycle 4: insights dashboards.

@@ -19,8 +19,8 @@ seed is append-only going forward and cannot rewrite existing JSON values).
 
 Cycle 3 (doc 20-cycle3-design.md, E1/E2/E4): 'installation-provisioning' is
 revised to v2 and 'suspension'/'reactivation'/'service-removal' to v4 —
-all four now resolve their playbook via the topology's purpose map
-(ENQUEUE_PROVISIONING use_topology) instead of an explicit *_playbook_id
+all four now resolve their playbooks by walking the service's network path
+(ENQUEUE_PROVISIONING use_service_path) instead of an explicit *_playbook_id
 param (revision c3a_topology_purpose). `_seed_device_categories` (E4,
 revision c3b_device_categories) is INSERT-ONLY convergent (ON CONFLICT key DO
 NOTHING) — never DO UPDATE, so super-admin edits to the 13 baseline rows
@@ -42,7 +42,7 @@ from database_utils.utils.timezone_utils import now_gt
 # a hand-typed string literal (doc 20a workflow-provisioning verifier fix —
 # a typo'd table/column name silently deactivates the gated templates
 # forever via the retirement pass, with no test catching it at head).
-from database_utils.models.isp import TopologyPlaybook
+from database_utils.models.isp import DeviceTypePlaybook
 
 logger = logging.getLogger(__name__)
 
@@ -257,12 +257,12 @@ def _wt(key, name, description, category, parameters, triggers, steps, edges):
 # this dict extends the same idea to plain columns. Checked against
 # information_schema.columns in _seed_workflow_templates.
 TEMPLATE_REQUIRED_COLUMNS = {
-    # Cycle 3 E2 (doc 20a workflow-provisioning §3): 'installation-provisioning'
-    # v2 and the v4 suspension/reactivation/service-removal rewrites all use
-    # ENQUEUE_PROVISIONING's use_topology mode, which resolves through the
-    # topology_playbook table (revision c3a_topology_purpose) — never publish
-    # before it exists.
-    "installation-provisioning": [(TopologyPlaybook.__tablename__, "purpose")],
+    # Cycle 10 (doc 35 §2.4): 'installation-provisioning' uses
+    # ENQUEUE_PROVISIONING's use_service_path mode, which resolves each device
+    # on the traversed path through the device_type_playbook binding table
+    # (revision ng1_network_graph) — never publish before it exists. Same gate
+    # as before, pointed at the table that replaced topology_playbook.
+    "installation-provisioning": [(DeviceTypePlaybook.__tablename__, "purpose")],
     # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these templates now
     # UPDATE_FIELD client_service.billing_status instead of
     # recurring_order.status — the column only exists from c2b onward. v4
@@ -331,7 +331,7 @@ WORKFLOW_TEMPLATES = [
     ),
     # v2 (Cycle 3 E2, doc 20a workflow-provisioning §3): rewritten from an
     # explicit `activation_playbook_id` param to topology purpose resolution
-    # (ENQUEUE_PROVISIONING use_topology). The task's linked_object_id (set by
+    # (ENQUEUE_PROVISIONING use_service_path). The task's linked_object_id (set by
     # new-installation's s2 to the client_service that fired new-installation)
     # is the resolution target; `purpose` is fixed to ACTIVATION (not a
     # param — the founder flow is specifically install -> activate; purpose
@@ -341,7 +341,7 @@ WORKFLOW_TEMPLATES = [
     _wt(
         "installation-provisioning", "Installation → Provisioning",
         "When an installation task is moved to the 'installed' column, resolve the "
-        "linked service's topology and run its ACTIVATION playbook.",
+        "linked service's network path and run each device's ACTIVATION playbook.",
         "installation",
         [
             {"key": "installed_state_id", "label": "Board column meaning 'installation done'",
@@ -350,10 +350,10 @@ WORKFLOW_TEMPLATES = [
         [{"resource_type": "task", "event_type": "UPDATED",
           "field_conditions": {"field": "task_state_id", "operator": "changed_to",
                                 "value": "{{param:installed_state_id}}"}}],
-        [{"ref": "provision", "name": "Provision service from topology",
+        [{"ref": "provision", "name": "Provision service from its network path",
           "action_type": "ENQUEUE_PROVISIONING",
           "action_config": {
-              "use_topology": True,
+              "use_service_path": True,
               "purpose": "ACTIVATION",
               "client_service_id": "{{trigger.after.linked_object_id}}",
               "idempotency_key": "activate-{{trigger.after.linked_object_id}}",
@@ -476,15 +476,27 @@ RETIRED_TEMPLATE_KEYS = [
 # a tier yet — the pre-nc2a data signature) — never a DO UPDATE and never an
 # every-run UPDATE, so super-admin tier/name edits (including clearing a tier
 # back to NULL) survive every re-seed.
+# (key, display name, sort order, tier, is_passive)
+#
+# is_passive (Cycle 10, doc 35 §2.3) marks SIGNAL-passive gear: it appears on a
+# service's configuration path and matters for troubleshooting, but nothing is
+# ever configured on it. It is NOT "has no playbook" — that distinction is the
+# whole point. Without the flag, an OLT whose ACTIVATION playbook someone
+# forgot to bind looks exactly like a splitter.
+#
+# UPS and RADIO are deliberately NOT passive: a UPS may well expose SNMP, and a
+# radio is an active link end. Marking them passive would silently exclude them
+# from provisioning forever.
 DEVICE_CATEGORIES = [
-    ('ROUTER', 'Router', 10, 'CORE'), ('SWITCH', 'Switch', 20, 'CORE'),
-    ('OLT', 'OLT', 30, 'CORE'),
-    ('ONU', 'ONU / ONT', 40, 'EDGE'), ('SPLITTER', 'Splitter', 50, None),
-    ('SPLICE_CLOSURE', 'Splice Closure', 60, None),
-    ('PATCH_PANEL', 'Patch Panel', 70, None), ('ACCESS_POINT', 'Access Point', 80, 'EDGE'),
-    ('CPE_ROUTER', 'CPE Router', 90, 'EDGE'), ('UPS', 'UPS', 100, None),
-    ('ANTENNA', 'Antenna', 110, None),
-    ('RADIO', 'Radio', 120, None), ('OTHER', 'Other', 130, None),
+    ('ROUTER', 'Router', 10, 'CORE', False), ('SWITCH', 'Switch', 20, 'CORE', False),
+    ('OLT', 'OLT', 30, 'CORE', False),
+    ('ONU', 'ONU / ONT', 40, 'EDGE', False), ('SPLITTER', 'Splitter', 50, None, True),
+    ('SPLICE_CLOSURE', 'Splice Closure', 60, None, True),
+    ('PATCH_PANEL', 'Patch Panel', 70, None, True),
+    ('ACCESS_POINT', 'Access Point', 80, 'EDGE', False),
+    ('CPE_ROUTER', 'CPE Router', 90, 'EDGE', False), ('UPS', 'UPS', 100, None, False),
+    ('ANTENNA', 'Antenna', 110, None, True),
+    ('RADIO', 'Radio', 120, None, False), ('OTHER', 'Other', 130, None, False),
 ]
 
 
@@ -726,7 +738,7 @@ def _seed_device_categories(connection: Connection) -> None:
         "WHERE table_name = 'device_category' AND column_name = 'tier'"
     )).scalar()
 
-    for key, name, sort_order, tier in DEVICE_CATEGORIES:
+    for key, name, sort_order, tier, _is_passive in DEVICE_CATEGORIES:
         if has_tier:
             connection.execute(
                 text(
@@ -761,11 +773,40 @@ def _seed_device_categories(connection: Connection) -> None:
             "SELECT COUNT(*) FROM device_category WHERE tier IS NOT NULL"
         )).scalar()
         if not any_classified:
-            for key, _name, _sort_order, tier in DEVICE_CATEGORIES:
+            for key, _name, _sort_order, tier, _passive in DEVICE_CATEGORIES:
                 if tier is None:
                     continue
                 connection.execute(
                     text("UPDATE device_category SET tier = :tier WHERE key = :key AND tier IS NULL"),
                     {"tier": tier, "key": key},
                 )
+    # Cycle 10 passive convergence, following the tier precedent above EXACTLY:
+    # classify only while NOTHING anywhere is classified. A per-row
+    # is_passive-is-false UPDATE cannot tell "never classified" apart from a
+    # super-admin who deliberately marked a splitter active (a tenant with
+    # managed splitters that report optical power would do precisely that), and
+    # reverting that decision on every migrate is the bug the tier block was
+    # written to avoid.
+    has_passive = connection.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        " WHERE table_name = 'device_category' AND column_name = 'is_passive'"
+    )).scalar()
+    if has_passive:
+        any_passive = connection.execute(text(
+            "SELECT COUNT(*) FROM device_category WHERE is_passive"
+        )).scalar()
+        if not any_passive:
+            for key, _name, _sort_order, _tier, is_passive in DEVICE_CATEGORIES:
+                if not is_passive:
+                    continue
+                connection.execute(
+                    text("UPDATE device_category SET is_passive = true WHERE key = :key"),
+                    {"key": key},
+                )
+    else:
+        logger.warning(
+            "device_category.is_passive missing (pre-ng1 position) — skipping the "
+            "passive classification"
+        )
+
     logger.info(f"Seeded {len(DEVICE_CATEGORIES)} baseline device categories (insert-only, convergent)")

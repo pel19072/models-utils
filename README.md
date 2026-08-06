@@ -67,7 +67,8 @@ alembic revision --autogenerate -m "description"  # generate a migration (needs 
 | [docs/limitations.md](docs/limitations.md) | Known limitations, TODOs, tracked debt |
 | [docs/auth-models.md](docs/auth-models.md) | Auth / tenancy / SaaS-billing models |
 | [docs/crm-models.md](docs/crm-models.md) | CRM models (clients, orders, payments, tasks, integrations) |
-| [docs/isp-models.md](docs/isp-models.md) | ISP vertical models (plans, services, inventory, topology, provisioning) |
+| [docs/isp-models.md](docs/isp-models.md) | ISP vertical models (plans, services, inventory, playbooks, provisioning) |
+| [docs/network-models.md](docs/network-models.md) | Network config + the company network graph (Cycles 5/7/10) |
 | [docs/workflow-models.md](docs/workflow-models.md) | Workflow automation models |
 | [docs/workflow-engine.md](docs/workflow-engine.md) | Workflow engine + provisioning resolution semantics |
 | [docs/schemas.md](docs/schemas.md) | Pydantic schema modules |
