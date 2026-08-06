@@ -476,15 +476,27 @@ RETIRED_TEMPLATE_KEYS = [
 # a tier yet — the pre-nc2a data signature) — never a DO UPDATE and never an
 # every-run UPDATE, so super-admin tier/name edits (including clearing a tier
 # back to NULL) survive every re-seed.
+# (key, display name, sort order, tier, is_passive)
+#
+# is_passive (Cycle 10, doc 35 §2.3) marks SIGNAL-passive gear: it appears on a
+# service's configuration path and matters for troubleshooting, but nothing is
+# ever configured on it. It is NOT "has no playbook" — that distinction is the
+# whole point. Without the flag, an OLT whose ACTIVATION playbook someone
+# forgot to bind looks exactly like a splitter.
+#
+# UPS and RADIO are deliberately NOT passive: a UPS may well expose SNMP, and a
+# radio is an active link end. Marking them passive would silently exclude them
+# from provisioning forever.
 DEVICE_CATEGORIES = [
-    ('ROUTER', 'Router', 10, 'CORE'), ('SWITCH', 'Switch', 20, 'CORE'),
-    ('OLT', 'OLT', 30, 'CORE'),
-    ('ONU', 'ONU / ONT', 40, 'EDGE'), ('SPLITTER', 'Splitter', 50, None),
-    ('SPLICE_CLOSURE', 'Splice Closure', 60, None),
-    ('PATCH_PANEL', 'Patch Panel', 70, None), ('ACCESS_POINT', 'Access Point', 80, 'EDGE'),
-    ('CPE_ROUTER', 'CPE Router', 90, 'EDGE'), ('UPS', 'UPS', 100, None),
-    ('ANTENNA', 'Antenna', 110, None),
-    ('RADIO', 'Radio', 120, None), ('OTHER', 'Other', 130, None),
+    ('ROUTER', 'Router', 10, 'CORE', False), ('SWITCH', 'Switch', 20, 'CORE', False),
+    ('OLT', 'OLT', 30, 'CORE', False),
+    ('ONU', 'ONU / ONT', 40, 'EDGE', False), ('SPLITTER', 'Splitter', 50, None, True),
+    ('SPLICE_CLOSURE', 'Splice Closure', 60, None, True),
+    ('PATCH_PANEL', 'Patch Panel', 70, None, True),
+    ('ACCESS_POINT', 'Access Point', 80, 'EDGE', False),
+    ('CPE_ROUTER', 'CPE Router', 90, 'EDGE', False), ('UPS', 'UPS', 100, None, False),
+    ('ANTENNA', 'Antenna', 110, None, True),
+    ('RADIO', 'Radio', 120, None, False), ('OTHER', 'Other', 130, None, False),
 ]
 
 
@@ -726,7 +738,7 @@ def _seed_device_categories(connection: Connection) -> None:
         "WHERE table_name = 'device_category' AND column_name = 'tier'"
     )).scalar()
 
-    for key, name, sort_order, tier in DEVICE_CATEGORIES:
+    for key, name, sort_order, tier, _is_passive in DEVICE_CATEGORIES:
         if has_tier:
             connection.execute(
                 text(
@@ -761,11 +773,40 @@ def _seed_device_categories(connection: Connection) -> None:
             "SELECT COUNT(*) FROM device_category WHERE tier IS NOT NULL"
         )).scalar()
         if not any_classified:
-            for key, _name, _sort_order, tier in DEVICE_CATEGORIES:
+            for key, _name, _sort_order, tier, _passive in DEVICE_CATEGORIES:
                 if tier is None:
                     continue
                 connection.execute(
                     text("UPDATE device_category SET tier = :tier WHERE key = :key AND tier IS NULL"),
                     {"tier": tier, "key": key},
                 )
+    # Cycle 10 passive convergence, following the tier precedent above EXACTLY:
+    # classify only while NOTHING anywhere is classified. A per-row
+    # is_passive-is-false UPDATE cannot tell "never classified" apart from a
+    # super-admin who deliberately marked a splitter active (a tenant with
+    # managed splitters that report optical power would do precisely that), and
+    # reverting that decision on every migrate is the bug the tier block was
+    # written to avoid.
+    has_passive = connection.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        " WHERE table_name = 'device_category' AND column_name = 'is_passive'"
+    )).scalar()
+    if has_passive:
+        any_passive = connection.execute(text(
+            "SELECT COUNT(*) FROM device_category WHERE is_passive"
+        )).scalar()
+        if not any_passive:
+            for key, _name, _sort_order, _tier, is_passive in DEVICE_CATEGORIES:
+                if not is_passive:
+                    continue
+                connection.execute(
+                    text("UPDATE device_category SET is_passive = true WHERE key = :key"),
+                    {"key": key},
+                )
+    else:
+        logger.warning(
+            "device_category.is_passive missing (pre-ng1 position) — skipping the "
+            "passive classification"
+        )
+
     logger.info(f"Seeded {len(DEVICE_CATEGORIES)} baseline device categories (insert-only, convergent)")
