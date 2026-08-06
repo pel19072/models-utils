@@ -22,7 +22,6 @@ from database_utils.models.workflow import (
     Workflow,
     WorkflowTrigger,
     WorkflowStep,
-    WorkflowStepEdge,
     WorkflowExecution,
     WorkflowStepExecution,
     StepActionType,
@@ -1221,6 +1220,10 @@ def _execute_enqueue_provisioning_explicit(
     from database_utils.models.isp import Playbook, ProvisioningJob, ProvisioningTrigger
     from database_utils.models.isp import ClientService, InventoryItem
     from database_utils.models.crm import Integration
+    # Was missing since doc 33 (fabaed9) — the namespacing change added the
+    # input_key() call here but only imported it in the other mode, so every
+    # explicit-playbook enqueue has NameError'd since.
+    from database_utils.utils.provisioning_resolution import input_key
 
     playbook_id = config.get("playbook_id")
     if not playbook_id:

@@ -6,7 +6,7 @@ is a dedicated marker column (doc 18 amendment 1/2) and is NEVER exposed on
 any schema here — it is internal audit state, not user-editable data.
 """
 from pydantic import BaseModel, ConfigDict, field_validator
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 from datetime import datetime
 import re

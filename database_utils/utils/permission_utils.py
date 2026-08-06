@@ -9,7 +9,7 @@ from fastapi import HTTPException, status, Request, Depends
 from database_utils.dependencies.auth import get_token_from_header
 
 if TYPE_CHECKING:
-    from database_utils.models.auth import User, Role, Permission
+    from database_utils.models.auth import User
 
 
 class PermissionChecker:

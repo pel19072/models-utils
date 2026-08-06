@@ -4,7 +4,6 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException, RequestValidationError
 from sqlalchemy.exc import IntegrityError, OperationalError, DataError
-from loguru import logger
 import traceback
 
 from database_utils.utils.logging_utils import (
@@ -21,7 +20,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     Handle HTTPException with custom format and comprehensive logging.
     """
     # Get current request context
-    context = get_request_context()
+    get_request_context()
 
     # Log the exception with full context
     log_with_context(

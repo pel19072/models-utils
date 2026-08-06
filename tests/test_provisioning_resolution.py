@@ -9,10 +9,8 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
-import sqlalchemy as sa
 
 from database_utils.models.isp import (
-    DeviceTypePlaybook,
     PURPOSE_ACTIVATION,
 )
 from database_utils.utils.provisioning_resolution import (

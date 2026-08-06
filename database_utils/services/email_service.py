@@ -44,21 +44,18 @@ class EmailService(ABC):
         locale: str = "es",
     ) -> bool:
         """Send invitation email to new user"""
-        pass
 
     @abstractmethod
     async def send_welcome_email(
         self, to_email: str, user_name: str, locale: str = "es"
     ) -> bool:
         """Send welcome email after user accepts invitation"""
-        pass
 
     @abstractmethod
     async def send_payment_receipt(
         self, to_email: str, invoice_data: Dict[str, Any]
     ) -> bool:
         """Send payment receipt"""
-        pass
 
     @abstractmethod
     async def send_confirmation_email(
@@ -66,7 +63,6 @@ class EmailService(ABC):
         locale: str = "es",
     ) -> bool:
         """Send signup confirmation email; login is blocked until this link is clicked."""
-        pass
 
     @abstractmethod
     async def send_password_reset_email(
@@ -74,21 +70,18 @@ class EmailService(ABC):
         locale: str = "es",
     ) -> bool:
         """Send password reset email with a short-lived reset link."""
-        pass
 
     @abstractmethod
     async def send_payment_failed_email(
         self, to_email: str, company_name: str, invoice_data: Dict[str, Any]
     ) -> bool:
         """Send notice that an automatic subscription charge could not be processed."""
-        pass
 
     @abstractmethod
     async def send_join_request_decision_email(
         self, to_email: str, user_name: str, company_name: str, approved: bool
     ) -> bool:
         """Notify a join-request requester that an admin approved or rejected them."""
-        pass
 
 
 class MockEmailService(EmailService):

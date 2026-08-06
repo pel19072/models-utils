@@ -7,18 +7,13 @@ and SUSPENSION bound to the router/olt/onu device types.
 
 import uuid
 
-import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
 
-from database_utils.database import Base
 from database_utils.models import ProvisioningRun
 from database_utils.models.isp import (
     ProvisioningJob,
     ProvisioningJobStatus,
-    ProvisioningTrigger,
     PURPOSE_ACTIVATION,
-    Playbook,
 )
 from database_utils.utils.provisioning_runs import (
     advance_run,

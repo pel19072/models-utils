@@ -4,7 +4,7 @@ Workflow field metadata: hardcoded allowlist of editable fields per resource typ
 Used by the workflow UI to populate field dropdowns in triggers and steps,
 and by the engine to validate field access.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 
 # Each entry: {"name": "<column_name>", "type": "<field_type>", "fk_to": "<resource_type>" | None}
