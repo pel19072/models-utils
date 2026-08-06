@@ -1,79 +1,65 @@
 # utils/provisioning_resolution.py
 """
-Provisioning resolution (Cycle 2 D5, doc 18a topology-networking §5). Moved
-into models-utils in Cycle 3 E2 (doc 20a workflow-provisioning §0) from
-backend-erp services/provisioning_resolution.py so the workflow engine's
-ENQUEUE_PROVISIONING use_topology mode can call it directly: the engine
-(models-utils) cannot import backend-erp, and backend-erp already imports
-models-utils, so moving resolution down the stack is the only import
-direction that compiles. backend-erp's manual POST /client-services/{id}/
-provision endpoint now imports this module instead of its own deleted copy.
+Provisioning resolution (Cycle 10, doc 35 §3.2).
 
-topology -> purpose -> playbook (topology_playbook, revision
-c3a_topology_purpose) + per-chain-position concrete device, resolved from the
-client's assigned inventory items matched BY TYPE (no coordinate/graph — the
-free-form network graph was removed in c2d_graph_removal).
+Lives in models-utils rather than backend-erp because the workflow engine's
+ENQUEUE_PROVISIONING path calls it directly: the engine (models-utils) cannot
+import backend-erp, and backend-erp already imports models-utils, so moving
+resolution down the stack is the only import direction that compiles.
 
-Founder decision: ambiguity is never auto-resolved — 0 matches fails
-MISSING_DEVICE, >1 matches fails AMBIGUOUS_DEVICE with the candidate list.
+WHAT CHANGED IN CYCLE 10. Resolution used to start from a `Topology` — a named,
+ordered chain of device TYPES — and match each chain position against the
+client's assigned inventory. It now starts from the service's CPE and walks the
+company's network graph to the root (utils/network_graph.resolve_path). The
+difference is not cosmetic:
 
-Cycle 3 changes (doc 20/20a, E1/E2):
-- `purpose` parameter (default ACTIVATION) selects the topology_playbook
-  entry instead of the old single `topology.playbook`. New error codes
-  PURPOSE_NOT_CONFIGURED (topology has no entry for `purpose`) and
-  PLAYBOOK_INACTIVE (entry exists, playbook inactive) join TOPOLOGY_NOT_SET /
-  TOPOLOGY_INACTIVE / RESOLUTION_FAILED.
-- Amendment 2 (E2xE4 alias derivation, doc 20 normative amendments #2):
-  device_type.category is now a `@property` reading a DeviceCategory FK
-  relationship (revision c3b_device_categories), not a PG enum with
-  `.value` — the alias key is `device_type.category` directly (already a
-  plain string key or None), normalized `.lower()`, keeping aliases
-  byte-identical across the enum->FK migration (cpe_router_serial,
-  onu_serial, ...).
-- Amendment 4 (doc 20 normative amendments #4, appendix workflow-provisioning
-  §3 option (c)): for non-ACTIVATION purposes, a device-chain resolution
-  error (MISSING_DEVICE/AMBIGUOUS_DEVICE) is fatal only when the resolved
-  playbook's own template actually references a device-derived variable.
-  ACTIVATION keeps the original founder hard-fail-visibly behavior
-  unconditionally.
+- Every node on the path IS a concrete device, so there is nothing left to
+  match. MISSING_DEVICE, AMBIGUOUS_DEVICE and PINNED_DEVICE_UNAVAILABLE — the
+  three most common provisioning failures in the old system — cannot occur.
+- Playbooks bind to device types (overridable per node) instead of to a chain,
+  so ONE run executes SEVERAL playbooks, one per configured device.
+- Path length is variable, so positional variables are gone (see below).
 
-Namespaced variables (doc 33, revision pv1 — founder decision 2026-07-20):
-every emitted variable now carries a namespace, replacing the flat
-device{i}_* names and the unique-category aliases (onu_serial, ...), which
-are GONE. Nothing bare survives, so a typo can never silently resolve to an
-unrelated value:
+Ordering is LEAF -> ROOT everywhere (doc 35 §3.1): devices are configured from
+the subscriber outward, CPE first and core last, for every purpose, in the
+executor and in the UI alike.
 
-  edge_devices[n].<attr> / core_devices[n].<attr>   n = 0-based WITHIN tier
-  chain[n].<attr>                                   n = 1-based absolute
-                                                    position; hidden from the
-                                                    editor, backs step
-                                                    targeting where only the
-                                                    chain position is known
-  service_plan.<field|param>                        plan fields + the plan's
-                                                    tenant-authored rows
-  client.<attr>                                     subscriber context: built-in
-                                                    fields + the tenant's own
-                                                    custom client attributes
-                                                    (built-ins win a collision)
-  service.<attr>                                    the client_service itself
-  input.<key>                                       author-declared playbook
-                                                    variables (applied at
-                                                    reference; the declared
-                                                    key itself stays bare)
+THE VARIABLE NAMESPACE (doc 35 §4). Positional namespaces are RETIRED with no
+compatibility shim: `chain[n]`, `edge_devices[n]`, `core_devices[n]` and the
+`position` attribute are gone, and ng2_topology_drop refuses to run over any
+playbook that still contains them.
 
-`variables` remains a FLAT dict — the KEYS are the full dotted/indexed
-strings. There is no nested structure to walk, which keeps the renderer a
-pure dictionary lookup (ADR-006: no expressions, no attribute access).
+  device.<attr>              the device THIS playbook is running on
+  cpe.<attr>                 the subscriber edge device that triggered the run
+  path.<category_key>.<attr> any other node on THIS RUN's path, named by its
+                             device-category role; nearest-to-the-CPE wins if a
+                             role repeats
+  service_plan.<field|param> plan fields + the plan's tenant-authored rows
+  client.<attr>              built-in subscriber fields + the tenant's own
+                             custom client attributes (built-ins win a clash)
+  service.<attr>             the client_service itself
+  input.<key>                author-declared playbook variables (namespace
+                             applied at REFERENCE time; the declared key stays
+                             bare)
 
-Cycle 7 changes (doc 25 §3, revision nc2a_core_config):
-- Pinned positions: a chain position with topology_device_type
-  .inventory_item_id set resolves to THAT item — shared core infrastructure
-  (e.g. the topology's OLT), exempt from client/service candidate matching.
-  Company checked; status must be RESERVED/INSTALLED, else the position
-  fails PINNED_DEVICE_UNAVAILABLE (collected like MISSING_DEVICE, same
-  amendment-4 fatality rules).
-- New emitted variable per resolved position: device{i}_category_tier
-  (CORE/EDGE/empty) for template convenience.
+Addressing is by CATEGORY, not device-type slug and not relative hop. Category
+is the stable semantic ROLE ("OLT") on a curated, platform-global table with a
+unique immutable key; a device-type slug is the hardware ("Huawei MA5800") and
+would break every playbook on a vendor swap. Relative hops break the instant a
+splitter is inserted, and have no downward form — a core-router playbook needs
+the OLT and CPE BELOW it, which is why addressing is path-relative rather than
+upstream-relative.
+
+`variables` remains a FLAT dict — the KEYS are the full dotted strings.
+`path.olt.serial` is a key, not a walk. There is no nested structure, which
+keeps the renderer a pure dictionary lookup (ADR-006: no expressions, no
+attribute access). A nested dict under a namespace prefix deliberately does NOT
+satisfy a dotted token; allowing it would be attribute access by the back door.
+
+Two dicts come out, not one: `shared_variables` is identical for every node in
+the run, while `device.*` differs per node. Each child job's `variables` column
+is written as `shared | device_variables[item_id]`, so the executor and the
+renderer still receive exactly one flat dict and their contract is untouched.
 """
 from __future__ import annotations
 
@@ -82,19 +68,18 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import or_
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from database_utils.models.isp import (
     ClientService,
+    DeviceTypePlaybook,
     InventoryItem,
-    InventoryItemStatus,
+    InventoryItemPlaybook,
     Playbook,
     PURPOSE_ACTIVATION,
-    Topology,
-    TopologyDeviceType,
-    TopologyPlaybook,
 )
+from database_utils.utils.network_graph import GraphError, resolve_path
 
 
 class ResolutionError(Exception):
@@ -113,27 +98,46 @@ class ResolutionError(Exception):
 
 
 @dataclass
-class ResolvedItem:
+class ResolvedNode:
+    """One node on a service's configuration path.
+
+    `position` is the hop count from the CPE (the CPE itself is 0) — a FACT
+    about the resolved path, never an addressing mechanism. Nothing templates
+    it; it exists so the UI can render the path in order and so `depth` has a
+    value.
+    """
+
     position: int
-    device_type_id: Any
-    device_type_name: str
-    category: Optional[str]
-    inventory_item_id: Any
+    item_id: Any
     serial_number: Optional[str]
     mac_address: Optional[str]
-    # Cycle 7 (doc 25 §3): the position category's CORE/EDGE tier (None =
-    # passives/unclassified) and whether the item came from a topology pin
-    # rather than client/service candidate matching. Defaulted so pre-Cycle-7
-    # constructors stay valid.
-    category_tier: Optional[str] = None
-    pinned: bool = False
+    device_type_id: Any
+    device_type_name: str
+    category_key: Optional[str]
+    category_tier: Optional[str]
+    mgmt_host: Optional[str]
+    mgmt_port: Optional[int]
+    is_passive: bool = False
+    playbook_id: Any = None
+    # "node" (an inventory_item_playbook override), "device_type" (the type's
+    # default), or None (nothing bound).
+    playbook_source: Optional[str] = None
 
 
 @dataclass
 class ResolvedProvisioning:
-    playbook_id: Any
-    variables: Dict[str, Any]
-    resolved_items: List[ResolvedItem] = field(default_factory=list)
+    """The full result of resolving one run.
+
+    `path` is every node including passives — the UI shows the whole path so an
+    operator can see that a splitter was considered and deliberately skipped,
+    rather than wondering where it went. `steps` is the subset that will
+    actually be configured.
+    """
+
+    path: List[ResolvedNode] = field(default_factory=list)
+    steps: List[ResolvedNode] = field(default_factory=list)
+    shared_variables: Dict[str, Any] = field(default_factory=dict)
+    device_variables: Dict[Any, Dict[str, Any]] = field(default_factory=dict)
 
 
 INPUT_NAMESPACE = "input"
@@ -235,35 +239,83 @@ def iter_client_custom_fields(client: Any):
                                         getattr(definition, "field_type", None))
 
 
-def get_topology_playbook(topology: Topology, purpose: str) -> Optional[TopologyPlaybook]:
-    """Look up the topology_playbook row bound to `purpose`, or None if the
-    topology has no entry for it. Extracted as a tiny module-level helper
-    (doc 20a D-E1.4) so resolve_provisioning and any other caller needing the
-    same purpose-map lookup (e.g. the engine, if it ever needs it directly)
-    share one lookup semantics — never two implementations that could drift."""
-    return next((tp for tp in topology.playbooks if tp.purpose == purpose), None)
+def resolve_playbook_for(
+    db: Session, item: InventoryItem, purpose: str
+) -> tuple[Any, Optional[str]]:
+    """(playbook_id, source) for one node and one purpose.
+
+    Precedence is node override -> device-type default -> none (doc 35 §2.4).
+    A single module-level helper so the resolver, the API's path preview and
+    the node detail endpoint share one lookup semantics rather than three that
+    could drift.
+    """
+    override = db.execute(
+        sa.select(InventoryItemPlaybook.playbook_id).where(
+            InventoryItemPlaybook.inventory_item_id == item.id,
+            InventoryItemPlaybook.purpose == purpose,
+        )
+    ).scalar_one_or_none()
+    if override is not None:
+        return override, "node"
+
+    default = db.execute(
+        sa.select(DeviceTypePlaybook.playbook_id).where(
+            DeviceTypePlaybook.device_type_id == item.device_type_id,
+            DeviceTypePlaybook.purpose == purpose,
+        )
+    ).scalar_one_or_none()
+    if default is not None:
+        return default, "device_type"
+
+    return None, None
 
 
-# Amendment 4: a device-derived variable is any token in the tier-indexed
-# device namespaces, or the hidden absolute-position `chain[n]` alias.
-# (Pre-namespace this matched device{i}_* and unique-category aliases like
-# onu_serial; both are gone — see the module docstring.)
-# The optional `| filter ...` suffix (doc 34) must be tolerated here, or a
-# token carrying a filter reads as NOT device-derived and amendment 4 silently
-# downgrades a MISSING_DEVICE from fatal. Both of these patterns FAIL OPEN, so
-# forgetting the suffix is a correctness bug, not a syntax error.
+# Amendment 4: a device-derived variable is any token in the three device
+# namespaces.
+#
+# The optional `| filter ...` suffix (doc 34) must be tolerated here, or a token
+# carrying a filter reads as NOT device-derived and amendment 4 silently
+# downgrades a resolution error from fatal.
+#
+# BOTH patterns in this module FAIL OPEN. A namespace that is emitted but not
+# listed here does not raise, does not warn, and does not fail a test that is
+# not looking for it — it quietly turns a hard resolution error into a partial
+# run that half-configures a paying customer. If you add a namespace, add it
+# here in the same commit. test_device_variable_pattern_matches_the_new_
+# namespaces exists solely to catch that omission.
 _FILTER_SUFFIX = r'(?:\s*\|[^{}\n]*)?'
 
 _DEVICE_VARIABLE_PATTERN = re.compile(
-    r'\{\{\s*(?:edge_devices|core_devices|chain)\[\d+\]\.[a-z][a-z0-9_]*'
+    r'\{\{\s*(?:device|cpe|path\.[a-z][a-z0-9_]*)\.[a-z][a-z0-9_]*'
     + _FILTER_SUFFIX + r'\s*\}\}'
 )
 
-# Attributes emitted for every resolved device, in all three device
-# namespaces. Keep in sync with the editor catalog in frontend-erp
-# (lib/playbookVariables.ts) — the editor is the only place an operator
-# discovers these.
-DEVICE_ATTRIBUTES = ("item_id", "serial", "mac", "type", "category_tier", "position")
+# Attributes emitted for every device, in all three device namespaces. Keep in
+# sync with the editor catalog in frontend-erp (lib/playbookVariables.ts) — the
+# editor is the only place an operator discovers these.
+DEVICE_ATTRIBUTES = (
+    "item_id", "serial", "mac", "type", "category", "category_tier",
+    "mgmt_host", "mgmt_port", "depth",
+)
+
+
+def build_device_frame(node: ResolvedNode, prefix: str) -> Dict[str, Any]:
+    """Flat dotted keys for one device under one namespace prefix.
+
+    Keys are the whole dotted string by design (see the module docstring): a
+    nested dict under `path` would be attribute access by the back door.
+    """
+    return {
+        f"{prefix}.item_id": str(node.item_id),
+        f"{prefix}.serial": node.serial_number or "",
+        f"{prefix}.mac": node.mac_address or "",
+        f"{prefix}.type": node.device_type_name or "",
+        f"{prefix}.category": (node.category_key or "").lower(),
+        f"{prefix}.category_tier": node.category_tier or "",
+        f"{prefix}.mgmt_host": node.mgmt_host or "",
+        f"{prefix}.mgmt_port": str(node.mgmt_port) if node.mgmt_port else "",
+        f"{prefix}.depth": node.position,
+    }
 
 
 def _playbook_references_token(playbook: Playbook, token: str) -> bool:
@@ -299,204 +351,134 @@ def _playbook_references_device_variables(playbook: Playbook) -> bool:
     return bool(_DEVICE_VARIABLE_PATTERN.search(blob))
 
 
+def _node_from_item(db: Session, item: InventoryItem, position: int,
+                    purpose: str) -> ResolvedNode:
+    device_type = item.device_type
+    category = getattr(device_type, "category_ref", None) if device_type else None
+    node = ResolvedNode(
+        position=position,
+        item_id=item.id,
+        serial_number=item.serial_number,
+        mac_address=item.mac_address,
+        device_type_id=item.device_type_id,
+        device_type_name=getattr(device_type, "name", "") or "",
+        category_key=getattr(category, "key", None),
+        category_tier=getattr(category, "tier", None),
+        mgmt_host=item.mgmt_host,
+        mgmt_port=item.mgmt_port,
+        is_passive=bool(getattr(category, "is_passive", False)),
+    )
+    if not node.is_passive:
+        node.playbook_id, node.playbook_source = resolve_playbook_for(db, item, purpose)
+    return node
+
+
 def resolve_provisioning(
     db: Session,
     client_service: ClientService,
     purpose: str = PURPOSE_ACTIVATION,
 ) -> ResolvedProvisioning:
-    """Resolve a client_service's topology into a playbook_id + rendered
-    variables + the concrete device chain, or raise ResolutionError.
+    """Resolve a service's configuration path, its per-node playbooks and its
+    variable frames — or raise ResolutionError.
 
-    Algorithm (doc 18a §5, purpose lookup + amendment 4 per doc 20a D-E1.4/§3):
-    1. topology = client_service.topology; None -> TOPOLOGY_NOT_SET.
-       not topology.is_active -> TOPOLOGY_INACTIVE.
-       no topology_playbook entry for `purpose` -> PURPOSE_NOT_CONFIGURED.
-       entry's playbook missing/inactive -> PLAYBOOK_INACTIVE.
-    2. chain = topology.device_types ordered by position.
-    3. Candidate pool: InventoryItem WHERE company_id=svc.company_id AND
-       status IN (RESERVED, INSTALLED) AND (client_service_id = svc.id OR
-       (client_id = svc.client_id AND client_service_id IS NULL)).
-    4. Per chain position (Cycle 7, doc 25 §3): a PINNED position
-       (topology_device_type.inventory_item_id set) resolves to that item
-       directly — company checked, status must be RESERVED/INSTALLED else
-       PINNED_DEVICE_UNAVAILABLE; pinned items are exempt from the candidate
-       pool of step 3. Otherwise match candidates by device_type_id.
-       Preference: service-assigned beats client-only; within a tier, >1
-       candidate -> AMBIGUOUS_DEVICE (never auto-pick); 0 -> MISSING_DEVICE.
-    5. Errors collected across ALL positions. For purpose == ACTIVATION they
-       are ALWAYS fatal (founder fail-visibly requirement for installs). For
-       any other purpose, they are fatal only when the resolved playbook's
-       template actually references a device-derived variable (amendment 4);
-       otherwise resolution proceeds with whatever positions DID resolve
-       (possibly none).
-    6. Variables injected for the playbook renderer (snake_case only):
-       client_service_id, service_plan_id, download_mbps, upload_mbps (from
-       the plan, NULL-safe), service_plan.provisioning_params merged in,
-       plus per resolved position i (1-based): device{i}_item_id/_serial/
-       _mac/_type/_category_tier (Cycle 7), plus a category-alias (e.g.
-       cpe_router_serial) only when
-       that category is unique within the chain. Caller-passed variables (if
-       any) override resolved ones (caller wins) — handled by the caller,
-       not here.
+    Algorithm (doc 35 §3.2):
+
+    1. client_service.cpe_item_id unset            -> CPE_NOT_SET
+    2. that CPE not attached to the graph          -> CPE_NOT_ATTACHED
+    3. path = resolve_path(cpe), ordered LEAF -> ROOT
+    4. a node whose category is_passive contributes nothing but stays on `path`
+    5. every other node resolves node override -> device-type default -> none
+    6. an ACTIVE node with no playbook for `purpose` is reported
+       PLAYBOOK_NOT_BOUND — fatal for ACTIVATION, non-fatal otherwise
+
+    Step 6 preserves the pre-existing fatality posture exactly: ACTIVATION
+    fails visibly (a half-provisioned install is worse than a refused one),
+    while a SUSPENSION whose OLT happens to have no suspend playbook still
+    suspends whatever it can.
     """
-    topology: Optional[Topology] = client_service.topology
-    if topology is None:
-        raise ResolutionError("TOPOLOGY_NOT_SET", "Client service has no topology configured")
-    if not topology.is_active:
-        raise ResolutionError("TOPOLOGY_INACTIVE", f"Topology '{topology.name}' is not active")
-
-    entry = get_topology_playbook(topology, purpose)
-    if entry is None:
+    cpe_id = getattr(client_service, "cpe_item_id", None)
+    if cpe_id is None:
         raise ResolutionError(
-            "PURPOSE_NOT_CONFIGURED",
-            f"Topology '{topology.name}' has no playbook for purpose '{purpose}'",
+            "CPE_NOT_SET",
+            "This service has no CPE assigned, so it has no place in the network",
         )
-    playbook = entry.playbook
-    if playbook is None or not playbook.is_active:
-        raise ResolutionError("PLAYBOOK_INACTIVE", f"Topology's '{purpose}' playbook is not active")
 
-    chain: List[TopologyDeviceType] = sorted(topology.device_types, key=lambda x: x.position)
-    if not chain:
-        raise ResolutionError("TOPOLOGY_NOT_SET", f"Topology '{topology.name}' has no device-type chain")
+    try:
+        path_items = resolve_path(db, cpe_id, client_service.company_id)
+    except GraphError as exc:
+        raise ResolutionError(exc.code, exc.detail) from exc
 
-    candidates = (
-        db.query(InventoryItem)
-        .filter(
-            InventoryItem.company_id == client_service.company_id,
-            InventoryItem.status.in_([InventoryItemStatus.RESERVED, InventoryItemStatus.INSTALLED]),
-            or_(
-                InventoryItem.client_service_id == client_service.id,
-                (InventoryItem.client_id == client_service.client_id)
-                & (InventoryItem.client_service_id.is_(None)),
+    if not path_items:
+        raise ResolutionError(
+            "CPE_NOT_ATTACHED",
+            "This service's CPE is not attached to the network graph",
+        )
+    if not path_items[0].network_attached:
+        raise ResolutionError(
+            "CPE_NOT_ATTACHED",
+            "This service's CPE is not attached to the network graph",
+        )
+
+    path = [
+        _node_from_item(db, item, position, purpose)
+        for position, item in enumerate(path_items)
+    ]
+    steps = [n for n in path if not n.is_passive and n.playbook_id is not None]
+
+    errors: List[Dict[str, Any]] = [
+        {
+            "code": "PLAYBOOK_NOT_BOUND",
+            "position": n.position,
+            "item_id": str(n.item_id),
+            "device_type_id": str(n.device_type_id),
+            "device_type_name": n.device_type_name,
+            "category": (n.category_key or "").lower(),
+            "detail": (
+                f"'{n.device_type_name}' has no {purpose} playbook bound, and "
+                f"its category is not marked passive"
             ),
-        )
-        .all()
-    )
+        }
+        for n in path
+        if not n.is_passive and n.playbook_id is None
+    ]
 
-    errors: List[Dict[str, Any]] = []
-    resolved_items: List[ResolvedItem] = []
-
-    for tdt in chain:
-        device_type = tdt.device_type
-        category_tier = (
-            device_type.category_ref.tier
-            if device_type is not None and device_type.category_ref is not None
-            else None
-        )
-
-        # Cycle 7 (doc 25 §3 step 1): pinned shared device wins. Pinned items
-        # are exempt from the client/service candidate pool above — they are
-        # shared infrastructure (one OLT serves many subscribers), so they are
-        # loaded directly (company checked) instead of matched by assignment.
-        pinned_id = getattr(tdt, "inventory_item_id", None)
-        if pinned_id is not None:
-            item = db.get(InventoryItem, pinned_id)
-            if (
-                item is None
-                or item.company_id != client_service.company_id
-                or item.status not in (InventoryItemStatus.RESERVED, InventoryItemStatus.INSTALLED)
-            ):
-                errors.append({
-                    "code": "PINNED_DEVICE_UNAVAILABLE",
-                    "position": tdt.position,
-                    "device_type_id": str(tdt.device_type_id),
-                    "device_type_name": device_type.name if device_type else "",
-                    "inventory_item_id": str(pinned_id),
-                })
-                continue
-            resolved_items.append(ResolvedItem(
-                position=tdt.position,
-                device_type_id=tdt.device_type_id,
-                device_type_name=device_type.name if device_type else "",
-                category=device_type.category if device_type else None,
-                inventory_item_id=item.id,
-                serial_number=item.serial_number,
-                mac_address=item.mac_address,
-                category_tier=category_tier,
-                pinned=True,
-            ))
-            continue
-
-        type_candidates = [c for c in candidates if c.device_type_id == tdt.device_type_id]
-
-        if not type_candidates:
-            errors.append({
-                "code": "MISSING_DEVICE",
-                "position": tdt.position,
-                "device_type_id": str(tdt.device_type_id),
-                "device_type_name": device_type.name if device_type else "",
-            })
-            continue
-
-        # Preference: service-assigned beats client-only.
-        service_assigned = [c for c in type_candidates if c.client_service_id == client_service.id]
-        tier = service_assigned if service_assigned else type_candidates
-
-        if len(tier) > 1:
-            errors.append({
-                "code": "AMBIGUOUS_DEVICE",
-                "position": tdt.position,
-                "device_type_id": str(tdt.device_type_id),
-                "device_type_name": device_type.name if device_type else "",
-                "candidates": [
-                    {
-                        "inventory_item_id": str(c.id),
-                        "serial_number": c.serial_number,
-                        "mac_address": c.mac_address,
-                    }
-                    for c in tier
-                ],
-            })
-            continue
-
-        item = tier[0]
-        resolved_items.append(ResolvedItem(
-            position=tdt.position,
-            device_type_id=tdt.device_type_id,
-            device_type_name=device_type.name if device_type else "",
-            # Amendment 2 (E2xE4 alias derivation): device_type.category is a
-            # @property over the device_category FK relationship (revision
-            # c3b_device_categories) — already a plain string key or None, no
-            # `.value` (that was the enum-era access pattern; a plain str has
-            # no `.value` attribute, which is exactly the silent-failure trap
-            # the unconverted line would have been).
-            category=device_type.category if device_type else None,
-            inventory_item_id=item.id,
-            serial_number=item.serial_number,
-            mac_address=item.mac_address,
-            category_tier=category_tier,
-        ))
-
-    if errors:
-        device_errors_fatal = (
-            purpose == PURPOSE_ACTIVATION or _playbook_references_device_variables(playbook)
-        )
-        if device_errors_fatal:
-            raise ResolutionError(
-                "RESOLUTION_FAILED",
-                "One or more chain positions could not be resolved to a concrete device",
-                errors=errors,
+    # Every playbook on the path must be active and owned by this company. An
+    # inactive playbook is a deliberate operator action ("stop running this")
+    # and must not be silently skipped.
+    playbooks = {
+        pb.id: pb
+        for pb in db.execute(
+            sa.select(Playbook).where(
+                Playbook.id.in_([n.playbook_id for n in steps] or [None])
             )
-        # Amendment 4: non-ACTIVATION purpose, device-free playbook — proceed
-        # with whatever positions DID resolve (possibly zero). The operator
-        # is not blocked from suspending/deprovisioning a service whose
-        # equipment state doesn't matter to this playbook.
+        ).scalars()
+    }
+    inactive = [
+        n for n in steps
+        if playbooks.get(n.playbook_id) is None
+        or not playbooks[n.playbook_id].is_active
+        or playbooks[n.playbook_id].company_id != client_service.company_id
+    ]
+    if inactive:
+        raise ResolutionError(
+            "PLAYBOOK_INACTIVE",
+            f"The {purpose} playbook bound to "
+            f"'{inactive[0].device_type_name}' is not active",
+        )
 
     missing_service_params: List[Dict[str, Any]] = []
-    variables: Dict[str, Any] = {
-        "service.id": str(client_service.id),
-    }
+    shared: Dict[str, Any] = {"service.id": str(client_service.id)}
 
     # getattr, not attribute access: resolution runs against detached/partial
     # ClientService objects too (the workflow engine, tests), and a missing
     # relationship must degrade to "no client variables", never crash a job.
     client = getattr(client_service, "client", None)
     if client is not None:
-        variables["client.id"] = str(client.id)
-        variables["client.name"] = client.name or ""
-        variables["client.email"] = client.email or ""
-        variables["client.phone"] = client.phone or ""
-        variables["client.address"] = client.address or ""
+        shared["client.id"] = str(client.id)
+        shared["client.name"] = client.name or ""
+        shared["client.email"] = client.email or ""
+        shared["client.phone"] = client.phone or ""
+        shared["client.address"] = client.address or ""
         # The tenant's own client attributes, exactly as a service plan's
         # provisioning parameters work — a per-subscriber value an operator
         # defines in the CRM and templates in a playbook.
@@ -504,18 +486,18 @@ def resolve_provisioning(
             token = f"client.{key}"
             # Built-in fields win: a custom field keyed `name` must not shadow
             # the subscriber's actual name in a template that already reads it.
-            if token in variables:
+            if token in shared:
                 continue
-            variables[token] = value
+            shared[token] = value
 
     plan = getattr(client_service, "service_plan", None)
     if plan is not None:
-        variables["service_plan.id"] = str(plan.id)
-        variables["service_plan.name"] = plan.name or ""
+        shared["service_plan.id"] = str(plan.id)
+        shared["service_plan.name"] = plan.name or ""
         if plan.download_mbps is not None:
-            variables["service_plan.download_mbps"] = plan.download_mbps
+            shared["service_plan.download_mbps"] = plan.download_mbps
         if plan.upload_mbps is not None:
-            variables["service_plan.upload_mbps"] = plan.upload_mbps
+            shared["service_plan.upload_mbps"] = plan.upload_mbps
         # Tenant-authored rows land under the plan's own namespace instead of
         # being flattened into the global one, so a plan parameter can never
         # collide with (or shadow) a system variable.
@@ -530,8 +512,7 @@ def resolve_provisioning(
                 value = service_values.get(key)
                 if _is_blank(value):
                     # Recorded, not raised: whether this is fatal depends on
-                    # the playbook actually referencing it (checked below),
-                    # exactly as an unresolved device position does.
+                    # the playbook actually referencing it (checked below).
                     missing_service_params.append({
                         "code": "MISSING_SERVICE_PARAM",
                         "key": key,
@@ -543,41 +524,59 @@ def resolve_provisioning(
                         ),
                     })
                     continue
-            variables[f"service_plan.{key}"] = value
+            shared[f"service_plan.{key}"] = value
 
-    # Devices are addressed by their index WITHIN a tier (0-based), because
-    # that is what an operator can actually see and reason about ("the second
-    # ONT"), plus a hidden absolute-position `chain[n]` alias (1-based) that
-    # backs step targeting, where only the chain position is in scope.
-    tier_counters: Dict[str, int] = {}
-    for ri in resolved_items:
-        attrs = {
-            "item_id": str(ri.inventory_item_id),
-            "serial": ri.serial_number or "",
-            "mac": ri.mac_address or "",
-            "type": ri.device_type_name,
-            "category_tier": ri.category_tier or "",
-            "position": ri.position + 1,
-        }
-        namespaces = [f"chain[{ri.position + 1}]"]
-        tier = (ri.category_tier or "").upper()
-        if tier in ("EDGE", "CORE"):
-            prefix = "edge_devices" if tier == "EDGE" else "core_devices"
-            index = tier_counters.get(prefix, 0)
-            tier_counters[prefix] = index + 1
-            namespaces.append(f"{prefix}[{index}]")
-        for namespace in namespaces:
-            for attr, value in attrs.items():
-                variables[f"{namespace}.{attr}"] = value
+    # cpe.* — the leaf that triggered the run. Always path[0]; ordering is
+    # leaf -> root by contract, not by luck.
+    shared.update(build_device_frame(path[0], "cpe"))
 
-    # A per-service parameter with no value is fatal only when the playbook
-    # actually reads it — the same rule that governs unresolved device
-    # positions (amendment 4). A SUSPENSION playbook that never templates
+    # path.<category_key>.* — nearest-to-the-CPE wins. Because `path` is
+    # leaf -> root, taking the FIRST occurrence of each category IS "nearest",
+    # with no comparison and no tie-break needed. A tree gives a total order
+    # along a path, so this is unambiguous by construction.
+    #
+    # Passives are addressable too: a playbook may legitimately want the serial
+    # of the splitter a subscriber hangs off for a description field, even
+    # though nothing is ever configured ON it.
+    seen: set = set()
+    for node in path:
+        key = (node.category_key or "").lower()
+        if not key or key in seen or not _REFERENCEABLE_KEY.match(key):
+            continue
+        seen.add(key)
+        shared.update(build_device_frame(node, f"path.{key}"))
+
+    device_variables = {n.item_id: build_device_frame(n, "device") for n in steps}
+
+    # PLAYBOOK_NOT_BOUND is fatal for ACTIVATION unconditionally, and for other
+    # purposes only when some playbook on the path actually reads a device
+    # variable — the same amendment-4 rule that used to govern unresolved chain
+    # positions. Refusing to suspend a service because an unrelated OLT lacks a
+    # suspend playbook would be worse than suspending what we can.
+    if errors:
+        fatal = purpose == PURPOSE_ACTIVATION or any(
+            _playbook_references_device_variables(playbooks[n.playbook_id])
+            for n in steps
+            if playbooks.get(n.playbook_id) is not None
+        )
+        if fatal:
+            raise ResolutionError(
+                "RESOLUTION_FAILED",
+                "One or more devices on this service's path have no playbook",
+                errors=errors,
+            )
+
+    # A per-service parameter with no value is fatal only when a playbook on
+    # this path actually reads it. A SUSPENSION playbook that never templates
     # {{service_plan.pppoe_user}} must not be blocked because some unrelated
     # parameter was left blank.
     referenced_missing = [
         err for err in missing_service_params
-        if _playbook_references_token(playbook, err["token"])
+        if any(
+            _playbook_references_token(playbooks[n.playbook_id], err["token"])
+            for n in steps
+            if playbooks.get(n.playbook_id) is not None
+        )
     ]
     if referenced_missing:
         raise ResolutionError(
@@ -587,7 +586,8 @@ def resolve_provisioning(
         )
 
     return ResolvedProvisioning(
-        playbook_id=playbook.id,
-        variables=variables,
-        resolved_items=resolved_items,
+        path=path,
+        steps=steps,
+        shared_variables=shared,
+        device_variables=device_variables,
     )

@@ -19,8 +19,8 @@ seed is append-only going forward and cannot rewrite existing JSON values).
 
 Cycle 3 (doc 20-cycle3-design.md, E1/E2/E4): 'installation-provisioning' is
 revised to v2 and 'suspension'/'reactivation'/'service-removal' to v4 —
-all four now resolve their playbook via the topology's purpose map
-(ENQUEUE_PROVISIONING use_topology) instead of an explicit *_playbook_id
+all four now resolve their playbooks by walking the service's network path
+(ENQUEUE_PROVISIONING use_service_path) instead of an explicit *_playbook_id
 param (revision c3a_topology_purpose). `_seed_device_categories` (E4,
 revision c3b_device_categories) is INSERT-ONLY convergent (ON CONFLICT key DO
 NOTHING) — never DO UPDATE, so super-admin edits to the 13 baseline rows
@@ -42,7 +42,7 @@ from database_utils.utils.timezone_utils import now_gt
 # a hand-typed string literal (doc 20a workflow-provisioning verifier fix —
 # a typo'd table/column name silently deactivates the gated templates
 # forever via the retirement pass, with no test catching it at head).
-from database_utils.models.isp import TopologyPlaybook
+from database_utils.models.isp import DeviceTypePlaybook
 
 logger = logging.getLogger(__name__)
 
@@ -257,12 +257,12 @@ def _wt(key, name, description, category, parameters, triggers, steps, edges):
 # this dict extends the same idea to plain columns. Checked against
 # information_schema.columns in _seed_workflow_templates.
 TEMPLATE_REQUIRED_COLUMNS = {
-    # Cycle 3 E2 (doc 20a workflow-provisioning §3): 'installation-provisioning'
-    # v2 and the v4 suspension/reactivation/service-removal rewrites all use
-    # ENQUEUE_PROVISIONING's use_topology mode, which resolves through the
-    # topology_playbook table (revision c3a_topology_purpose) — never publish
-    # before it exists.
-    "installation-provisioning": [(TopologyPlaybook.__tablename__, "purpose")],
+    # Cycle 10 (doc 35 §2.4): 'installation-provisioning' uses
+    # ENQUEUE_PROVISIONING's use_service_path mode, which resolves each device
+    # on the traversed path through the device_type_playbook binding table
+    # (revision ng1_network_graph) — never publish before it exists. Same gate
+    # as before, pointed at the table that replaced topology_playbook.
+    "installation-provisioning": [(DeviceTypePlaybook.__tablename__, "purpose")],
     # v3 (Cycle 2 §1b rewrite, doc 18 amendment 8): these templates now
     # UPDATE_FIELD client_service.billing_status instead of
     # recurring_order.status — the column only exists from c2b onward. v4
@@ -331,7 +331,7 @@ WORKFLOW_TEMPLATES = [
     ),
     # v2 (Cycle 3 E2, doc 20a workflow-provisioning §3): rewritten from an
     # explicit `activation_playbook_id` param to topology purpose resolution
-    # (ENQUEUE_PROVISIONING use_topology). The task's linked_object_id (set by
+    # (ENQUEUE_PROVISIONING use_service_path). The task's linked_object_id (set by
     # new-installation's s2 to the client_service that fired new-installation)
     # is the resolution target; `purpose` is fixed to ACTIVATION (not a
     # param — the founder flow is specifically install -> activate; purpose
@@ -341,7 +341,7 @@ WORKFLOW_TEMPLATES = [
     _wt(
         "installation-provisioning", "Installation → Provisioning",
         "When an installation task is moved to the 'installed' column, resolve the "
-        "linked service's topology and run its ACTIVATION playbook.",
+        "linked service's network path and run each device's ACTIVATION playbook.",
         "installation",
         [
             {"key": "installed_state_id", "label": "Board column meaning 'installation done'",
@@ -350,10 +350,10 @@ WORKFLOW_TEMPLATES = [
         [{"resource_type": "task", "event_type": "UPDATED",
           "field_conditions": {"field": "task_state_id", "operator": "changed_to",
                                 "value": "{{param:installed_state_id}}"}}],
-        [{"ref": "provision", "name": "Provision service from topology",
+        [{"ref": "provision", "name": "Provision service from its network path",
           "action_type": "ENQUEUE_PROVISIONING",
           "action_config": {
-              "use_topology": True,
+              "use_service_path": True,
               "purpose": "ACTIVATION",
               "client_service_id": "{{trigger.after.linked_object_id}}",
               "idempotency_key": "activate-{{trigger.after.linked_object_id}}",

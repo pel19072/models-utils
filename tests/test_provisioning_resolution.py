@@ -1,491 +1,393 @@
-"""Unit tests for the pure-Python helpers in the Cycle 3 E2 provisioning
-resolution module (moved from backend-erp services/provisioning_resolution.py,
-doc 20a workflow-provisioning §0). `resolve_provisioning` itself needs a live
-SQLAlchemy Session (DB-backed candidate queries) and is covered by
-backend-erp's test suite (doc 20a D-E1.9); these tests exercise the two
-helpers that operate on plain Python objects: get_topology_playbook (purpose
-lookup) and _playbook_references_device_variables (amendment 4).
+"""Provisioning resolution against the traversed network path (doc 35 §3.2).
 
-Cycle 7 (doc 25 §3): the pinned-position paths of resolve_provisioning are
-covered here too, via a minimal fake Session (query -> prepared candidate
-list, get -> item-by-id) — the pinned logic itself is pure Python over model
-attributes, so no live DB is needed (the DB-backed candidate SQL stays
-covered by backend-erp's suite)."""
+Built on a real in-memory SQLite graph rather than fakes: the resolver now runs
+recursive CTEs and two binding lookups, and a hand-rolled fake DB would be
+asserting the shape of the mock rather than the behaviour of the query.
+
+The seeded plant is one company's chain, root-first:
+
+    CORE-1 (router) -> OLT-1 (olt) -> SPL-1 (splitter) -> SPL-2 (splitter)
+                                                       -> ONT-1 (onu)
+
+Both splitters are passive. ACTIVATION and SUSPENSION playbooks are bound to
+the router, olt and onu device TYPES.
+"""
+
 import uuid
 from types import SimpleNamespace
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy.orm import Session
 
-from database_utils.models.isp import InventoryItemStatus
+from database_utils.database import Base
+from database_utils.models.isp import (
+    ClientService,
+    DeviceCategory,
+    DeviceType,
+    DeviceTypePlaybook,
+    InventoryItem,
+    InventoryItemPlaybook,
+    Playbook,
+    PURPOSE_ACTIVATION,
+    ServicePlan,
+)
 from database_utils.utils.provisioning_resolution import (
+    DEVICE_ATTRIBUTES,
     ResolutionError,
-    get_topology_playbook,
+    _DEVICE_VARIABLE_PATTERN,
+    build_device_frame,
+    iter_client_custom_fields,
+    resolve_playbook_for,
     resolve_provisioning,
-    _playbook_references_device_variables,
 )
 
-
-def _topology(entries):
-    return SimpleNamespace(playbooks=[SimpleNamespace(purpose=p, playbook=pb) for p, pb in entries])
-
-
-# --- get_topology_playbook ---
-
-def test_get_topology_playbook_finds_matching_purpose():
-    activation_pb = object()
-    topology = _topology([("ACTIVATION", activation_pb), ("SUSPENSION", object())])
-    entry = get_topology_playbook(topology, "ACTIVATION")
-    assert entry.playbook is activation_pb
-
-
-def test_get_topology_playbook_returns_none_when_purpose_missing():
-    topology = _topology([("ACTIVATION", object())])
-    assert get_topology_playbook(topology, "DEPROVISION") is None
-
-
-def test_get_topology_playbook_empty_topology():
-    topology = _topology([])
-    assert get_topology_playbook(topology, "ACTIVATION") is None
-
-
-# --- _playbook_references_device_variables (amendment 4) ---
-
-def _playbook(definition):
-    return SimpleNamespace(definition=definition)
-
-
-def test_device_free_playbook_is_not_fatal():
-    """A suspend/deprovision playbook that never templates a device variable
-    (e.g. only uses client_service_id/service_plan_id) is 'device-free' —
-    resolution should not require the device chain for it."""
-    definition = {
-        "steps": [{
-            "name": "flip-vlan",
-            "driver": "http",
-            "request": {"method": "POST", "path": "/api", "body": "{{service.id}}"},
-        }]
-    }
-    assert _playbook_references_device_variables(_playbook(definition)) is False
-
-
-def test_positional_device_variable_reference_is_fatal():
-    definition = {
-        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{edge_devices[0].serial}}"}]
-    }
-    assert _playbook_references_device_variables(_playbook(definition)) is True
-
-
-def test_chain_position_reference_is_fatal():
-    """The hidden absolute-position namespace is device-derived too — it is
-    what `target_position` step targeting compiles to."""
-    definition = {
-        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{chain[1].serial}}"}]
-    }
-    assert _playbook_references_device_variables(_playbook(definition)) is True
-
-
-def test_retired_category_alias_is_not_device_referencing():
-    """Unique-category aliases (cpe_router_serial, onu_mac, ...) are GONE
-    (doc 33). The name is now just an unresolvable token, not a device
-    reference — the executor's unresolved-token guard is what catches it."""
-    definition = {
-        "steps": [{"name": "s", "driver": "simulator", "template": "serial={{cpe_router_serial}}"}]
-    }
-    assert _playbook_references_device_variables(_playbook(definition)) is False
-
-
-def test_unserializable_definition_fails_safe_as_device_referencing():
-    class Unserializable:
-        pass
-
-    assert _playbook_references_device_variables(_playbook(Unserializable())) is True
-
-
-def test_category_tier_variable_reference_is_fatal():
-    """Cycle 7 (doc 25 §3): a device's category_tier is device-derived — a
-    playbook templating it needs the chain resolved."""
-    definition = {
-        "steps": [{"name": "s", "driver": "ssh", "template": "tier={{core_devices[0].category_tier}}"}]
-    }
-    assert _playbook_references_device_variables(_playbook(definition)) is True
-
-
-# --- resolve_provisioning pinned paths (Cycle 7, doc 25 §3) ---
-
-class _FakeQuery:
-    """Stands in for db.query(InventoryItem).filter(...).all() — filters are
-    real SQLAlchemy expressions but never evaluated; the prepared candidate
-    list IS the post-filter result (candidate SQL semantics are covered by
-    backend-erp's DB-backed suite)."""
-
-    def __init__(self, items):
-        self._items = items
-
-    def filter(self, *args, **kwargs):
-        return self
-
-    def all(self):
-        return list(self._items)
-
-
-class _FakeDb:
-    def __init__(self, candidates=(), items_by_id=None):
-        self._candidates = list(candidates)
-        self._items_by_id = items_by_id or {}
-
-    def query(self, model):
-        return _FakeQuery(self._candidates)
-
-    def get(self, model, pk):
-        return self._items_by_id.get(pk)
-
-
-def _item(company_id, device_type_id, status=InventoryItemStatus.INSTALLED,
-          serial="SN-1", mac="AA:BB", client_service_id=None):
-    return SimpleNamespace(
-        id=uuid.uuid4(), company_id=company_id, device_type_id=device_type_id,
-        status=status, serial_number=serial, mac_address=mac,
-        client_service_id=client_service_id,
-    )
-
-
-def _device_type(name, category_key, tier):
-    return SimpleNamespace(
-        name=name, category=category_key,
-        category_ref=SimpleNamespace(key=category_key, tier=tier),
-    )
-
-
-def _tdt(position, device_type, inventory_item_id=None):
-    return SimpleNamespace(
-        position=position, device_type_id=uuid.uuid4(),
-        device_type=device_type, inventory_item_id=inventory_item_id,
-    )
-
-
-def _service(topology, company_id=None):
-    return SimpleNamespace(
-        id=uuid.uuid4(), company_id=company_id or uuid.uuid4(),
-        client_id=uuid.uuid4(), topology=topology, service_plan=None,
-    )
-
-
-def _activation_topology(chain):
-    playbook = SimpleNamespace(
-        id=uuid.uuid4(), is_active=True,
-        definition={"steps": [{"driver": "ssh", "template": "sn={{device1_serial}}"}]},
-    )
-    return SimpleNamespace(
-        name="FTTH", is_active=True,
-        playbooks=[SimpleNamespace(purpose="ACTIVATION", playbook=playbook)],
-        device_types=chain,
-    )
-
-
-def test_pinned_position_resolves_without_client_matching():
-    """A pinned CORE position resolves to the pinned shared item even though
-    the client/service candidate pool is EMPTY — pinned devices are exempt
-    from assignment matching (doc 25 §3 step 1)."""
-    olt_type = _device_type("MA5800", "OLT", "CORE")
-    tdt = _tdt(0, olt_type)
-    topology = _activation_topology([tdt])
-    svc = _service(topology)
-    pinned = _item(svc.company_id, tdt.device_type_id, serial="OLT-001")
-    tdt.inventory_item_id = pinned.id
-    db = _FakeDb(candidates=[], items_by_id={pinned.id: pinned})
-
-    resolved = resolve_provisioning(db, svc)
-
-    assert resolved.resolved_items[0].pinned is True
-    # Tier-indexed (what the operator sees) and absolute-position (what step
-    # targeting compiles to) both address the same device — doc 33.
-    assert resolved.variables["core_devices[0].item_id"] == str(pinned.id)
-    assert resolved.variables["chain[1].item_id"] == str(pinned.id)
-    assert resolved.variables["core_devices[0].serial"] == "OLT-001"
-    assert resolved.variables["core_devices[0].category_tier"] == "CORE"
-    assert "olt_serial" not in resolved.variables  # unique-category alias retired
-
-
-def test_pinned_item_wrong_status_is_pinned_device_unavailable():
-    olt_type = _device_type("MA5800", "OLT", "CORE")
-    tdt = _tdt(0, olt_type)
-    topology = _activation_topology([tdt])
-    svc = _service(topology)
-    pinned = _item(svc.company_id, tdt.device_type_id, status=InventoryItemStatus.RETIRED)
-    tdt.inventory_item_id = pinned.id
-    db = _FakeDb(candidates=[], items_by_id={pinned.id: pinned})
-
-    with pytest.raises(ResolutionError) as exc:
-        resolve_provisioning(db, svc)
-    assert exc.value.code == "RESOLUTION_FAILED"
-    assert exc.value.errors[0]["code"] == "PINNED_DEVICE_UNAVAILABLE"
-    assert exc.value.errors[0]["inventory_item_id"] == str(pinned.id)
-
-
-def test_pinned_item_foreign_company_is_pinned_device_unavailable():
-    olt_type = _device_type("MA5800", "OLT", "CORE")
-    tdt = _tdt(0, olt_type)
-    topology = _activation_topology([tdt])
-    svc = _service(topology)
-    foreign = _item(uuid.uuid4(), tdt.device_type_id)  # other tenant's item
-    tdt.inventory_item_id = foreign.id
-    db = _FakeDb(candidates=[], items_by_id={foreign.id: foreign})
-
-    with pytest.raises(ResolutionError) as exc:
-        resolve_provisioning(db, svc)
-    assert exc.value.errors[0]["code"] == "PINNED_DEVICE_UNAVAILABLE"
-
-
-def test_pinned_item_deleted_is_pinned_device_unavailable():
-    olt_type = _device_type("MA5800", "OLT", "CORE")
-    tdt = _tdt(0, olt_type, inventory_item_id=uuid.uuid4())  # dangling pin
-    topology = _activation_topology([tdt])
-    svc = _service(topology)
-    db = _FakeDb(candidates=[], items_by_id={})
-
-    with pytest.raises(ResolutionError) as exc:
-        resolve_provisioning(db, svc)
-    assert exc.value.errors[0]["code"] == "PINNED_DEVICE_UNAVAILABLE"
-
-
-def test_pinned_core_plus_client_matched_edge_mix():
-    """Founder chain (doc 25 §1): position 0 = pinned shared OLT (CORE),
-    position 1 = subscriber ONU resolved from the client's assigned inventory
-    — both resolve, each with its tier variable."""
-    olt_type = _device_type("MA5800", "OLT", "CORE")
-    onu_type = _device_type("F660", "ONU", "EDGE")
-    tdt_olt = _tdt(0, olt_type)
-    tdt_onu = _tdt(1, onu_type)
-    topology = _activation_topology([tdt_olt, tdt_onu])
-    svc = _service(topology)
-    pinned = _item(svc.company_id, tdt_olt.device_type_id, serial="OLT-001")
-    tdt_olt.inventory_item_id = pinned.id
-    onu = _item(svc.company_id, tdt_onu.device_type_id, serial="ONU-042",
-                client_service_id=svc.id)
-    db = _FakeDb(candidates=[onu], items_by_id={pinned.id: pinned})
-
-    resolved = resolve_provisioning(db, svc)
-
-    assert [ri.pinned for ri in resolved.resolved_items] == [True, False]
-    # Indexes are 0-based WITHIN a tier, so the CORE OLT and the EDGE ONT are
-    # both [0] — that is the whole point of the tier namespaces (doc 33).
-    assert resolved.variables["core_devices[0].serial"] == "OLT-001"
-    assert resolved.variables["core_devices[0].category_tier"] == "CORE"
-    assert resolved.variables["edge_devices[0].serial"] == "ONU-042"
-    assert resolved.variables["edge_devices[0].category_tier"] == "EDGE"
-    # Absolute chain positions stay 1-based and distinct.
-    assert resolved.variables["chain[1].serial"] == "OLT-001"
-    assert resolved.variables["chain[2].serial"] == "ONU-042"
-    # The unique-category alias is retired, not renamed.
-    assert "onu_serial" not in resolved.variables
-
-
-# --- client custom attributes as variables (doc 33 follow-up) ---
-
-def _custom_value(key, value, field_type="TEXT"):
-    return SimpleNamespace(
-        value=value,
-        field_definition=SimpleNamespace(field_key=key, field_type=field_type),
-    )
-
-
-def _client(name="Ada Lovelace", custom=None):
-    return SimpleNamespace(
-        id=uuid.uuid4(), name=name, email="ada@example.com",
-        phone="+502 5555 0100", address="1 Analytical Way",
-        custom_field_values=custom or [],
-    )
-
-
-def _service_with_client(topology, client):
-    svc = _service(topology)
-    svc.client = client
-    return svc
-
-
-def _resolve_vars(custom):
-    """Resolve a minimal single-position service and return its variables."""
-    onu_type = _device_type("HG8245", "ONU", "EDGE")
-    tdt = _tdt(0, onu_type)
-    topology = _activation_topology([tdt])
-    svc = _service_with_client(topology, _client(custom=custom))
-    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
-                client_service_id=svc.id)
-    db = _FakeDb(candidates=[onu], items_by_id={})
-    return resolve_provisioning(db, svc).variables
-
-
-def test_client_custom_attributes_are_emitted():
-    """A tenant's own client attributes reach playbooks under client.*, the
-    same way a service plan's provisioning parameters reach service_plan.*."""
-    variables = _resolve_vars([_custom_value("ip_address", "10.10.9.88")])
-
-    assert variables["client.ip_address"] == "10.10.9.88"
-    # Built-ins still present alongside them.
-    assert variables["client.name"] == "Ada Lovelace"
-
-
-def test_number_and_boolean_custom_fields_get_their_natural_type():
-    """Values are stored as strings; a template should render 100, not 100.0,
-    and a boolean should not read as the literal string 'true'."""
-    variables = _resolve_vars([
-        _custom_value("vlan", "100", "NUMBER"),
-        _custom_value("ratio", "1.5", "NUMBER"),
-        _custom_value("is_vip", "true", "BOOLEAN"),
-        _custom_value("nope", "no", "BOOLEAN"),
-    ])
-
-    assert variables["client.vlan"] == 100
-    assert variables["client.ratio"] == 1.5
-    assert variables["client.is_vip"] is True
-    assert variables["client.nope"] is False
-
-
-def test_unparseable_number_falls_back_to_the_raw_string():
-    variables = _resolve_vars([_custom_value("vlan", "not-a-number", "NUMBER")])
-    assert variables["client.vlan"] == "not-a-number"
-
-
-def test_custom_field_cannot_shadow_a_builtin_client_field():
-    """A custom field keyed `name` must not replace the subscriber's actual
-    name in a template that already reads {{client.name}}."""
-    variables = _resolve_vars([_custom_value("name", "SHADOWED")])
-    assert variables["client.name"] == "Ada Lovelace"
-
-
-def test_key_the_token_grammar_cannot_express_is_skipped():
-    """field_key permits a leading digit, which the renderer's grammar does
-    not — emitting it would create a token nobody can reference."""
-    variables = _resolve_vars([_custom_value("5g_profile", "x")])
-    assert "client.5g_profile" not in variables
-
-
-def test_null_custom_value_renders_as_empty_string():
-    variables = _resolve_vars([_custom_value("note", None)])
-    assert variables["client.note"] == ""
-
-
-def test_missing_relationship_does_not_crash_resolution():
-    """Resolution runs against detached/partial objects too."""
-    onu_type = _device_type("HG8245", "ONU", "EDGE")
-    tdt = _tdt(0, onu_type)
-    topology = _activation_topology([tdt])
-    svc = _service_with_client(topology, SimpleNamespace(
-        id=uuid.uuid4(), name="No Rels", email=None, phone=None, address=None))
-    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
-                client_service_id=svc.id)
-
-    variables = resolve_provisioning(_FakeDb(candidates=[onu], items_by_id={}), svc).variables
-
-    assert variables["client.name"] == "No Rels"
-
-
-# --- per-service provisioning parameter values (doc 33 follow-up) ---
-
-def _plan(params):
-    return SimpleNamespace(
-        id=uuid.uuid4(), name="Internet 25MB", download_mbps=25, upload_mbps=8,
-        provisioning_params=params,
-    )
-
-
-def _resolve_with_params(plan_params, service_params, template="noop"):
-    onu_type = _device_type("HG8245", "ONU", "EDGE")
-    tdt = _tdt(0, onu_type)
-    playbook = SimpleNamespace(
-        id=uuid.uuid4(), is_active=True,
-        definition={"steps": [
-            {"name": "s", "driver": "simulator", "template": template}]},
-    )
-    topology = SimpleNamespace(
-        name="FTTH", is_active=True,
-        playbooks=[SimpleNamespace(purpose="ACTIVATION", playbook=playbook)],
-        device_types=[tdt],
-    )
-    svc = _service(topology)
-    svc.service_plan = _plan(plan_params)
-    svc.provisioning_params = service_params
-    onu = _item(svc.company_id, tdt.device_type_id, serial="ONU-1",
-                client_service_id=svc.id)
-    db = _FakeDb(candidates=[onu], items_by_id={})
-    return resolve_provisioning(db, svc)
-
-
-def test_plan_scoped_param_uses_the_plan_value():
-    resolved = _resolve_with_params(
-        [{"key": "vlan", "value": 110, "scope": "plan"}], None)
-    assert resolved.variables["service_plan.vlan"] == 110
-
-
-def test_row_without_scope_is_plan_scoped():
-    """Every row written before this feature has no scope — it must keep
-    behaving exactly as it did."""
-    resolved = _resolve_with_params([{"key": "vlan", "value": 110}], None)
-    assert resolved.variables["service_plan.vlan"] == 110
-
-
-def test_service_scoped_param_uses_this_service_value():
-    """Declared on the plan, valued on the service — and still resolved under
-    the PLAN's namespace, so the playbook never changes."""
-    resolved = _resolve_with_params(
-        [{"key": "pppoe_user", "scope": "service"}],
-        [{"key": "pppoe_user", "value": "juan.perez"}],
-    )
-    assert resolved.variables["service_plan.pppoe_user"] == "juan.perez"
-
-
-def test_missing_service_value_fails_when_the_playbook_reads_it():
-    with pytest.raises(ResolutionError) as exc:
-        _resolve_with_params(
-            [{"key": "pppoe_user", "scope": "service"}], None,
-            template="user {{service_plan.pppoe_user}}",
+CO_A = uuid.uuid4()
+CO_B = uuid.uuid4()
+
+# A definition that reads a device variable, so amendment-4 fatality applies.
+_DEF = {"steps": [{"name": "s", "driver": "simulator",
+                   "template": "sn {{ cpe.serial }}"}]}
+# A definition that reads no device variable at all.
+_DEF_DEVICE_FREE = {"steps": [{"name": "s", "driver": "simulator",
+                               "template": "noop"}]}
+
+
+@pytest.fixture()
+def db():
+    engine = sa.create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session
+
+
+class Plant:
+    """The seeded graph, exposed as attributes the tests can poke at."""
+
+    def __init__(self, db, company_id=CO_A):
+        self.db = db
+        self.company_id = company_id
+        self.categories = {}
+        self.types = {}
+
+        for key, tier, passive in (
+            ("ROUTER", "CORE", False),
+            ("OLT", "CORE", False),
+            ("SPLITTER", None, True),
+            ("ONU", "EDGE", False),
+        ):
+            cat = DeviceCategory(id=uuid.uuid4(), key=key, name=key.title(),
+                                 tier=tier, is_passive=passive)
+            db.add(cat)
+            self.categories[key] = cat
+        db.flush()
+
+        for key in self.categories:
+            dt = DeviceType(id=uuid.uuid4(), company_id=company_id,
+                            name=f"{key} model", category_id=self.categories[key].id)
+            db.add(dt)
+            self.types[key] = dt
+        db.flush()
+
+        self.core = self._item("CORE-1", "ROUTER", None)
+        self.olt = self._item("OLT-1", "OLT", self.core)
+        self.spl1 = self._item("SPL-1", "SPLITTER", self.olt)
+        self.spl2 = self._item("SPL-2", "SPLITTER", self.spl1)
+        self.cpe = self._item("ONT-1", "ONU", self.spl2)
+
+        self.plan = ServicePlan(id=uuid.uuid4(), company_id=company_id,
+                                name="Fibra 100", download_mbps=100, upload_mbps=20)
+        db.add(self.plan)
+        db.flush()
+
+        self.service = ClientService(
+            id=uuid.uuid4(), company_id=company_id, client_id=uuid.uuid4(),
+            service_plan_id=self.plan.id, cpe_item_id=self.cpe.id,
         )
-    assert exc.value.code == "RESOLUTION_FAILED"
-    error = exc.value.errors[0]
-    assert error["code"] == "MISSING_SERVICE_PARAM"
-    assert error["key"] == "pppoe_user"
-    # The message names the plan that declared it, so the operator knows where
-    # the declaration lives and which service is missing the value.
-    assert "Internet 25MB" in error["detail"]
+        db.add(self.service)
+        db.flush()
+        self.cpe.client_service_id = self.service.id
+        db.flush()
 
+        self.playbooks = {}
+        for key in ("ROUTER", "OLT", "ONU"):
+            for purpose in (PURPOSE_ACTIVATION, "SUSPENSION"):
+                self.bind_type(self.types[key], purpose,
+                               self._playbook(f"{key.lower()}-{purpose.lower()}"))
 
-def test_blank_string_counts_as_missing():
-    with pytest.raises(ResolutionError):
-        _resolve_with_params(
-            [{"key": "pppoe_user", "scope": "service"}],
-            [{"key": "pppoe_user", "value": "   "}],
-            template="user {{service_plan.pppoe_user}}",
+    def _item(self, serial, category_key, parent):
+        item = InventoryItem(
+            id=uuid.uuid4(), company_id=self.company_id,
+            device_type_id=self.types[category_key].id, serial_number=serial,
+            mac_address=f"AA:BB:{serial}", mgmt_host=f"10.0.0.{len(serial)}",
+            network_attached=True,
+            parent_id=parent.id if parent is not None else None,
         )
+        self.db.add(item)
+        self.db.flush()
+        return item
+
+    def _playbook(self, name, definition=None):
+        pb = Playbook(id=uuid.uuid4(), company_id=self.company_id, name=name,
+                      is_active=True, definition=definition or _DEF)
+        self.db.add(pb)
+        self.db.flush()
+        self.playbooks[name] = pb
+        return pb
+
+    def bind_type(self, device_type, purpose, playbook):
+        self.db.add(DeviceTypePlaybook(
+            id=uuid.uuid4(), company_id=self.company_id,
+            device_type_id=device_type.id, purpose=purpose, playbook_id=playbook.id,
+        ))
+        self.db.flush()
+
+    def bind_node(self, item, purpose, playbook):
+        self.db.add(InventoryItemPlaybook(
+            id=uuid.uuid4(), company_id=self.company_id,
+            inventory_item_id=item.id, purpose=purpose, playbook_id=playbook.id,
+        ))
+        self.db.flush()
+
+    def unbind_type(self, device_type, purpose):
+        self.db.execute(sa.delete(DeviceTypePlaybook.__table__).where(
+            DeviceTypePlaybook.__table__.c.device_type_id == device_type.id,
+            DeviceTypePlaybook.__table__.c.purpose == purpose,
+        ))
+        self.db.flush()
 
 
-def test_missing_service_value_is_ignored_when_the_playbook_never_reads_it():
-    """A SUSPENSION-style playbook that does not template the parameter must
-    not be blocked because some unrelated parameter was left blank."""
-    resolved = _resolve_with_params(
-        [{"key": "pppoe_user", "scope": "service"},
-         {"key": "vlan", "value": 110, "scope": "plan"}],
-        None,
-        template="just flip the vlan {{service_plan.vlan}}",
+@pytest.fixture()
+def plant(db):
+    return Plant(db)
+
+
+# --------------------------------------------------------------- path shape
+
+def test_path_is_leaf_to_root(db, plant):
+    res = resolve_provisioning(db, plant.service, PURPOSE_ACTIVATION)
+    assert [n.serial_number for n in res.path] == [
+        "ONT-1", "SPL-2", "SPL-1", "OLT-1", "CORE-1"]
+
+
+def test_passives_are_on_the_path_but_are_not_steps(db, plant):
+    res = resolve_provisioning(db, plant.service, PURPOSE_ACTIVATION)
+    assert [n.category_key for n in res.steps] == ["ONU", "OLT", "ROUTER"]
+    assert all(n.is_passive for n in res.path if n.category_key == "SPLITTER")
+    assert not any(n.is_passive for n in res.steps)
+
+
+def test_position_counts_hops_from_the_cpe(db, plant):
+    res = resolve_provisioning(db, plant.service)
+    assert [n.position for n in res.path] == [0, 1, 2, 3, 4]
+
+
+# ------------------------------------------------------- playbook resolution
+
+def test_device_type_default_is_used_when_there_is_no_override(db, plant):
+    res = resolve_provisioning(db, plant.service)
+    olt = next(n for n in res.steps if n.category_key == "OLT")
+    assert olt.playbook_source == "device_type"
+
+
+def test_node_override_beats_the_device_type_default(db, plant):
+    special = plant._playbook("olt-special")
+    plant.bind_node(plant.olt, PURPOSE_ACTIVATION, special)
+    res = resolve_provisioning(db, plant.service)
+    olt = next(n for n in res.steps if n.category_key == "OLT")
+    assert olt.playbook_id == special.id
+    assert olt.playbook_source == "node"
+
+
+def test_resolve_playbook_for_returns_none_when_nothing_is_bound(db, plant):
+    plant.unbind_type(plant.types["OLT"], PURPOSE_ACTIVATION)
+    assert resolve_playbook_for(db, plant.olt, PURPOSE_ACTIVATION) == (None, None)
+
+
+def test_an_active_node_with_no_playbook_is_fatal_for_activation(db, plant):
+    plant.unbind_type(plant.types["OLT"], PURPOSE_ACTIVATION)
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service, PURPOSE_ACTIVATION)
+    assert exc.value.code == "RESOLUTION_FAILED"
+    assert exc.value.errors[0]["code"] == "PLAYBOOK_NOT_BOUND"
+    assert exc.value.errors[0]["category"] == "olt"
+
+
+def test_a_missing_playbook_is_not_fatal_for_a_device_free_suspension(db, plant):
+    """A suspend that never templates a device variable must not be blocked by
+    an OLT with no suspend playbook."""
+    plant.unbind_type(plant.types["OLT"], "SUSPENSION")
+    for name in ("router-suspension", "onu-suspension"):
+        plant.playbooks[name].definition = _DEF_DEVICE_FREE
+    db.flush()
+    res = resolve_provisioning(db, plant.service, "SUSPENSION")
+    assert [n.category_key for n in res.steps] == ["ONU", "ROUTER"]
+
+
+def test_a_missing_playbook_is_fatal_for_a_device_reading_suspension(db, plant):
+    plant.unbind_type(plant.types["OLT"], "SUSPENSION")
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service, "SUSPENSION")
+    assert exc.value.code == "RESOLUTION_FAILED"
+
+
+def test_an_inactive_playbook_is_never_silently_skipped(db, plant):
+    plant.playbooks["olt-activation"].is_active = False
+    db.flush()
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service)
+    assert exc.value.code == "PLAYBOOK_INACTIVE"
+
+
+def test_a_playbook_owned_by_another_company_is_refused(db, plant):
+    plant.playbooks["olt-activation"].company_id = CO_B
+    db.flush()
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service)
+    assert exc.value.code == "PLAYBOOK_INACTIVE"
+
+
+# ------------------------------------------------------------- preconditions
+
+def test_unset_cpe_is_reported(db, plant):
+    plant.service.cpe_item_id = None
+    db.flush()
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service)
+    assert exc.value.code == "CPE_NOT_SET"
+
+
+def test_detached_cpe_is_reported(db, plant):
+    plant.cpe.parent_id = None
+    plant.cpe.network_attached = False
+    db.flush()
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service)
+    assert exc.value.code == "CPE_NOT_ATTACHED"
+
+
+def test_a_cpe_belonging_to_another_company_resolves_to_nothing(db, plant):
+    plant.service.company_id = CO_B
+    db.flush()
+    with pytest.raises(ResolutionError) as exc:
+        resolve_provisioning(db, plant.service)
+    assert exc.value.code == "CPE_NOT_ATTACHED"
+
+
+# ----------------------------------------------------------------- variables
+
+def test_shared_variables_expose_the_path_by_category(db, plant):
+    v = resolve_provisioning(db, plant.service).shared_variables
+    assert v["cpe.serial"] == "ONT-1"
+    assert v["path.olt.serial"] == "OLT-1"
+    assert v["path.router.serial"] == "CORE-1"
+    assert v["path.splitter.serial"] == "SPL-2"
+    assert v["cpe.depth"] == 0
+    assert v["path.olt.depth"] == 3
+
+
+def test_path_category_picks_the_node_nearest_the_cpe(db, plant):
+    """Two OLTs stacked: the one closest to the subscriber wins, with no
+    tie-break needed because the path is already ordered leaf -> root."""
+    second = plant._item("OLT-2", "OLT", plant.core)
+    plant.olt.parent_id = second.id
+    db.flush()
+    v = resolve_provisioning(db, plant.service).shared_variables
+    assert v["path.olt.serial"] == "OLT-1"
+
+
+def test_device_frame_is_per_node(db, plant):
+    res = resolve_provisioning(db, plant.service)
+    olt = next(n for n in res.steps if n.category_key == "OLT")
+    assert res.device_variables[olt.item_id]["device.serial"] == "OLT-1"
+    assert res.device_variables[plant.cpe.id]["device.serial"] == "ONT-1"
+
+
+def test_passive_nodes_get_no_device_frame(db, plant):
+    res = resolve_provisioning(db, plant.service)
+    assert plant.spl1.id not in res.device_variables
+
+
+def test_no_positional_namespace_survives(db, plant):
+    v = resolve_provisioning(db, plant.service).shared_variables
+    assert not any(
+        k.startswith(("chain[", "edge_devices[", "core_devices[")) for k in v)
+    assert not any(k.endswith(".position") for k in v)
+
+
+def test_plan_fields_are_unchanged(db, plant):
+    v = resolve_provisioning(db, plant.service).shared_variables
+    assert v["service_plan.name"] == "Fibra 100"
+    assert v["service_plan.download_mbps"] == 100
+    assert v["service.id"] == str(plant.service.id)
+
+
+def test_build_device_frame_emits_every_declared_attribute(db, plant):
+    node = resolve_provisioning(db, plant.service).path[0]
+    frame = build_device_frame(node, "cpe")
+    assert set(frame) == {f"cpe.{a}" for a in DEVICE_ATTRIBUTES}
+
+
+def test_device_variable_pattern_matches_the_new_namespaces():
+    """This pattern FAILS OPEN. A namespace missing from it silently downgrades
+    a fatal resolution error into a half-configured customer."""
+    for token in ("{{device.serial}}", "{{cpe.serial}}", "{{path.olt.mgmt_host}}",
+                  "{{ cpe.serial | upper }}", "{{path.cpe_router.mac}}"):
+        assert _DEVICE_VARIABLE_PATTERN.search(token), token
+    for token in ("{{chain[1].serial}}", "{{edge_devices[0].serial}}",
+                  "{{core_devices[0].serial}}"):
+        assert not _DEVICE_VARIABLE_PATTERN.search(token), token
+
+
+# ------------------------------------------- client custom fields (unchanged)
+
+def _detached_service(plant, client):
+    """A ClientService stand-in.
+
+    resolve_provisioning reads its inputs with getattr precisely so it survives
+    detached and partial objects — the workflow engine hands it exactly this
+    shape. Using one here also lets a test vary `client` freely, which the ORM
+    relationship would refuse.
+    """
+    return SimpleNamespace(
+        id=plant.service.id,
+        company_id=plant.company_id,
+        cpe_item_id=plant.cpe.id,
+        client=client,
+        service_plan=plant.plan,
+        provisioning_params=None,
     )
-    assert "service_plan.pppoe_user" not in resolved.variables
-    assert resolved.variables["service_plan.vlan"] == 110
 
 
-def test_service_value_for_an_undeclared_key_is_ignored():
-    """The plan owns the declaration — a stray value on the service must not
-    invent a variable nobody declared."""
-    resolved = _resolve_with_params(
-        [{"key": "vlan", "value": 110}],
-        [{"key": "rogue", "value": "x"}],
+def test_client_custom_fields_are_namespaced_under_client(db, plant):
+    client = SimpleNamespace(
+        id=uuid.uuid4(), name="Ana", email="a@x.gt", phone="", address="",
+        custom_field_values=[SimpleNamespace(
+            value="42", field_definition=SimpleNamespace(
+                field_key="nodo", field_type="NUMBER"))],
     )
-    assert "service_plan.rogue" not in resolved.variables
+    v = resolve_provisioning(db, _detached_service(plant, client)).shared_variables
+    assert v["client.nodo"] == 42
 
 
-def test_service_value_does_not_override_a_plan_scoped_param():
-    """Scope is the plan's decision. A per-service value for a shared
-    parameter is not a silent override."""
-    resolved = _resolve_with_params(
-        [{"key": "vlan", "value": 110, "scope": "plan"}],
-        [{"key": "vlan", "value": 999}],
+def test_a_builtin_client_field_wins_a_collision(db, plant):
+    client = SimpleNamespace(
+        id=uuid.uuid4(), name="Ana", email="", phone="", address="",
+        custom_field_values=[SimpleNamespace(
+            value="shadow", field_definition=SimpleNamespace(
+                field_key="name", field_type="TEXT"))],
     )
-    assert resolved.variables["service_plan.vlan"] == 110
+    v = resolve_provisioning(db, _detached_service(plant, client)).shared_variables
+    assert v["client.name"] == "Ana"
+
+
+def test_an_ungrammatical_custom_key_is_skipped(db):
+    client = SimpleNamespace(custom_field_values=[SimpleNamespace(
+        value="x", field_definition=SimpleNamespace(
+            field_key="5g_profile", field_type="TEXT"))])
+    assert list(iter_client_custom_fields(client)) == []
+
+
+def test_a_missing_client_relationship_does_not_crash(db, plant):
+    v = resolve_provisioning(db, _detached_service(plant, None)).shared_variables
+    assert "client.id" not in v

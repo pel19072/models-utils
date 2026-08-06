@@ -18,7 +18,7 @@ from datetime import datetime
 from database_utils.models.isp import ClientServiceStatus, PURPOSE_ACTIVATION, SuspensionReason
 from database_utils.models.crm import RecurrenceEnum, RecurringOrderStatus
 from .service_plan import ProvisioningParam, ServicePlanOut, _coerce_params
-from .topology import normalize_purpose
+from .playbook import normalize_purpose
 
 
 class ClientServiceBase(BaseModel):
