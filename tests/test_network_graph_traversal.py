@@ -159,3 +159,21 @@ def test_child_count_is_immediate_children_only(db):
 def test_child_count_is_company_scoped(db):
     (a_core,) = _chain(db, CO_A, ["a-core"])
     assert child_count(db, a_core.id, CO_B) == 0
+
+
+def test_a_detached_item_has_no_path(db):
+    """Warehouse stock is not a place in the plant.
+
+    Returning a one-element path for a detached item made the resolver and the
+    path panel disagree: one refused with CPE_NOT_ATTACHED while the other
+    rendered a single-node path. The anchor filters on network_attached so both
+    read the same answer.
+    """
+    (core,) = _chain(db, CO_A, ["core"])
+    spare = InventoryItem(
+        id=uuid.uuid4(), company_id=CO_A, device_type_id=uuid.uuid4(),
+        serial_number="spare", network_attached=False,
+    )
+    db.add(spare)
+    db.flush()
+    assert resolve_path(db, spare.id, CO_A) == []

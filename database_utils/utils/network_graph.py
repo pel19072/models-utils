@@ -48,11 +48,22 @@ class GraphError(Exception):
 
 
 def _ancestor_cte(item_id: uuid.UUID, company_id: uuid.UUID):
-    """`item_id` at depth 0, then each ancestor, one level per step."""
+    """`item_id` at depth 0, then each ancestor, one level per step.
+
+    The anchor requires `network_attached`. A detached item is warehouse stock,
+    not a place in the plant, and returning a one-element "path" for it made two
+    callers disagree: the resolver refused with CPE_NOT_ATTACHED while the path
+    panel happily rendered a single-node path. One of them had to be wrong; the
+    resolver was right.
+    """
     ii = InventoryItem.__table__
     anchor = (
         sa.select(ii.c.id, ii.c.parent_id, sa.literal(0).label("depth"))
-        .where(ii.c.id == item_id, ii.c.company_id == company_id)
+        .where(
+            ii.c.id == item_id,
+            ii.c.company_id == company_id,
+            ii.c.network_attached.is_(True),
+        )
         .cte("graph_ancestors", recursive=True)
     )
     step = (
