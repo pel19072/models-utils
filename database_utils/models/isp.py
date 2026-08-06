@@ -723,12 +723,38 @@ class InventoryItem(Base):
     client_service_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("client_service.id", ondelete="SET NULL"), nullable=True
     )
+    # --- network graph (doc 35 §2.1, revision ng1_network_graph) --------------
+    # The company's plant is a tree of inventory items. `network_attached` marks
+    # an item as part of that tree at all; a root is attached with no parent;
+    # warehouse stock is simply not attached. Two flags rather than one because
+    # `parent_id IS NULL` alone cannot distinguish "this is the core router"
+    # from "this ONT is still in the van".
+    #
+    # RESTRICT on delete is deliberate: deleting an OLT must not silently
+    # promote the 400 subscribers behind it to roots. Detach or re-parent the
+    # children first — the API says so, and trg_inventory_item_detach_guard
+    # enforces it.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("inventory_item.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    network_attached = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     company = relationship("Company", back_populates="inventory_items")
     device_type = relationship("DeviceType", back_populates="items")
     warehouse = relationship("Warehouse", back_populates="items")
     client = relationship("Client", back_populates="equipment")
-    client_service = relationship("ClientService", back_populates="equipment")
+    # Two FK paths now join inventory_item and client_service (this one, and
+    # client_service.cpe_item_id pointing back) — both sides must name theirs.
+    client_service = relationship(
+        "ClientService", back_populates="equipment", foreign_keys=[client_service_id],
+    )
+    parent = relationship(
+        "InventoryItem", remote_side=[id], back_populates="children",
+    )
+    children = relationship("InventoryItem", back_populates="parent")
     events = relationship(
         "EquipmentEvent", back_populates="item",
         cascade="all, delete-orphan", foreign_keys="EquipmentEvent.item_id",
@@ -745,6 +771,21 @@ class InventoryItem(Base):
         Index("ix_inventory_item_company_status", "company_id", "status"),
         # Cycle 7 (doc 25 §2.3).
         CheckConstraint(_CLI_PROTOCOL_CHECK, name="ck_inventory_item_cli_protocol"),
+        # Cycle 10 / doc 35 §2.1. Cycles, cross-tenant parents and the depth cap
+        # are guarded by trg_inventory_item_graph_guard (ng1) — a CHECK cannot
+        # express reachability. These two are the parts a CHECK *can* state.
+        CheckConstraint(
+            "parent_id IS NULL OR network_attached",
+            name="ck_inventory_item_parent_attached",
+        ),
+        CheckConstraint(
+            "parent_id IS NULL OR parent_id <> id",
+            name="ck_inventory_item_not_self_parent",
+        ),
+        Index(
+            "ix_inventory_item_company_attached", "company_id",
+            postgresql_where=text("network_attached"),
+        ),
     )
 
 
