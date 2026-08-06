@@ -54,7 +54,9 @@ docstring: **backend-erp imports models-utils, never the reverse.** Any logic
 the workflow engine needs must therefore live in this repo. This is why
 business logic has migrated *down* into this "models" library — most notably
 `provisioning_resolution.py`, moved here from backend-erp in Cycle 3 so the
-engine's `ENQUEUE_PROVISIONING` step can resolve topology playbooks. See
+engine's `ENQUEUE_PROVISIONING` step can resolve playbooks — joined in Cycle 10
+by `network_graph.py` (the plant traversal) and `provisioning_runs.py`
+(multi-device runs) for exactly the same reason. See
 [workflow-engine.md](workflow-engine.md).
 
 ## Startup flow (in a consumer)

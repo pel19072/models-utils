@@ -22,13 +22,21 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 | Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login + flat company-only Signup), `email_verification`, `password_reset` |
 | SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice`, `tier_change_request` — rb1 extends `tier` and `subscription` (see below) |
 | CRM | `client`, `custom_field`, `order`, `order_item`, `payment`, `invoice`, `product` (legacy), `recurring_order` (legacy), `task`, `task_state`, `task_template`, `integration` |
-| ISP | `service_plan`, `client_service`, `inventory`, `topology`, `playbook`, `device_category`, `insight` (Cycle 4) |
+| ISP | `service_plan`, `client_service`, `inventory`, `playbook`, `device_category`, `insight` (Cycle 4) |
 | Network config (Cycle 5) | `acs_registration`, `device_credential`, `network_access`, `provisioning_settings` |
 | Workflow | `workflow`, `workflow_template` |
 | Generic | `pagination` — `PaginatedResponse[T]` wrapper |
 
-`schemas/network.py` was **deleted** with the network-graph removal (Cycle 2
-`c2d_graph_removal`) — a comment in `__init__.py` records this.
+Two modules have been deleted over the life of this repo, and the distinction
+matters when reading `__init__.py`:
+
+- `schemas/network.py` — deleted with the free-form network-graph removal
+  (Cycle 2 `c2d_graph_removal`); a comment in `__init__.py` still records it.
+- `schemas/topology.py` — deleted in **Cycle 10** (doc 35) together with the
+  `Topology` / `TopologyDeviceType` / `TopologyPlaybook` models. Its one
+  still-needed export, **`normalize_purpose`**, moved to
+  [`schemas/playbook.py`](#cycle-10-network-graph-doc-35--schema-changes) —
+  purposes now key playbook *bindings*, not topologies.
 
 ## Connections to Other Components
 
@@ -59,11 +67,8 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   against `CLI_PROTOCOLS`) PATCHable via the existing inventory update; the
   worker-stamped `mgmt_last_check_at`/`mgmt_last_check_ok` appear **only** on
   `InventoryItemOut` (read-only)
-- `topology`: `TopologyChainEntryIn` — richer per-position write shape carrying
-  `inventory_item_id` (pinned shared device). `TopologyCreate` requires exactly
-  one of `device_type_ids`/`chain`; `TopologyUpdate` at most one; both expose a
-  normalized `chain_entries()` helper. `TopologyChainEntryOut` gains
-  `inventory_item_id`/`inventory_item_serial`/`category_tier` (router-populated)
+- ~~`topology`~~: the pinned-chain write shapes (`TopologyChainEntryIn/Out`,
+  `TopologyCreate`/`TopologyUpdate`) went with the module in Cycle 10
 - `playbook`: `PLAYBOOK_DRIVERS` gains `ping`; `PlaybookStep.target_item_id`
   (and the same on `PlaybookPrecondition`) — an inventory_item id or a
   `{{variable}}` rendered by the executor, declared so it round-trips through
@@ -82,11 +87,11 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
   elsewhere means "not computed", not "no evidence")
 - `ClientServiceAdoptIn` — `POST /client-services/{id}/adopt` body: `note`
   required non-empty (stripping validator), `installed_at` optional historical
-  install date (applied only while the service's `installed_at` is NULL), and
-  `topology_id: Optional[UUID]` (service-lifecycle cycle, doc 35) — the topology
-  to assign DURING adoption. An adopted/brownfield service with no topology can
-  resolve no lifecycle playbook at all, so it would be uncancellable except
-  through the ADMIN force escape hatch. Inherited by
+  install date (applied only while the service's `installed_at` is NULL). It also
+  still declares `topology_id: Optional[UUID]` from the service-lifecycle cycle,
+  which is now **inert** — the column and the `topology` table were dropped by
+  `ng2_topology_drop`; the graph equivalent is assigning a CPE
+  (`client_service.cpe_item_id`) and attaching it to a parent. Inherited by
   `ClientServiceAdoptBulkItem`, so the bulk campaign path accepts it too
 - `ClientServiceAdoptBulkItem` (AdoptIn + `client_service_id`) and
   `ClientServiceAdoptBulkIn` (`items`, 1–500) — `POST /client-services/adopt-bulk`
@@ -119,20 +124,51 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 
 ### Cycle 8 (network UX, doc 26) — `playbook` schema changes
 
-Playbooks are now topology-owned, so `schemas/playbook.py` changes:
-
 - `PlaybookBase` drops `target_vendor` and `target_category`; `PlaybookCreate`
-  drops them from its optional overrides too
-- `PlaybookOut` drops `target_category_id` and gains `topology_id: Optional[UUID]`
-  (NULL = a system/global playbook; non-NULL = an inline playbook owned by that
-  topology, cascaded on topology delete)
-- `PlaybookStep` gains `target_position: Optional[int]` — the 1-based topology
-  chain position the step configures. A `field_validator` rejects `< 1`. When
-  set and `target_item_id` is unset, the renderer derives
-  `target_item_id = "{{device<N>_item_id}}"` (N = target_position) at render
-  time; doc 33: the derivation targets the absolute-position `chain[n]` namespace;
-  `target_item_id` still wins for power users / system playbooks
+  drops them from its optional overrides too. **This half stands.**
+- `PlaybookOut` drops `target_category_id`. Cycle 8 also added
+  `topology_id: Optional[UUID]` and `PlaybookStep.target_position`; **both were
+  removed again in Cycle 10** — see below.
 - `PlaybookDefinition` is otherwise unchanged (steps still carry `target_item_id`)
+
+### Cycle 10 (network graph, doc 35) — schema changes
+
+`schemas/topology.py` is **deleted** along with its models.
+
+`schemas/playbook.py`:
+
+- **hosts `normalize_purpose(v)`** now — `strip → upper → replace ' '/'-' with
+  '_' → regex-validate against `PLAYBOOK_PURPOSE_PATTERN`` (renamed from
+  `TOPOLOGY_PURPOSE_PATTERN`, `models/isp.py`). Deliberately module-level and
+  importable: the provision endpoint body schema
+  (`ClientServiceProvisionIn`), the binding endpoints and the engine's
+  `ENQUEUE_PROVISIONING` config path all share this exact normalization, so a
+  tenant typing `'Activation'` or `'activation '` always matches the seeded
+  `ACTIVATION` binding.
+- `PlaybookBase` carries **no ownership field at all** — a playbook row is again
+  a plain company-scoped library entry. `topology_id` is gone from `PlaybookOut`;
+  ownership lives in the `device_type_playbook` / `inventory_item_playbook`
+  tables ([network-models.md](network-models.md)).
+- `PlaybookStep.target_position` is **deleted**. A playbook binds to one device
+  type and therefore runs on exactly one device, so there is no chain slot left
+  to address: the executor defaults the step target to `{{device.item_id}}` and
+  `target_item_id` remains the power-user override.
+
+> **Known drift — the schema layer still carries vestigial topology fields.**
+> `ClientServiceBase.topology_id`, `ClientServiceUpdate.topology_id`,
+> `ClientServiceAdoptIn.topology_id` and
+> `ServicePlanBase/Update.default_topology_id` are **still declared** in
+> `schemas/client_service.py` and `schemas/service_plan.py`, and
+> `utils/workflow_fields.py` still lists `client_service.topology_id`
+> (`fk_to: "topology"`) as a trigger-context field. The backing **columns and
+> tables are gone** (`ng2_topology_drop`), so these are accepted-but-ignored
+> request fields that can never round-trip and a trigger field that can never
+> match. Nothing reads them; they are inert rather than dangerous, but they are
+> not intended and should be removed in a follow-up. Recorded here so the wiki
+> does not claim a cleanliness the code does not have.
+>
+> No Pydantic schema exists for `ProvisioningRun` yet — backend-erp shapes the
+> `/automations/runs` response itself.
 
 ### Auth overhaul — request-schema changes (no DB migration)
 

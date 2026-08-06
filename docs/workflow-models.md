@@ -33,9 +33,13 @@ invoked by backend-erp after entity mutations.
 - **CRM models** ([crm-models.md](crm-models.md)): triggers fire on CRM entity
   events; `CREATE_ORDER`/`CREATE_TASK` create CRM rows; `HTTP_REQUEST` steps
   use `Integration` credentials (URL-guarded by `utils/ssrf.py`)
-- **ISP models** ([isp-models.md](isp-models.md)): `ENQUEUE_PROVISIONING`
-  creates `ProvisioningJob` rows, optionally resolving playbooks via
-  `utils/provisioning_resolution.py` (`use_topology` purpose mode)
+- **ISP models** ([isp-models.md](isp-models.md)): `ENQUEUE_PROVISIONING` either
+  creates one standalone `ProvisioningJob` (explicit `playbook_id` mode) or, with
+  **`use_service_path: true`**, opens a `ProvisioningRun` whose children are one
+  job per configured device — resolved by `utils/provisioning_resolution.py`
+  walking the service's network path. The retired `use_topology` key raises;
+  `ng2_topology_drop` rewrites it in installed `workflow_step.action_config` and
+  `workflow_template.definition` rows
 - **Seeds**: `alembic/seeds/isp_seed.py` seeds purpose-based workflow-template
   blueprints. The `new-installation` blueprint is at **v4** (ships with the
   no-op `tk1_new_installation_v4` revision): its installation-fee param is type

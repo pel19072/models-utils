@@ -3,18 +3,25 @@
 ## Description
 
 SQLAlchemy ORM models for the ISP vertical (`database_utils/models/isp.py` —
-the largest model module): service catalog, subscriber services, network
-inventory, topology, and provisioning. Built across Cycles 2–3 of the Uplink
-ISP pivot (platform ADRs 002/003/005/006); Cycle 7 (core config, doc 25,
-revision `nc2a_core_config`) added the CORE/EDGE tier axis, the device
-management surface, topology pinning, and the subscriber install state machine
-— detailed in [network-models.md](network-models.md). Cycle 8 (network UX, doc
-26, revision `c8a_playbook_topology`) made playbooks **topology-owned**: the old
-`Playbook.target_vendor`/`target_category_id` targeting columns were dropped in
-favor of a nullable `Playbook.topology_id`. The service-lifecycle cycle (doc 35,
-revisions `bf1_topology_backfill` → `lc1_retire_removal_tmpl`) added the
-**service status machine** (`PURPOSE_TO_STATUS`, `ALLOWED_TRANSITIONS`,
-`purpose_allowed_for_status`) that backs the per-purpose lifecycle actions.
+the largest model module): service catalog, subscriber services, the network
+plant, and provisioning. Built across Cycles 2–3 of the Uplink ISP pivot
+(platform ADRs 002/003/005/006); Cycle 7 (core config, doc 25, revision
+`nc2a_core_config`) added the CORE/EDGE tier axis, the device management surface
+and the subscriber install state machine — detailed in
+[network-models.md](network-models.md). Cycle 8 (network UX, doc 26, revision
+`c8a_playbook_topology`) dropped the old
+`Playbook.target_vendor`/`target_category_id` targeting columns. The
+service-lifecycle cycle added the **service status machine**
+(`PURPOSE_TO_STATUS`, `ALLOWED_TRANSITIONS`, `purpose_allowed_for_status`) that
+backs the per-purpose lifecycle actions.
+
+**Cycle 10 (the company network graph, doc 35, revisions `ng1_network_graph` +
+`ng2_topology_drop`) is the largest change to this module since the Cycle 2
+entity merge.** `Topology`, `TopologyDeviceType` and `TopologyPlaybook` are
+**deleted**. The plant is now one company-wide tree of `InventoryItem` rows, a
+service names one CPE, playbooks bind to device types (overridable per node), and
+a provisioning run spans several devices. The structural detail lives in
+[network-models.md](network-models.md); this page records what changed *here*.
 
 ## Models (in `database_utils/models/isp.py`; table names in parens)
 
@@ -28,7 +35,7 @@ revisions `bf1_topology_backfill` → `lc1_retire_removal_tmpl`) added the
 
 | Model | Purpose |
 |---|---|
-| `ClientService` (client_service) | A client's subscription to a plan; `ClientServiceStatus`. Absorbed recurring-order billing in `c2b_service_billing`; the dual-write link to legacy `recurring_order` is retained during the rollback window. Cycle 7 (`nc2a`): `install_state` (`INSTALL_STATES` CHECK: NOT_INSTALLED/IN_PROGRESS/INSTALLED, separate from billing `status`, written only by backend-erp's `recompute_install_state`) + `installed_at` (stamped on first INSTALLED, never cleared). Brownfield adoption (doc 30, `ba1_attested_adoption`): `adopted_at` (TIMESTAMPTZ NULL) + `adopted_by_user_id` (UUID FK → `user`, SET NULL, `adopted_by` relationship) + `adoption_note` (VARCHAR NULL) + partial index `ix_client_service_adopted` (`company_id` WHERE `adopted_at IS NOT NULL`) — a persistent attestation FACT substituting for a missing SUCCEEDED activation job inside backend-erp's install_state derivation (never a state, never writes `install_state`, the CHECK is unchanged); writable only via the adopt/un-adopt endpoints behind the ADMIN-only `client_services.adopt` permission; historical `installed_at` may be pre-set at adopt time only when still NULL. `ACTIVATION_EVIDENCE_*` module constants back the backend-computed `activation_evidence` field. Per-service provisioning parameters (`sp1_service_params`): `provisioning_params` (JSON NULL, `[{key, value}]`) holds this service's VALUES for the parameters its plan declares with `scope='service'` — the plan owns the declaration, the service owns only the value, and both resolve to `{{service_plan.<key>}}`. Distinct from `connection_params`, which stays free-form and is not a playbook variable source |
+| `ClientService` (client_service) | A client's subscription to a plan; `ClientServiceStatus`. Absorbed recurring-order billing in `c2b_service_billing`; the dual-write link to legacy `recurring_order` is retained during the rollback window. Cycle 7 (`nc2a`): `install_state` (`INSTALL_STATES` CHECK: NOT_INSTALLED/IN_PROGRESS/INSTALLED, separate from billing `status`, written only by backend-erp's `recompute_install_state`) + `installed_at` (stamped on first INSTALLED, never cleared). Brownfield adoption (doc 30, `ba1_attested_adoption`): `adopted_at` (TIMESTAMPTZ NULL) + `adopted_by_user_id` (UUID FK → `user`, SET NULL, `adopted_by` relationship) + `adoption_note` (VARCHAR NULL) + partial index `ix_client_service_adopted` (`company_id` WHERE `adopted_at IS NOT NULL`) — a persistent attestation FACT substituting for a missing SUCCEEDED activation job inside backend-erp's install_state derivation (never a state, never writes `install_state`, the CHECK is unchanged); writable only via the adopt/un-adopt endpoints behind the ADMIN-only `client_services.adopt` permission; historical `installed_at` may be pre-set at adopt time only when still NULL. `ACTIVATION_EVIDENCE_*` module constants back the backend-computed `activation_evidence` field. Per-service provisioning parameters (`sp1_service_params`): `provisioning_params` (JSON NULL, `[{key, value}]`) holds this service's VALUES for the parameters its plan declares with `scope='service'` — the plan owns the declaration, the service owns only the value, and both resolve to `{{service_plan.<key>}}`. Distinct from `connection_params`, which stays free-form and is not a playbook variable source. **Cycle 10 (`ng1`/`ng2`)**: `topology_id` is **dropped**; `cpe_item_id` (FK → `inventory_item`, SET NULL, indexed, `cpe_item` relationship) and `path_changed_at` (TIMESTAMPTZ NULL, stamped on a re-parent above the CPE, cleared by a SUCCEEDED non-dry-run ACTIVATION run) replace it |
 | `ServiceSuspension` (service_suspension) | Suspension records with `SuspensionReason` |
 
 #### Service lifecycle status machine (doc 35)
@@ -38,7 +45,9 @@ live **here, not in backend-erp**, because the workflow engine resolves the same
 purposes and the import direction is strictly downward (see CLAUDE.md). They are
 the single source of truth for both the backend's pre-flight gate and the
 frontend's per-purpose action buttons (a button is enabled only when the machine
-allows the transition **and** the topology has a playbook for that purpose).
+allows the transition **and** the service's path resolves a playbook for that
+purpose — since Cycle 10 that means the CPE is set and attached, and every
+non-passive node on the path has a binding for the purpose).
 
 - `PURPOSE_TO_STATUS` — the status each canonical purpose writes:
   `SUSPENSION → SUSPENDED`, `REACTIVATION → ACTIVE`, `DEPROVISION → CANCELLED`,
@@ -73,7 +82,7 @@ allows the transition **and** the topology has a playbook for that purpose).
   3. Any other canonical purpose — legal iff its target status is in
      `ALLOWED_TRANSITIONS[current_status]`.
   4. A **tenant-defined custom purpose** (purposes are extensible free strings,
-     see `TOPOLOGY_PURPOSE_PATTERN`) falls through to `True`: it is enqueue-only
+     see `PLAYBOOK_PURPOSE_PATTERN`) falls through to `True`: it is enqueue-only
      and writes no status, so there is no transition to police. It must never
      raise — an unknown purpose is normal tenant config, not a bug.
 
@@ -85,40 +94,53 @@ Covered by `tests/test_service_lifecycle.py`.
 
 | Model | Purpose |
 |---|---|
-| `DeviceCategory` (device_category) | **Global SaaS-admin table** (Cycle 3 `c3b` converted it from an enum to a FK table). Cycle 7 (`nc2a`): `tier` (`DEVICE_CATEGORY_TIERS` CHECK: CORE/EDGE; NULL = passives) — admin-editable, backfilled by key |
+| `DeviceCategory` (device_category) | **Global SaaS-admin table** (Cycle 3 `c3b` converted it from an enum to a FK table). Cycle 7 (`nc2a`): `tier` (`DEVICE_CATEGORY_TIERS` CHECK: CORE/EDGE; NULL = unclassified) — admin-editable, backfilled by key. Cycle 10 (`ng1`): `is_passive` (bool, NOT NULL, default false) — signal-passive gear that is **on** the path and never configured. `tier` says where a device sits; `is_passive` says whether it is ever configured |
 | `DeviceType` (device_type) | Tenant device type catalog. Cycle 7: `cli_platform` (netmiko platform id, free string; NULL → generic drivers) |
 | `Warehouse` (warehouse) | Stock location |
-| `InventoryItem` (inventory_item) | Physical unit. Cycle 7 mgmt surface: `mgmt_host`/`mgmt_port`/`cli_protocol` (`CLI_PROTOCOLS` CHECK: ssh/telnet) + worker-stamped `mgmt_last_check_at`/`mgmt_last_check_ok` |
+| `InventoryItem` (inventory_item) | Physical unit — **and, since Cycle 10, a node of the company network graph**: `parent_id` (self-FK, ON DELETE RESTRICT, indexed) + `network_attached` (bool) + the `parent`/`children` relationships. Root = attached with no parent; warehouse stock is simply not attached. Cycle 7 mgmt surface: `mgmt_host`/`mgmt_port`/`cli_protocol` (`CLI_PROTOCOLS` CHECK: ssh/telnet) + worker-stamped `mgmt_last_check_at`/`mgmt_last_check_ok` |
 | `EquipmentEvent` (equipment_event) | Equipment lifecycle events |
 
-### Topology (ADR-003 → Cycle 2 chain model)
+### The network graph (ADR-003 → Cycle 10 tree)
 
-| Model | Purpose |
-|---|---|
-| `Topology` (topology) | A network topology definition |
-| `TopologyDeviceType` (topology_device_type) | Per-position device chain (ordered chain, not a graph). Cycle 7: `inventory_item_id` (FK, SET NULL) pins the concrete shared CORE device serving the position — pinned positions bypass candidate matching in provisioning resolution |
-| `TopologyPlaybook` (topology_playbook) | Cycle 3 `c3a` **purpose-keyed map**: `PURPOSE_ACTIVATION` / `PURPOSE_SUSPENSION` / `PURPOSE_REACTIVATION` / `PURPOSE_DEPROVISION` (validated by `TOPOLOGY_PURPOSE_PATTERN`) |
+There is **no topology model and no separate node model**. A network element is
+an `InventoryItem` that has been attached to the company's tree via
+`parent_id` + `network_attached`; roles come from `device_category`
+(`tier`, `is_passive`). Structure, constraints and the two guard triggers:
+[network-models.md](network-models.md).
 
-The earlier free-form network graph (`network_node`/`network_link`) was
-**removed** in `c2d_graph_removal`; `schemas/network.py` was deleted with it.
+This is the third attempt at a plant model and the history matters when reading
+the code. Doc 07 specified exactly this tree; it shipped as
+`network_node`/`network_node_type`/`network_link` and was **deleted** by
+`c2d_graph_removal` because it was decorative — provisioning never traversed it,
+it was a free-form graph with a link overlay, and it carried a second type
+catalog alongside `device_type`. `Topology` replaced it as a named, ordered chain
+of device *types*, and that in turn is what Cycle 10 removed. What is different
+this time: the tree is **load-bearing** (it is the only source of the config
+path), it is a **strict tree** with a single parent and no link overlay, and
+nodes *are* `InventoryItem`s so there is **one catalog** and one identity.
 
 ### Provisioning (ADR-005/006)
 
 | Model | Purpose |
 |---|---|
-| `Playbook` (playbook) | Declarative provisioning steps. Cycle 8 (`c8a`): **topology-owned** — `topology_id` (FK → topology, **ON DELETE CASCADE**, nullable, indexed): NULL = a system/global playbook (the seeded per-company `core_connectivity_check_*`), non-NULL = an inline playbook authored inside that topology's editor, one per purpose. The topology now supplies the device context, so the old `target_vendor`/`target_category_id` columns (+ the `target_category_ref` relationship and `target_category` @property) were removed. CASCADE cleans up an inline playbook on topology delete, but `provisioning_job.playbook_id` is `ON DELETE RESTRICT`, so the backend topology-delete path must clear dependent jobs first (the RESTRICT preserves job history) |
-| `ProvisioningJob` (provisioning_job) | Durable job queue row — `ProvisioningJobStatus`, `ProvisioningTrigger`; consumed by backend-erp's `provision-worker` process (SKIP LOCKED claiming) |
+| `Playbook` (playbook) | Declarative provisioning steps. A plain company-scoped library row with **no ownership column**: Cycle 8 dropped `target_vendor`/`target_category_id` (+ the `target_category_ref` relationship and `target_category` @property) and Cycle 10 dropped the `topology_id` it briefly gained. One playbook can therefore serve several device types |
+| `DeviceTypePlaybook` (device_type_playbook) | Cycle 10 — the type-level default playbook for a purpose. UNIQUE (device_type_id, purpose) |
+| `InventoryItemPlaybook` (inventory_item_playbook) | Cycle 10 — one node's override of its device type's default. UNIQUE (inventory_item_id, purpose). Precedence: **node override → device-type default → none** |
+| `ProvisioningRun` (provisioning_run) | Cycle 10 — one service-path run: several devices, several playbooks. Snapshots the resolved `path`, the ordered `plan` and the variable `frames` at creation; children are created lazily, one at a time, leaf → root |
+| `ProvisioningJob` (provisioning_job) | Durable job queue row — `ProvisioningJobStatus`, `ProvisioningTrigger`; consumed by backend-erp's `provision-worker` process (SKIP LOCKED claiming). Cycle 10 adds `run_id`/`run_position`; **`run_id` NULL means a standalone job** (explicit-playbook, ACS reboot, connectivity probe) and nothing about those changed |
 
 ## Connections to Other Components
 
 - **backend-erp**: primary consumer (ISP routers + the provisioning worker)
 - **Workflow engine** ([workflow-engine.md](workflow-engine.md)): the
-  `ENQUEUE_PROVISIONING` step's `use_topology` mode resolves
-  topology → purpose → playbook via `utils/provisioning_resolution.py`
+  `ENQUEUE_PROVISIONING` step's **`use_service_path`** mode walks the service's
+  network path via `utils/provisioning_resolution.py` and opens a
+  `ProvisioningRun`. The retired `use_topology` key raises
 - **Seeds**: `alembic/seeds/isp_seed.py` seeds ISP permissions, tier modules,
   purpose-based workflow-template blueprints, and the device_category baseline
-  (Cycle 7: baseline entries carry a CORE/EDGE tier; a gated backfill classifies
-  pre-nc2a rows only while no row has a tier yet, so admin edits survive re-seeds)
+  (Cycle 7: baseline entries carry a CORE/EDGE tier; Cycle 10: they also carry
+  `is_passive`. Both classifications use the same gate — backfill only while no
+  row anywhere is classified — so super-admin edits survive every re-seed)
 - **CRM models** ([crm-models.md](crm-models.md)): `ClientService` links to
   `Client` and dual-writes legacy `RecurringOrder` rows
 
@@ -130,8 +152,10 @@ The earlier free-form network graph (`network_node`/`network_link`) was
 - Cycle-7 value sets are CHECK-constrained strings, never PG enums:
   `DEVICE_CATEGORY_TIERS`, `CLI_PROTOCOLS`, `INSTALL_STATES` (constants in
   `models/isp.py`, SQL fragments byte-identical with the nc2a migration)
-- The topology chain + purpose-keyed playbook map replaced the removed graph
-  model as the provisioning source of truth
+- **The graph is the provisioning source of truth.** A service supplies exactly
+  two network inputs — which CPE (`client_service.cpe_item_id`) and which node it
+  hangs off (that item's `parent_id`) — and the whole configuration path is
+  derived by walking to the root, leaf → root
 
 ## Environment Variables
 
