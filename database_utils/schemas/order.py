@@ -1,23 +1,18 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
-from enum import Enum
 from pydantic import BaseModel, computed_field, ConfigDict
 from .order_item import OrderItemInput, OrderItemOut
 from .client import ClientOut
 import calendar
 
 # Single source of truth — reuse the model enums (doc 16 §1 contract).
-from database_utils.models.crm import OrderType, PaymentStatus
+from database_utils.models.crm import OrderStatus, OrderType, PaymentStatus
 from database_utils.utils.timezone_utils import make_aware_gt, today_gt
 
 if TYPE_CHECKING:
     from .recurring_order import RecurringOrderOut
 
-
-class OrderStatus(str, Enum):
-    ACTIVE = "ACTIVE"
-    CANCELLED = "CANCELLED"
 
 class OrderBase(BaseModel):
     client_id: Optional[UUID]

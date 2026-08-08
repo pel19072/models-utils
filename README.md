@@ -29,7 +29,7 @@ root repo docs and [docs/connections.md](docs/connections.md).
 - Python >= 3.11 (CI runs 3.12) — MIT license
 - SQLAlchemy >= 2.0, Alembic >= 1.12, psycopg2-binary
 - Pydantic >= 2.12.5, FastAPI >= 0.100 (dependency helpers)
-- PyJWT, bcrypt/passlib, loguru, Jinja2, aiosmtplib, opentelemetry-api (API only)
+- PyJWT, bcrypt, loguru, Jinja2, aiosmtplib, opentelemetry-api (API only)
 
 ## Quickstart
 

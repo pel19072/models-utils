@@ -7,6 +7,7 @@ tier data exists in the database.
 The script is idempotent - it checks for existing data before inserting,
 so it's safe to run multiple times.
 """
+import json
 from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -35,7 +36,7 @@ def _enforce_free_trial_unlimited(connection: Connection) -> None:
     silently revert the t1 data migration). Idempotent by construction.
     Remove this call (with a revision) when real Free/Trial limits return.
     """
-    modules_json = str(ALL_MODULES).replace("'", '"')
+    modules_json = json.dumps(ALL_MODULES)
     result = connection.execute(
         text(
             "UPDATE tier "
@@ -230,7 +231,7 @@ def seed_tier_data(connection: Connection) -> None:
                             'tier_id': tier_id,
                             'price': tier_data['price'],
                             'billing_cycle': tier_data['billing_cycle'],
-                            'features': str(tier_data['features']).replace("'", '"'),
+                            'features': json.dumps(tier_data['features']),
                             'stripe_price_id': tier_data['stripe_price_id'],
                             'is_active': tier_data['is_active']
                         }
@@ -259,8 +260,8 @@ def seed_tier_data(connection: Connection) -> None:
                     'name': tier_name,
                     'price': tier_data['price'],
                     'billing_cycle': tier_data['billing_cycle'],
-                    'features': str(tier_data['features']).replace("'", '"'),
-                    'modules': str(tier_data['modules']).replace("'", '"') if tier_data.get('modules') else None,
+                    'features': json.dumps(tier_data['features']),
+                    'modules': json.dumps(tier_data['modules']) if tier_data.get('modules') else None,
                     'stripe_price_id': tier_data['stripe_price_id'],
                     'is_active': tier_data['is_active']
                 }

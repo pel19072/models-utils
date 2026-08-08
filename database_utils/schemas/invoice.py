@@ -14,18 +14,6 @@ class InvoiceBase(BaseModel):
     details: dict
 
 
-class InvoiceCreate(InvoiceBase):
-    order_id: UUID
-
-
-class InvoiceUpdate(BaseModel):
-    issue_date: Optional[datetime] = None
-    subtotal: Optional[float] = None
-    tax: Optional[float] = None
-    total: Optional[float] = None
-    details: Optional[dict] = None
-
-
 class InvoiceOut(InvoiceBase):
     id: UUID
     created_at: datetime

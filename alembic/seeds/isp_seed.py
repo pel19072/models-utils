@@ -43,6 +43,7 @@ from database_utils.utils.timezone_utils import now_gt
 # a typo'd table/column name silently deactivates the gated templates
 # forever via the retirement pass, with no test catching it at head).
 from database_utils.models.isp import DeviceTypePlaybook
+from database_utils.utils.workflow_engine import KNOWN_RESOURCE_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -583,16 +584,6 @@ def _seed_tier_modules(connection: Connection) -> None:
     logger.info("Tier modules updated with ISP modules")
 
 
-def _known_resource_types(connection: Connection) -> set:
-    """The engine's model map keys, as of the CURRENT models-utils code (not
-    migration-position-dependent — the Python module always reflects what
-    THIS worker/backend build can execute). Used to gate template triggers
-    referencing a resource type the engine no longer understands (e.g.
-    'network_node', removed in Cycle 2 D6)."""
-    from database_utils.utils.workflow_engine import KNOWN_RESOURCE_TYPES
-    return set(KNOWN_RESOURCE_TYPES)
-
-
 def _seed_workflow_templates(connection: Connection) -> None:
     # Upsert (doc 16 §5.4): templates are global blueprints; installed
     # workflows are materialized copies, so DO UPDATE is safe and lets template
@@ -623,7 +614,8 @@ def _seed_workflow_templates(connection: Connection) -> None:
             "WHERE t.typname = 'stepactiontype'"
         ))
     }
-    known_resource_types = _known_resource_types(connection)
+    # The engine's model map as of THIS build, not migration-position-dependent.
+    known_resource_types = set(KNOWN_RESOURCE_TYPES)
     seeded_keys = []
 
     for tpl in WORKFLOW_TEMPLATES:

@@ -7,10 +7,10 @@
 | `sqlalchemy` | >= 2.0 | ORM models, engine, sessions |
 | `alembic` | >= 1.12 | Schema migrations |
 | `psycopg2-binary` | — | PostgreSQL driver |
-| `pydantic` | >= 2.12.5 (`pydantic_core` >= 2.41.5) | Request/response schemas |
+| `pydantic` | >= 2.12.5 | Request/response schemas |
 | `fastapi` | >= 0.100.0 | Dependency helpers (`get_db`, audit context), exception handlers, middleware |
 | `PyJWT` | >= 2.8.0 | HS256 token create/decode (`jwt_utils`) |
-| `bcrypt` / `passlib` | >= 4.2.0 / >= 1.7.4 | Password hashing |
+| `bcrypt` | >= 4.2.0 | Password hashing |
 | `loguru` | >= 0.7.3 | Structured JSON logging (`logging_utils`) |
 | `python-dotenv` | >= 1.0 | Env loading |
 | `email-validator` | >= 2.0.0 | Email field validation |
