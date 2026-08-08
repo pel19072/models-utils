@@ -204,8 +204,8 @@ path still does not call them (see [limitations.md](limitations.md)).
 | Path | Purpose |
 |---|---|
 | `dependencies/db.py` | `get_db` FastAPI session dependency (rollback + close) |
-| `dependencies/audit.py` | `AuditContext`, `get_client_ip` (proxy-aware), `get_audit_context[_optional]` |
-| `middleware/logging_middleware.py` | `create_logging_middleware` — request-ID + JWT-context + duration ASGI middleware |
+| `dependencies/audit.py` | `get_client_ip` (proxy-aware) |
+| `middleware/logging_middleware.py` | `LoggingMiddleware` — request-ID + JWT-context + duration ASGI middleware |
 | `constants/roles.py` | `Roles` ADMIN/MANAGER/SALES/USER |
 
 ## Connections to Other Components

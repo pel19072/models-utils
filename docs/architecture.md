@@ -64,7 +64,7 @@ by `network_graph.py` (the plant traversal) and `provisioning_runs.py`
 1. Consumer process imports `database_utils` → `database.py` reads env and
    constructs the engine (no connection yet).
 2. FastAPI app wires `get_db` (per-request session with rollback + close),
-   audit-context dependencies, and optionally `create_logging_middleware`
+   the `get_client_ip` audit helper, and optionally `LoggingMiddleware`
    (request-ID + JWT-context + duration logging).
 3. CRUD routers call the workflow engine after mutations via
    `asyncio.create_task(check_workflow_triggers(...))`.

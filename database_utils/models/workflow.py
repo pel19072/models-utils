@@ -10,11 +10,6 @@ import enum
 import uuid
 
 
-class WorkflowStatus(str, enum.Enum):
-    ACTIVE = "ACTIVE"
-    INACTIVE = "INACTIVE"
-
-
 class TriggerEventType(str, enum.Enum):
     CREATED = "CREATED"
     UPDATED = "UPDATED"

@@ -70,12 +70,6 @@ class AcsRegistrationUpdate(BaseModel):
         return _normalize_oui(v)
 
 
-class AcsRegistrationAssignRequest(BaseModel):
-    """Superadmin quarantine-assignment flow (canon C20): stamp a NULL-company
-    (quarantined) registration onto a tenant."""
-    company_id: UUID
-
-
 class AcsRegistrationOut(AcsRegistrationBase):
     id: UUID
     company_id: Optional[UUID] = None   # NULL = quarantined

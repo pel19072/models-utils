@@ -3,27 +3,13 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 from .client import ClientOut
-from enum import Enum
+from database_utils.models.crm import RecurrenceEnum, RecurringOrderStatus
 
 
 # Forward reference import
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .order import OrderOut
-
-
-class RecurrenceEnum(str, Enum):
-    DAILY = "DAILY"
-    WEEKLY = "WEEKLY"
-    MONTHLY = "MONTHLY"
-    YEARLY = "YEARLY"
-
-
-class RecurringOrderStatus(str, Enum):
-    ACTIVE = "ACTIVE"
-    PAUSED = "PAUSED"
-    INACTIVE = "INACTIVE"
-    CANCELLED = "CANCELLED"
 
 
 # ===================== Items =====================

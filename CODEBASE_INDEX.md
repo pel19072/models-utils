@@ -28,8 +28,8 @@ docker-compose service. May drift — verify against actual files.
 |---|---|
 | `database.py` | Engine bootstrap: `DATABASE_URL` or `DB_URL` or composed `POSTGRES_*` (raises at import if none); `pool_pre_ping`, `pool_recycle=3600`; exports `SessionLocal`, `Base` |
 | `dependencies/db.py` | `get_db` FastAPI session dependency (rollback + close) |
-| `dependencies/audit.py` | `AuditContext`, `get_client_ip` (proxy-aware), `get_audit_context[_optional]` |
-| `middleware/logging_middleware.py` | `create_logging_middleware` — request-ID + JWT-context + duration ASGI middleware |
+| `dependencies/audit.py` | `get_client_ip` (proxy-aware) |
+| `middleware/logging_middleware.py` | `LoggingMiddleware` — request-ID + JWT-context + duration ASGI middleware |
 | `constants/roles.py` | `Roles`: ADMIN / MANAGER / SALES / USER |
 | `services/email_service.py` | Abstract `EmailService` + Mock + SMTP impl (aiosmtplib); 7 transactional email kinds; the 4 auth kinds (confirmation, invitation, password_reset, welcome) take `locale: str = "es"` as last keyword param with localized Uplink subjects (`_UPLINK_SUBJECTS` es/en dict); selected via `EMAIL_PROVIDER`, `SMTP_USE_TLS` |
 | `templates/email/*.html` | 13 Jinja2 templates: `base_uplink` (Uplink-branded shell) + es/en pairs for confirmation/invitation/password_reset/welcome; legacy `base_layout`, join_request_decision, payment_failed, payment_receipt. `render_email(name, locale)` resolves `{stem}.{locale}.html` → `{stem}.es.html` → `{stem}.html` |

@@ -158,12 +158,3 @@ def get_writable_fields(resource_type: str) -> List[Dict[str, Any]]:
     trigger-condition-only fields marked writable=False)."""
     return [f for f in get_resource_fields(resource_type) if f.get("writable", True)]
 
-
-def get_fk_fields(resource_type: str) -> List[Dict[str, Any]]:
-    """Return only FK fields for a resource type (for match_field dropdowns)."""
-    return [f for f in get_resource_fields(resource_type) if f.get("fk_to")]
-
-
-def get_resource_types() -> List[str]:
-    """Return all known resource types."""
-    return list(RESOURCE_FIELDS.keys())
