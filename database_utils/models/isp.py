@@ -1251,6 +1251,13 @@ class NetworkAccess(Base):
             "company_id", "kind",
             unique=True,
             postgresql_where=text("is_default"),
+            # sqlite_where mirrors postgresql_where so this partial index
+            # behaves the same under the SQLite `create_all()` the test
+            # suite uses — without it, SQLite creates a plain (non-partial)
+            # unique index and rejects any non-default row that shares a
+            # company_id/kind with the default row. No production schema
+            # change: Postgres is migrated by nc1a_network_config_core.
+            sqlite_where=text("is_default"),
         ),
     )
 
