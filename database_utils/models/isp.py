@@ -253,7 +253,12 @@ CREDENTIAL_KINDS = (
 
 # canon C9: network-access transport shape.
 NETWORK_ACCESS_KINDS = ("acs", "olt")
-NETWORK_ACCESS_MODES = ("direct", "vpn", "tunnel")
+NETWORK_ACCESS_MODES = ("direct", "vpn", "tunnel", "nat_zt", "nat_public")
+# spec N2: the two variants of gateway port-mapping. Both resolve the dial
+# target to (network_access.gateway_host, inventory_item.nat_port); they differ
+# only in how the gateway itself is reached — nat_zt through the fleet Pylon
+# SOCKS5 proxy, nat_public over plain egress.
+NAT_MODES = ("nat_zt", "nat_public")
 
 # canon C13: derived acs_device_registration ONLINE-vs-STALE threshold (a
 # registration that has not informed within this window reads STALE).
@@ -263,7 +268,11 @@ ACS_STALE_AFTER_SECONDS = 900
 # hand-written nc1a migration — kept as strings so both agree byte-for-byte.
 _CREDENTIAL_KIND_CHECK = "kind IN ('SSH','TELNET','SNMP_COMMUNITY','TR069_CONNECTION_REQUEST','HTTP_BASIC','HTTP_BEARER','WIREGUARD','AGENT')"
 _NETWORK_ACCESS_KIND_CHECK = "kind IN ('acs','olt')"
-_NETWORK_ACCESS_MODE_CHECK = "mode IN ('direct','vpn','tunnel')"
+_NETWORK_ACCESS_MODE_CHECK = "mode IN ('direct','vpn','tunnel','nat_zt','nat_public')"
+# spec §8: mgmt_port has had no range CHECK since nc2a and the xlsx importer
+# will happily write 0 or 70000. Both ports get one here.
+_NAT_PORT_CHECK = "nat_port IS NULL OR (nat_port BETWEEN 1 AND 65535)"
+_MGMT_PORT_CHECK = "mgmt_port IS NULL OR (mgmt_port BETWEEN 1 AND 65535)"
 
 
 # ---------------------------------------------------------------------------
@@ -728,6 +737,15 @@ class InventoryItem(Base):
     mgmt_last_check_at = Column(DateTime(timezone=True), nullable=True)
     mgmt_last_check_ok = Column(Boolean, nullable=True)
 
+    # --- NAT transport (spec §8, revision nat1_gateway_transport) ---
+    # The external port on the tenant's gateway that dst-nats to this device.
+    # NEVER conflated with mgmt_port, which stays the device's REAL service
+    # port (spec N1). NULL for every non-NAT device.
+    nat_port = Column(Integer, nullable=True)
+    # Pinned SSH host key (spec N9). Recorded on first successful connect;
+    # any later mismatch is a hard failure, never an auto-add.
+    mgmt_host_key = Column(String, nullable=True)
+
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -792,6 +810,17 @@ class InventoryItem(Base):
         Index("ix_inventory_item_company_status", "company_id", "status"),
         # Cycle 7 (doc 25 §2.3).
         CheckConstraint(_CLI_PROTOCOL_CHECK, name="ck_inventory_item_cli_protocol"),
+        # spec §8 (nat1). nat_port uniqueness is per company because a tenant
+        # has one gateway; two devices behind one external port would be a
+        # config push to the wrong device.
+        CheckConstraint(_NAT_PORT_CHECK, name="ck_inventory_item_nat_port"),
+        CheckConstraint(_MGMT_PORT_CHECK, name="ck_inventory_item_mgmt_port"),
+        Index(
+            "uq_inventory_item_company_nat_port",
+            "company_id", "nat_port",
+            unique=True,
+            postgresql_where=text("nat_port IS NOT NULL"),
+        ),
         # Cycle 10 / doc 35 §2.1. Cycles, cross-tenant parents and the depth cap
         # are guarded by trg_inventory_item_graph_guard (ng1) — a CHECK cannot
         # express reachability. These two are the parts a CHECK *can* state.
@@ -1198,6 +1227,12 @@ class NetworkAccess(Base):
     mgmt_subnets = Column(JSON, nullable=True)
     # Phase-4 per-tenant ACS escape hatch — nullable from day one, unused until P4.
     acs_base_url = Column(String, nullable=True)
+    # spec N1/§8: the tenant gateway's address on the path WE dial — a
+    # ZeroTier address under nat_zt, a public IP or DDNS hostname under
+    # nat_public. Deliberately String, not INET: a nat_zt value is RFC1918 and
+    # a nat_public value may be a hostname, so no "globally routable"
+    # assertion is possible or wanted. NULL on every non-NAT row.
+    gateway_host = Column(String, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
