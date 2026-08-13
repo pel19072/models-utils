@@ -9,12 +9,12 @@ tier as the topology-purpose normalizer. Standard multi-record CRUD (no
 singleton PUT).
 """
 import ipaddress
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
-from database_utils.models.isp import NETWORK_ACCESS_KINDS, NETWORK_ACCESS_MODES
+from database_utils.models.isp import NETWORK_ACCESS_KINDS, NETWORK_ACCESS_MODES, NAT_MODES
 
 
 def _validate_subnets(v: Optional[List[str]]) -> Optional[List[str]]:
@@ -35,6 +35,10 @@ class NetworkAccessBase(BaseModel):
     is_default: bool = False
     mgmt_subnets: Optional[List[str]] = None
     acs_base_url: Optional[str] = None
+    # spec §8: deliberately a bare string. Under nat_zt this is an RFC1918
+    # ZeroTier address; under nat_public a public IP or a DDNS hostname. No
+    # ip_address() coercion, no routability assertion.
+    gateway_host: Optional[str] = None
 
     @field_validator("kind")
     @classmethod
@@ -55,6 +59,12 @@ class NetworkAccessBase(BaseModel):
     def validate_subnets(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         return _validate_subnets(v)
 
+    @model_validator(mode="after")
+    def validate_nat_requires_gateway_host(self):
+        if self.mode in NAT_MODES and not (self.gateway_host or "").strip():
+            raise ValueError(f"gateway_host is required when mode is '{self.mode}'")
+        return self
+
 
 class NetworkAccessCreate(NetworkAccessBase):
     pass
@@ -67,6 +77,7 @@ class NetworkAccessUpdate(BaseModel):
     is_default: Optional[bool] = None
     mgmt_subnets: Optional[List[str]] = None
     acs_base_url: Optional[str] = None
+    gateway_host: Optional[str] = None
 
     @field_validator("kind")
     @classmethod
