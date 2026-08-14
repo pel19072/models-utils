@@ -21,6 +21,7 @@ library, never the reverse).
 | `network_graph.py` | The **only** place the company plant tree is walked (Cycle 10, doc 35 §3) — see below |
 | `provisioning_resolution.py` | Resolves a service's configuration path, its per-node playbooks and its variable frames (moved down from backend-erp in Cycle 3; **rewritten in Cycle 10** to traverse the graph instead of matching a topology chain) — see below |
 | `provisioning_runs.py` | Opens and advances a multi-device `ProvisioningRun` (Cycle 10, doc 35 §5) — see below |
+| `transport.py` | NAT transport resolver, `resolve_endpoint()` (2026-08-13, doc 34 canon R23 rewrite) — see below |
 | `jwt_utils.py` | HS256 JWT create/decode. Env: `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE` (minutes, default 1440), `REFRESH_TOKEN_EXPIRE`. **Fails fast if `SECRET_KEY` is unset when `ENVIRONMENT=production`**; dev fallback otherwise |
 | `permission_utils.py` | `PermissionChecker` and require-permission FastAPI dependencies |
 | `audit_utils.py` | `log_create_operation` / `log_update_operation` / `log_delete_operation` / `log_custom_operation` helpers writing `AuditLog` rows |
@@ -198,6 +199,48 @@ is still individually unique under `uq_provisioning_job_company_idem`), carry
 (kill switch, dry-run gate). Those live in backend-erp and are called by its
 routers before `create_run`, exactly as they are today — and the workflow-engine
 path still does not call them (see [limitations.md](limitations.md)).
+
+### `transport.py` (NAT transport, 2026-08-13)
+
+The one place that turns an `InventoryItem` plus its tenant's `NetworkAccess`
+row into the address a driver actually dials. Lives here (not in backend-erp)
+so `cli.py`, `ping.py`, and any future TCP driver share one implementation
+instead of three drifting copies.
+
+| Name | Behaviour |
+|---|---|
+| `ResolvedEndpoint` | Frozen dataclass: `host`, `port`, `proxy` (SOCKS5 `host:port` for `nat_zt`, else `None`), `mode` |
+| `resolve_endpoint(db, item, company_id, default_port, pylon_socks5=None, access=None)` | Returns `(endpoint, None)` or `(None, error_code)`. Reads only the company's **default** `kind='olt'` `NetworkAccess` row (or the caller-supplied `access`) — no longest-prefix match, no per-device override; `network_access.mgmt_subnets` is deliberately not read |
+
+Resolution:
+- `mode in NAT_MODES` (`nat_zt`, `nat_public`): target is always `(access.gateway_host, item.nat_port)`, **never** `item.mgmt_host`. Missing `gateway_host` or `nat_port` → `NAT_MAPPING_NOT_SET`.
+- `mode == 'nat_zt'` additionally requires a `pylon_socks5` argument; if none is supplied → `TRANSPORT_UNAVAILABLE`. **As of 2026-08-13, no caller in backend-erp supplies `pylon_socks5`** — the Pylon SOCKS5 fleet proxy (doc 34 §2.2 OV11) was not wired this cycle (Task 0's ZeroTier Central spike could not run — see doc 34 OV17). `nat_zt` is therefore selectable and stores its config but every dial against it fails closed with `TRANSPORT_UNAVAILABLE`. `nat_public` is fully dial-capable.
+- Every mode NOT in `NAT_MODES` (`direct`, `vpn`, `tunnel` — and no default row at all) falls through to the SAME branch: `(item.mgmt_host, item.mgmt_port or default_port)`. This is not fail-closed for those modes — nothing distinguishes a `vpn` row that genuinely has a live tunnel to `item.mgmt_host` from one that doesn't. The only check on that branch is that `mgmt_host` itself is non-empty → `MGMT_HOST_NOT_SET`.
+- `access` supplied by the caller (skipping the internal query) is rejected with `TRANSPORT_UNAVAILABLE` if `access.company_id != company_id` — a cross-tenant guard, since nothing else here re-validates a caller-supplied row.
+
+Error-code vocabulary `resolve_endpoint` can return (spec N12):
+
+| Code | When |
+|---|---|
+| `NAT_MAPPING_NOT_SET` | `mode in NAT_MODES` and `gateway_host` or `item.nat_port` is missing |
+| `TRANSPORT_UNAVAILABLE` | `mode == 'nat_zt'` with no `pylon_socks5` configured, or a caller-supplied `access` row belongs to a different `company_id` |
+| `MGMT_HOST_NOT_SET` | a non-NAT mode (or no default row) with an empty `item.mgmt_host` |
+
+Two invariants documented in the module docstring: the `InventoryItem` is
+**never mutated** (`mgmt_host`/`mgmt_port` always describe the device, never
+the path to it — doc 34 §1.3), and NAT modes **fail closed** — doc 34 canon
+R23 was rewritten specifically because its original predicate ("does this
+company hold a non-`direct` row") is satisfied vacuously by a NAT tenant
+stored as `mode='direct'`. The precise scope of "fails closed", accurately:
+only `nat_zt`/`nat_public` are actually fail-closed on a missing config
+(`gateway_host`, `nat_port`, or the `nat_zt` proxy) — none of those inputs
+ever exist on the item, so there is nothing to fall back to. `vpn`/`tunnel`/
+`direct` are NOT separately validated; they all fall through to the same
+`item.mgmt_host` branch as `direct` always has, and that branch only errors
+if `mgmt_host` itself is empty (`MGMT_HOST_NOT_SET`) — a `vpn`-mode row with
+a populated `mgmt_host` resolves successfully even though nothing here
+confirms a VPN actually routes to it. Callers must surface any returned
+error code as a step failure. See `tests/test_transport_resolver.py`.
 
 ## Related packages
 

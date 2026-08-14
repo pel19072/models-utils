@@ -1,5 +1,5 @@
 # schemas/inventory.py
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -151,8 +151,12 @@ class InventoryItemBase(BaseModel):
     # --- Cycle 7 management surface (doc 25 §2.3) — how the CLI drivers reach
     # a CORE-tier device. mgmt_port NULL -> driver default (22 ssh / 23 telnet).
     mgmt_host: Optional[str] = None
-    mgmt_port: Optional[int] = None
+    mgmt_port: Optional[int] = Field(default=None, ge=1, le=65535)
     cli_protocol: Optional[str] = None
+    # spec N1: the external port on the tenant's gateway that dst-nats to this
+    # device. Never conflated with mgmt_port, which stays the device's real
+    # service port.
+    nat_port: Optional[int] = Field(default=None, ge=1, le=65535)
 
     @field_validator("cli_protocol")
     @classmethod
@@ -182,8 +186,9 @@ class InventoryItemUpdate(BaseModel):
     # inventory PATCH (no dedicated endpoint); the mgmt_last_check_* stamps
     # are deliberately absent — worker-owned, read-only.
     mgmt_host: Optional[str] = None
-    mgmt_port: Optional[int] = None
+    mgmt_port: Optional[int] = Field(default=None, ge=1, le=65535)
     cli_protocol: Optional[str] = None
+    nat_port: Optional[int] = Field(default=None, ge=1, le=65535)
 
     @field_validator("cli_protocol")
     @classmethod
