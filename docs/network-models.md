@@ -25,7 +25,7 @@ pre-baked chain.
 | Model | Table | Key Fields | Purpose |
 |-------|-------|-----------|---------|
 | `DeviceCredential` | `device_credential` | name, kind (CHECK: CREDENTIAL_KINDS), username, `secret_ciphertext`/`dek_wrapped`/`kek_id`, fingerprint, binding FKs (inventory_item/device_type/network_access) | Envelope-encrypted per-tenant device secret (canon C1/C19). Secret never round-trips — Out schema exposes only `has_secret` + fingerprint |
-| `NetworkAccess` | `network_access` | name, kind (CHECK: acs\|olt), mode (CHECK: direct\|vpn\|tunnel), is_default, mgmt_subnets (JSON CIDRs), acs_base_url | Per-tenant transport config (canon C9); the resolver longest-prefix-matches mgmt address, else the default row |
+| `NetworkAccess` | `network_access` | name, kind (CHECK: acs\|olt), mode (CHECK: direct\|vpn\|tunnel\|nat_zt\|nat_public), is_default, mgmt_subnets (JSON CIDRs), acs_base_url, **`gateway_host`** (String, nullable — NAT transport, 2026-08-13) | Per-tenant transport config (canon C9). `mgmt_subnets`-based longest-prefix match was never implemented; `transport.py::resolve_endpoint` reads only the default `kind='olt'` row — see below |
 | `AcsDeviceRegistration` | `acs_device_registration` | serial_number, oui, company_id (**nullable** = QUARANTINED), genieacs_device_id, first/last_inform_at, cwmp_cr_* connection-request creds | Serial/OUI→tenant mapping — the tenant-stamping keystone (canon C13); global `(oui, serial)` unique so two tenants can't claim one CPE |
 | `ProvisioningSettings` | `provisioning_settings` | company_id (unique), enabled (default **false**), default_inform_interval | Tenant provisioning enable gate — a per-tenant singleton (canon C6). Absence of a row = DISABLED (fail-safe) |
 | `DeviceActionLog` | `device_action_log` | actor_kind, actor_user_id, device_kind, device_identity, action, before_data/after_data (secret-redacted JSON), provisioning_job_id | Append-only device audit trail (canon C14). No `updated_at`; immutability enforced by a Postgres `BEFORE UPDATE OR DELETE` trigger (nc1b) |
@@ -324,6 +324,28 @@ precisely that), and reverting that decision on every migrate is the bug the
 gated, so running seeds at a pre-`ng1` migration position logs a warning and
 skips instead of erroring.
 
+## NAT transport (`nat1_gateway_transport`, 2026-08-13)
+
+Second reachability path alongside `direct` (Phase 1) and the reserved
+`vpn`/`tunnel` rows (doc 34 §5.5): the tenant maps external ports on their own
+gateway to their devices' real management ports (`dst-nat`), and Uplink dials
+the gateway instead of the device's private address. Purely additive — no
+existing `network_access` row's `mode` changes, and `downgrade()` refuses if
+any row is in a NAT mode (see the migration's module docstring for why
+silently rewriting to `direct` would strand `gateway_host`/`nat_port` data).
+
+| Table | New columns | Purpose |
+|---|---|---|
+| `network_access` | `gateway_host` (String, nullable) | The tenant gateway's address on the path **we** dial — a ZeroTier address under `nat_zt`, a public IP or DDNS hostname under `nat_public`. Deliberately `String`, not `INET`: a `nat_zt` value is RFC1918, a `nat_public` value may be a hostname, so no "globally routable" assertion is made. NULL on every non-NAT row |
+| `inventory_item` | `nat_port` (Integer, nullable, CHECK 1–65535, unique per `company_id` where set) | The external port on the tenant's gateway that `dst-nat`s to this device. **Never** conflated with `mgmt_port`, which stays the device's real service port |
+| `inventory_item` | `mgmt_host_key` (String, nullable) | Pinned SSH host key (TOFU — recorded on first successful connect). Any later mismatch is a hard, non-retryable failure, never an auto-add — see backend-erp's wiki for the pre-auth enforcement mechanism |
+
+`mgmt_port` also gains the range CHECK it had lacked since `nc2a` (a pre-existing gap the xlsx importer could exploit by writing 0 or 70000).
+
+`NETWORK_ACCESS_MODES` widens to `("direct", "vpn", "tunnel", "nat_zt", "nat_public")`; `NAT_MODES = ("nat_zt", "nat_public")` is the subset the resolver treats specially. Both variants resolve the dial target to `(network_access.gateway_host, inventory_item.nat_port)` — they differ only in how the *gateway itself* is reached: `nat_zt` through a fleet ZeroTier SOCKS5 proxy (Pylon), `nat_public` over plain internet egress.
+
+**`nat_zt` is schema-complete but not dial-capable this cycle.** Task 0's ZeroTier Central spike (doc 34 §2.2 OV17) could not run — no `ZEROTIER_CENTRAL_TOKEN` or interactive Central session was available — so the Pylon SOCKS5 wiring was deferred. `database_utils/utils/transport.py::resolve_endpoint` requires a `pylon_socks5` argument for `nat_zt` and returns `TRANSPORT_UNAVAILABLE` when none is supplied; no caller in backend-erp supplies one yet. `nat_public` is fully implemented and dial-capable — see [utilities.md](utilities.md) for `resolve_endpoint`'s full resolution logic.
+
 ## Open value sets (CHECK-constrained strings, not PG enums)
 
 Following the c3a/c3b precedent, driver-bounded value sets are CHECK-constrained
@@ -332,7 +354,9 @@ strings so adding a value is a plain transactional `ALTER` of the CHECK, never t
 
 - `CREDENTIAL_KINDS`: SSH, TELNET, SNMP_COMMUNITY, TR069_CONNECTION_REQUEST, HTTP_BASIC,
   HTTP_BEARER, WIREGUARD, AGENT
-- `NETWORK_ACCESS_KINDS`: acs, olt · `NETWORK_ACCESS_MODES`: direct, vpn, tunnel
+- `NETWORK_ACCESS_KINDS`: acs, olt · `NETWORK_ACCESS_MODES`: direct, vpn, tunnel, nat_zt, nat_public
+  (`NAT_MODES` = nat_zt, nat_public — 2026-08-13, `nat1_gateway_transport`, see the NAT transport
+  section above)
 - **Cycle 7**: `DEVICE_CATEGORY_TIERS`: CORE, EDGE · `CLI_PROTOCOLS`: ssh, telnet ·
   `INSTALL_STATES`: NOT_INSTALLED, IN_PROGRESS, INSTALLED (SQL CHECK fragments kept
   byte-identical between `models/isp.py` and the nc2a migration, guarded by

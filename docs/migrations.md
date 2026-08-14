@@ -3,7 +3,7 @@
 ## Description
 
 Alembic-managed schema migrations for all models in this repo — 55 revisions in
-`alembic/versions/` (head: **`ng2_topology_drop`**) — plus the idempotent seed
+`alembic/versions/` (head: **`nat1_gateway_transport`**) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -353,12 +353,46 @@ in [network-models.md](network-models.md).
   tenant with managed splitters reporting optical power would) is never reverted
   on the next migrate.
 
+### NAT transport (`nat1_gateway_transport`, 2026-08-13, head)
+
+On `ng2_topology_drop`. Purely **additive** — no existing row's `mode`
+changes; Cable Santa Rosa (the live production tenant) keeps whatever mode it
+already has. Full column/constraint detail in
+[network-models.md](network-models.md#nat-transport-nat1_gateway_transport-2026-08-13).
+
+- Adds `network_access.gateway_host` (String, nullable), `inventory_item.nat_port`
+  (Integer, nullable, range-CHECKed) and `inventory_item.mgmt_host_key` (String,
+  nullable).
+- Drops and recreates `ck_network_access_mode` to widen the CHECK to include
+  `nat_zt`/`nat_public`.
+- Clamps any pre-existing out-of-range `mgmt_port` to NULL **before** adding
+  `mgmt_port`'s own new range CHECK (`ck_inventory_item_mgmt_port`) — `mgmt_port`
+  has had no range CHECK since `nc2a`, and the xlsx importer would happily have
+  written 0 or 70000.
+- Adds a partial unique index `uq_inventory_item_company_nat_port` on
+  `(company_id, nat_port)` where `nat_port IS NOT NULL` — a tenant has one
+  gateway, so two devices behind one external port would push a config to the
+  wrong device.
+- `downgrade()` **refuses** rather than silently rewriting NAT rows to
+  `direct`: it raises `RuntimeError` if any `network_access` row is in
+  `nat_zt`/`nat_public` mode, because that would strand `gateway_host` and
+  every device's `nat_port` in columns the downgrade then drops, and the next
+  upgrade would come back with `mode='direct'` pointing at a management LAN
+  nothing can reach. Switch the affected tenants off NAT explicitly first.
+- The CHECK fragments (`_NETWORK_ACCESS_MODE_CHECK`, `_NAT_PORT_CHECK`,
+  `_MGMT_PORT_CHECK`) are duplicated byte-for-byte between
+  `database_utils/models/isp.py` and the migration (the nc1a/nc2a precedent —
+  revisions are immutable, models are not), pinned equal by
+  `tests/test_nat_transport_constants.py`.
+
 ## Key rules
 
 - **Not all migrations are reversible**: `c1e_install_actions` uses
   `ALTER TYPE ... ADD VALUE`, which has no downgrade, and `ng2_topology_drop`
-  raises from `downgrade()` by design. Check each revision's
-  `downgrade()` before assuming rollback is possible
+  raises from `downgrade()` by design. `nat1_gateway_transport`'s `downgrade()`
+  is conditionally reversible — it raises only while a `network_access` row is
+  still in a NAT mode. Check each revision's `downgrade()` before assuming
+  rollback is possible
 - Additive changes (new columns/tables): safe to apply before consuming
   service code ships
 - Destructive changes (removing/renaming): apply AFTER all consuming service
