@@ -102,6 +102,21 @@ class NetworkAccessUpdate(BaseModel):
     def validate_subnets(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         return _validate_subnets(v)
 
+    @model_validator(mode="after")
+    def validate_nat_requires_gateway_host(self):
+        # Whole-branch review I3: belt-and-suspenders with the DB CHECK
+        # (nat2_gateway_host_check) and backend-erp's router-level fix. This
+        # schema only sees the fields present in THIS update payload, not the
+        # row's current DB state, so it can only catch the case where both
+        # `mode` (being set to a NAT mode) and a blank `gateway_host` are
+        # submitted together in the same request — the exact "direct ->
+        # nat_public with no gateway_host" tenant flow the review flagged.
+        # The DB CHECK is what closes every other path.
+        if self.mode is not None and self.mode in NAT_MODES:
+            if self.gateway_host is not None and not self.gateway_host.strip():
+                raise ValueError(f"gateway_host is required when mode is '{self.mode}'")
+        return self
+
 
 class NetworkAccessOut(NetworkAccessBase):
     id: UUID

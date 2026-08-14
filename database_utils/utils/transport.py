@@ -70,6 +70,15 @@ def resolve_endpoint(
     """
     if access is None:
         access = _default_olt_access(db, company_id)
+    elif access.company_id != company_id:
+        # Whole-branch review I4: a caller-supplied `access` row is trusted
+        # verbatim — nothing here confirmed it belongs to `company_id`. In a
+        # multi-tenant system, a caller that passes the wrong company's row
+        # would otherwise resolve to that company's gateway: a cross-tenant
+        # address leak. Today's only caller (cli.py) always queries its own
+        # tenant's row, but this guard is what makes that an invariant
+        # instead of a convention.
+        return None, "TRANSPORT_UNAVAILABLE"
 
     mode = access.mode if access is not None else "direct"
 

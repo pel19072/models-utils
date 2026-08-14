@@ -8,16 +8,24 @@ import os
 
 from database_utils.models import isp
 
-_MIGRATION_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "alembic", "versions", "nat1_gateway_transport.py"
-)
+_VERSIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "alembic", "versions")
 
 
-def _load_nat1():
-    spec = importlib.util.spec_from_file_location("nat1_gateway_transport", _MIGRATION_PATH)
+def _load_migration(filename, module_name):
+    spec = importlib.util.spec_from_file_location(
+        module_name, os.path.join(_VERSIONS_DIR, filename)
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_nat1():
+    return _load_migration("nat1_gateway_transport.py", "nat1_gateway_transport")
+
+
+def _load_nat2():
+    return _load_migration("nat2_gateway_host_check.py", "nat2_gateway_host_check")
 
 
 def test_network_access_modes_constant():
@@ -49,3 +57,15 @@ def test_migration_chain_position():
     assert nat1.revision == "nat1_gateway_transport"
     assert nat1.down_revision == "ng2_topology_drop"
     assert len(nat1.revision) <= 32
+
+
+def test_nat2_migration_fragment_matches_model_fragment():
+    nat2 = _load_nat2()
+    assert nat2._NETWORK_ACCESS_NAT_GATEWAY_CHECK == isp._NETWORK_ACCESS_NAT_GATEWAY_CHECK
+
+
+def test_nat2_migration_chain_position():
+    nat2 = _load_nat2()
+    assert nat2.revision == "nat2_gateway_host_check"
+    assert nat2.down_revision == "nat1_gateway_transport"
+    assert len(nat2.revision) <= 32

@@ -273,6 +273,14 @@ _NETWORK_ACCESS_MODE_CHECK = "mode IN ('direct','vpn','tunnel','nat_zt','nat_pub
 # will happily write 0 or 70000. Both ports get one here.
 _NAT_PORT_CHECK = "nat_port IS NULL OR (nat_port BETWEEN 1 AND 65535)"
 _MGMT_PORT_CHECK = "mgmt_port IS NULL OR (mgmt_port BETWEEN 1 AND 65535)"
+# whole-branch review I3: "gateway_host required for NAT mode" was previously
+# only enforced by NetworkAccessCreate's Pydantic validator — bypassable by
+# an UPDATE (direct -> nat_public on an existing row) or any future caller
+# that skips the schema. This CHECK is the layer that can't be bypassed.
+# Shared byte-for-byte with the hand-written nat2 migration.
+_NETWORK_ACCESS_NAT_GATEWAY_CHECK = (
+    "mode NOT IN ('nat_zt','nat_public') OR gateway_host IS NOT NULL"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1244,6 +1252,9 @@ class NetworkAccess(Base):
         UniqueConstraint("company_id", "name", name="uq_network_access_company_name"),
         CheckConstraint(_NETWORK_ACCESS_KIND_CHECK, name="ck_network_access_kind"),
         CheckConstraint(_NETWORK_ACCESS_MODE_CHECK, name="ck_network_access_mode"),
+        CheckConstraint(
+            _NETWORK_ACCESS_NAT_GATEWAY_CHECK, name="ck_network_access_nat_gateway_host"
+        ),
         # Exactly one default path per tenant PER KIND (one default ACS, one
         # default OLT).
         Index(

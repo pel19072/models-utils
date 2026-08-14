@@ -342,6 +342,8 @@ silently rewriting to `direct` would strand `gateway_host`/`nat_port` data).
 
 `mgmt_port` also gains the range CHECK it had lacked since `nc2a` (a pre-existing gap the xlsx importer could exploit by writing 0 or 70000).
 
+A follow-up revision, `nat2_gateway_host_check`, adds `ck_network_access_nat_gateway_host` (`mode NOT IN ('nat_zt','nat_public') OR gateway_host IS NOT NULL`) — the "gateway_host required for NAT mode" rule was originally enforced only by `NetworkAccessCreate`'s Pydantic validator, which a mode-flipping UPDATE on an existing row could bypass entirely. This is the layer that can't be.
+
 `NETWORK_ACCESS_MODES` widens to `("direct", "vpn", "tunnel", "nat_zt", "nat_public")`; `NAT_MODES = ("nat_zt", "nat_public")` is the subset the resolver treats specially. Both variants resolve the dial target to `(network_access.gateway_host, inventory_item.nat_port)` — they differ only in how the *gateway itself* is reached: `nat_zt` through a fleet ZeroTier SOCKS5 proxy (Pylon), `nat_public` over plain internet egress.
 
 **`nat_zt` is schema-complete but not dial-capable this cycle.** Task 0's ZeroTier Central spike (doc 34 §2.2 OV17) could not run — no `ZEROTIER_CENTRAL_TOKEN` or interactive Central session was available — so the Pylon SOCKS5 wiring was deferred. `database_utils/utils/transport.py::resolve_endpoint` requires a `pylon_socks5` argument for `nat_zt` and returns `TRANSPORT_UNAVAILABLE` when none is supplied; no caller in backend-erp supplies one yet. `nat_public` is fully implemented and dial-capable — see [utilities.md](utilities.md) for `resolve_endpoint`'s full resolution logic.
