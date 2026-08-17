@@ -57,13 +57,13 @@ def resolve_endpoint(
     item,
     company_id,
     default_port: int,
-    pylon_socks5: Optional[str] = None,
     access: Optional[NetworkAccess] = None,
 ) -> Tuple[Optional[ResolvedEndpoint], Optional[str]]:
     """Resolve the dial target for `item`.
 
     Returns (endpoint, None) or (None, error_code). Error codes are the
-    provisioning failure-code vocabulary (spec N12).
+    provisioning failure-code vocabulary (spec N12, extended by spec
+    2026-08-17 §4.2 with PYLON_NOT_PROVISIONED).
 
     `access` lets a caller that already loaded the default row pass it in;
     when omitted it is queried here.
@@ -90,12 +90,12 @@ def resolve_endpoint(
             return None, "NAT_MAPPING_NOT_SET"
         proxy = None
         if mode == "nat_zt":
-            proxy = (pylon_socks5 or "").strip() or None
+            proxy = (access.pylon_socks5 or "").strip() or None
             if proxy is None:
-                # nat_zt has no route without the fleet proxy. Dialling the
-                # gateway's ZeroTier address directly from the worker would
-                # simply time out, so say why instead.
-                return None, "TRANSPORT_UNAVAILABLE"
+                # This tenant's Pylon was never wired, or the runbook step
+                # that writes this column was skipped. Fail closed — there
+                # is no fleet proxy to fall back to, by design (spec N13).
+                return None, "PYLON_NOT_PROVISIONED"
         return ResolvedEndpoint(gateway_host, int(item.nat_port), proxy, mode), None
 
     host = (item.mgmt_host or "").strip()
