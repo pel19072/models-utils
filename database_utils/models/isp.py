@@ -281,6 +281,9 @@ _MGMT_PORT_CHECK = "mgmt_port IS NULL OR (mgmt_port BETWEEN 1 AND 65535)"
 _NETWORK_ACCESS_NAT_GATEWAY_CHECK = (
     "mode NOT IN ('nat_zt','nat_public') OR gateway_host IS NOT NULL"
 )
+# spec 2026-08-17 §3.1: mirrors _NETWORK_ACCESS_NAT_GATEWAY_CHECK, narrowed to
+# nat_zt only — nat_public has no proxy hop and must not require one.
+_NETWORK_ACCESS_PYLON_CHECK = "mode != 'nat_zt' OR pylon_socks5 IS NOT NULL"
 
 
 # ---------------------------------------------------------------------------
@@ -1242,6 +1245,14 @@ class NetworkAccess(Base):
     # assertion is possible or wanted. NULL on every non-NAT row.
     gateway_host = Column(String, nullable=True)
 
+    # spec 2026-08-17 N13 (doc 34 OV17): the per-tenant Pylon's SOCKS5
+    # listener as "host:port" — always THIS tenant's own Railway-internal
+    # Pylon service, e.g. "pylon-acme.railway.internal:1080". One `pylon
+    # refract` process joins exactly one ZeroTier network, so a shared fleet
+    # proxy cannot serve two tenants. NULL on every non-nat_zt row, including
+    # nat_public (which dials the gateway over plain egress, no proxy hop).
+    pylon_socks5 = Column(String, nullable=True)
+
     company_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -1254,6 +1265,9 @@ class NetworkAccess(Base):
         CheckConstraint(_NETWORK_ACCESS_MODE_CHECK, name="ck_network_access_mode"),
         CheckConstraint(
             _NETWORK_ACCESS_NAT_GATEWAY_CHECK, name="ck_network_access_nat_gateway_host"
+        ),
+        CheckConstraint(
+            _NETWORK_ACCESS_PYLON_CHECK, name="ck_network_access_pylon_socks5"
         ),
         # Exactly one default path per tenant PER KIND (one default ACS, one
         # default OLT).

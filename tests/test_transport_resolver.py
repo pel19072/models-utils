@@ -18,11 +18,11 @@ def _company_id(db):
     return uuid.uuid4()
 
 
-def _access(db, company_id, mode, gateway_host=None, is_default=True, name=None):
+def _access(db, company_id, mode, gateway_host=None, is_default=True, name=None, pylon_socks5=None):
     row = NetworkAccess(
         id=uuid.uuid4(), name=name or f"na-{mode}", kind="olt",
         mode=mode, is_default=is_default, gateway_host=gateway_host,
-        company_id=company_id,
+        pylon_socks5=pylon_socks5, company_id=company_id,
     )
     db.add(row)
     db.commit()
@@ -81,7 +81,7 @@ def test_nat_public_dials_the_gateway_and_the_mapped_port(db):
 
 def test_nat_zt_carries_the_pylon_proxy(db):
     cid = _company_id(db)
-    _access(db, cid, "nat_zt", gateway_host="10.147.3.1")
+    _access(db, cid, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="127.0.0.1:1080")
     item = _item(db, cid, nat_port=2201)
     endpoint, error = resolve_endpoint(
         db, item, cid, default_port=22, pylon_socks5="127.0.0.1:1080",
@@ -94,7 +94,7 @@ def test_nat_zt_carries_the_pylon_proxy(db):
 
 def test_nat_zt_without_a_configured_proxy_fails_closed(db):
     cid = _company_id(db)
-    _access(db, cid, "nat_zt", gateway_host="10.147.3.1")
+    _access(db, cid, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="127.0.0.1:1080")
     item = _item(db, cid, nat_port=2201)
     endpoint, error = resolve_endpoint(db, item, cid, default_port=22, pylon_socks5=None)
     assert endpoint is None
