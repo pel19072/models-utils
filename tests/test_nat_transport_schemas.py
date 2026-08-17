@@ -23,6 +23,7 @@ def test_nat_zt_accepts_an_rfc1918_address():
     # "globally routable" assertion here would reject every nat_zt tenant.
     row = NetworkAccessCreate(
         name="gw", kind="olt", mode="nat_zt", gateway_host="10.147.3.1",
+        pylon_socks5="pylon-acme.railway.internal:1080",
     )
     assert row.gateway_host == "10.147.3.1"
 

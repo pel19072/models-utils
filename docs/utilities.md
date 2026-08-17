@@ -210,11 +210,11 @@ instead of three drifting copies.
 | Name | Behaviour |
 |---|---|
 | `ResolvedEndpoint` | Frozen dataclass: `host`, `port`, `proxy` (SOCKS5 `host:port` for `nat_zt`, else `None`), `mode` |
-| `resolve_endpoint(db, item, company_id, default_port, pylon_socks5=None, access=None)` | Returns `(endpoint, None)` or `(None, error_code)`. Reads only the company's **default** `kind='olt'` `NetworkAccess` row (or the caller-supplied `access`) — no longest-prefix match, no per-device override; `network_access.mgmt_subnets` is deliberately not read |
+| `resolve_endpoint(db, item, company_id, default_port, access=None)` | Returns `(endpoint, None)` or `(None, error_code)`. Reads only the company's **default** `kind='olt'` `NetworkAccess` row (or the caller-supplied `access`) — no longest-prefix match, no per-device override; `network_access.mgmt_subnets` is deliberately not read |
 
 Resolution:
 - `mode in NAT_MODES` (`nat_zt`, `nat_public`): target is always `(access.gateway_host, item.nat_port)`, **never** `item.mgmt_host`. Missing `gateway_host` or `nat_port` → `NAT_MAPPING_NOT_SET`.
-- `mode == 'nat_zt'` additionally requires a `pylon_socks5` argument; if none is supplied → `TRANSPORT_UNAVAILABLE`. **As of 2026-08-13, no caller in backend-erp supplies `pylon_socks5`** — the Pylon SOCKS5 fleet proxy (doc 34 §2.2 OV11) was not wired this cycle (Task 0's ZeroTier Central spike could not run — see doc 34 OV17). `nat_zt` is therefore selectable and stores its config but every dial against it fails closed with `TRANSPORT_UNAVAILABLE`. `nat_public` is fully dial-capable.
+- `mode == 'nat_zt'` additionally reads `access.pylon_socks5` — the tenant's own Pylon SOCKS5 endpoint (revision `nat3_pylon_socks5`, 2026-08-17). It is a column on the tenant's `NetworkAccess` row, not a function argument: the parameter was removed because a stray test-fixture value could leak a proxy across tenants. If the column is blank/NULL, resolution fails closed with `PYLON_NOT_PROVISIONED`. `nat_public` remains fully dial-capable, and `nat_zt` is now dial-capable too once the tenant's `pylon_socks5` is set — see doc 34 OV17: one Pylon process joins exactly one ZeroTier network, so there is no shared fleet proxy, only one Pylon Railway service per tenant.
 - Every mode NOT in `NAT_MODES` (`direct`, `vpn`, `tunnel` — and no default row at all) falls through to the SAME branch: `(item.mgmt_host, item.mgmt_port or default_port)`. This is not fail-closed for those modes — nothing distinguishes a `vpn` row that genuinely has a live tunnel to `item.mgmt_host` from one that doesn't. The only check on that branch is that `mgmt_host` itself is non-empty → `MGMT_HOST_NOT_SET`.
 - `access` supplied by the caller (skipping the internal query) is rejected with `TRANSPORT_UNAVAILABLE` if `access.company_id != company_id` — a cross-tenant guard, since nothing else here re-validates a caller-supplied row.
 
@@ -223,7 +223,8 @@ Error-code vocabulary `resolve_endpoint` can return (spec N12):
 | Code | When |
 |---|---|
 | `NAT_MAPPING_NOT_SET` | `mode in NAT_MODES` and `gateway_host` or `item.nat_port` is missing |
-| `TRANSPORT_UNAVAILABLE` | `mode == 'nat_zt'` with no `pylon_socks5` configured, or a caller-supplied `access` row belongs to a different `company_id` |
+| `PYLON_NOT_PROVISIONED` | `mode == 'nat_zt'` and `access.pylon_socks5` is blank/NULL |
+| `TRANSPORT_UNAVAILABLE` | a caller-supplied `access` row belongs to a different `company_id` |
 | `MGMT_HOST_NOT_SET` | a non-NAT mode (or no default row) with an empty `item.mgmt_host` |
 
 Two invariants documented in the module docstring: the `InventoryItem` is

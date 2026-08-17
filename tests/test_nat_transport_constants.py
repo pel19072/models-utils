@@ -28,6 +28,10 @@ def _load_nat2():
     return _load_migration("nat2_gateway_host_check.py", "nat2_gateway_host_check")
 
 
+def _load_nat3():
+    return _load_migration("nat3_pylon_socks5.py", "nat3_pylon_socks5")
+
+
 def test_network_access_modes_constant():
     assert isp.NETWORK_ACCESS_MODES == (
         "direct", "vpn", "tunnel", "nat_zt", "nat_public",
@@ -69,3 +73,19 @@ def test_nat2_migration_chain_position():
     assert nat2.revision == "nat2_gateway_host_check"
     assert nat2.down_revision == "nat1_gateway_transport"
     assert len(nat2.revision) <= 32
+
+
+def test_pylon_check_fragment_exists():
+    assert isp._NETWORK_ACCESS_PYLON_CHECK == "mode != 'nat_zt' OR pylon_socks5 IS NOT NULL"
+
+
+def test_nat3_migration_fragment_matches_model_fragment():
+    nat3 = _load_nat3()
+    assert nat3._NETWORK_ACCESS_PYLON_CHECK == isp._NETWORK_ACCESS_PYLON_CHECK
+
+
+def test_nat3_migration_chain_position():
+    nat3 = _load_nat3()
+    assert nat3.revision == "nat3_pylon_socks5"
+    assert nat3.down_revision == "nat2_gateway_host_check"
+    assert len(nat3.revision) <= 32

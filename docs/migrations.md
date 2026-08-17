@@ -2,8 +2,8 @@
 
 ## Description
 
-Alembic-managed schema migrations for all models in this repo — 55 revisions in
-`alembic/versions/` (head: **`nat1_gateway_transport`**) — plus the idempotent seed
+Alembic-managed schema migrations for all models in this repo — 58 revisions in
+`alembic/versions/` (head: **`nat3_pylon_socks5`**) — plus the idempotent seed
 scripts that run after every upgrade.
 
 ## Goal
@@ -353,7 +353,7 @@ in [network-models.md](network-models.md).
   tenant with managed splitters reporting optical power would) is never reverted
   on the next migrate.
 
-### NAT transport (`nat1_gateway_transport`, 2026-08-13, head)
+### NAT transport (`nat1_gateway_transport`, 2026-08-13)
 
 On `ng2_topology_drop`. Purely **additive** — no existing row's `mode`
 changes; Cable Santa Rosa (the live production tenant) keeps whatever mode it
@@ -384,6 +384,31 @@ already has. Full column/constraint detail in
   `database_utils/models/isp.py` and the migration (the nc1a/nc2a precedent —
   revisions are immutable, models are not), pinned equal by
   `tests/test_nat_transport_constants.py`.
+
+### `nat2_gateway_host_check` (2026-08-13)
+
+On `nat1_gateway_transport`. Additive, hand-written: adds DB-level CHECK
+`ck_network_access_nat_gateway_host` (`mode NOT IN ('nat_zt','nat_public') OR
+gateway_host IS NOT NULL`), closing the gap where `NetworkAccessUpdate` had no
+cross-field validator and a mode-flipping UPDATE could bypass the Pydantic
+check entirely. Scrubs any pre-existing NAT row with no `gateway_host` back
+to `direct` before adding the constraint.
+
+### `nat3_pylon_socks5` (2026-08-17, head)
+
+On `nat2_gateway_host_check`. Adds `network_access.pylon_socks5` (String,
+nullable) — the tenant's own Pylon SOCKS5 endpoint — plus DB-level CHECK
+`ck_network_access_pylon_socks5` (`mode != 'nat_zt' OR pylon_socks5 IS NOT
+NULL`). Doc 34 OV17 retracted the original shared-fleet-Pylon design (one
+Pylon process joins exactly one ZeroTier network, so it can't serve more than
+one tenant); the SOCKS5 endpoint moves from a worker env var (`PYLON_SOCKS5`,
+spec N4 — retracted) to this per-tenant column, mirroring `gateway_host`. No
+production tenant has ever run `nat_zt` (it has fail-closed since `nat1`
+shipped, since `PYLON_SOCKS5` was never set), so the same clamp-before-CHECK
+scrub as `nat2` is defensive rather than expected to fire.
+`downgrade()` drops the column and its CHECK cleanly (no data-loss ambiguity
+like `nat1`'s mode downgrade) — a `nat_zt` tenant on a downgraded schema has
+no proxy column left to read and fails closed on the transport channel.
 
 ## Key rules
 

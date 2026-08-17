@@ -18,11 +18,11 @@ def _company_id(db):
     return uuid.uuid4()
 
 
-def _access(db, company_id, mode, gateway_host=None, is_default=True, name=None):
+def _access(db, company_id, mode, gateway_host=None, is_default=True, name=None, pylon_socks5=None):
     row = NetworkAccess(
         id=uuid.uuid4(), name=name or f"na-{mode}", kind="olt",
         mode=mode, is_default=is_default, gateway_host=gateway_host,
-        company_id=company_id,
+        pylon_socks5=pylon_socks5, company_id=company_id,
     )
     db.add(row)
     db.commit()
@@ -79,26 +79,45 @@ def test_nat_public_dials_the_gateway_and_the_mapped_port(db):
     assert (item.mgmt_host, item.mgmt_port) == ("10.1.5.37", 23)
 
 
-def test_nat_zt_carries_the_pylon_proxy(db):
+def test_nat_zt_carries_the_tenants_own_pylon_proxy(db):
     cid = _company_id(db)
-    _access(db, cid, "nat_zt", gateway_host="10.147.3.1")
+    _access(db, cid, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="127.0.0.1:1080")
     item = _item(db, cid, nat_port=2201)
-    endpoint, error = resolve_endpoint(
-        db, item, cid, default_port=22, pylon_socks5="127.0.0.1:1080",
-    )
+    endpoint, error = resolve_endpoint(db, item, cid, default_port=22)
     assert error is None
     assert (endpoint.host, endpoint.port, endpoint.proxy) == (
         "10.147.3.1", 2201, "127.0.0.1:1080",
     )
 
 
-def test_nat_zt_without_a_configured_proxy_fails_closed(db):
+def test_nat_zt_without_a_provisioned_pylon_fails_closed(db):
     cid = _company_id(db)
-    _access(db, cid, "nat_zt", gateway_host="10.147.3.1")
+    _access(db, cid, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="")
     item = _item(db, cid, nat_port=2201)
-    endpoint, error = resolve_endpoint(db, item, cid, default_port=22, pylon_socks5=None)
+    endpoint, error = resolve_endpoint(db, item, cid, default_port=22)
     assert endpoint is None
-    assert error == "TRANSPORT_UNAVAILABLE"
+    assert error == "PYLON_NOT_PROVISIONED"
+
+
+def test_two_nat_zt_tenants_never_share_a_proxy(db):
+    # acceptance criterion 2 of the redesign spec: same LAN range, different
+    # tenants, different Pylons — this is the I4 cross-tenant guard, still
+    # exercised the same way after the parameter removal.
+    cid_a = _company_id(db)
+    cid_b = _company_id(db)
+    access_a = _access(db, cid_a, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="pylon-a.railway.internal:1080")
+    _access(db, cid_b, "nat_zt", gateway_host="10.147.3.1", pylon_socks5="pylon-b.railway.internal:1080")
+    item_a = _item(db, cid_a, nat_port=2201)
+
+    endpoint, error = resolve_endpoint(db, item_a, cid_a, default_port=22, access=access_a)
+    assert error is None
+    assert endpoint.proxy == "pylon-a.railway.internal:1080"
+
+    # cross-tenant access= misuse: passing tenant B's row while resolving for
+    # tenant A must still refuse (I4), not silently pick up B's proxy.
+    access_b_row = db.query(NetworkAccess).filter_by(company_id=cid_b).first()
+    endpoint2, error2 = resolve_endpoint(db, item_a, cid_a, default_port=22, access=access_b_row)
+    assert endpoint2 is None
 
 
 def test_nat_without_a_nat_port_fails_closed(db):
