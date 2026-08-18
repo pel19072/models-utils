@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 ALL_MODULES = ["core", "admin", "management", "automations",
                "inventory", "topologies", "provisioning"]
 
+# Network modules every paid tier gets (t2_paid_tier_network_modules).
+NETWORK_MODULES = ["inventory", "topologies", "provisioning"]
+PAID_TIER_NAMES = ('Basic', 'Premium', 'Pro', 'Enterprise')
+
 
 def _enforce_free_trial_unlimited(connection: Connection) -> None:
     """Converge the standing product policy: Free/Trial have NO resource
@@ -54,6 +58,33 @@ def _enforce_free_trial_unlimited(connection: Connection) -> None:
     connection.commit()
     if result.rowcount:
         logger.info(f"✓ Converged {result.rowcount} tier(s) to the Free/Trial-unlimited policy")
+
+
+def _enforce_paid_tier_network_modules(connection: Connection) -> None:
+    """Converge the standing product policy: every paid tier includes the
+    Network modules (see revision t2_paid_tier_network_modules).
+
+    Unions NETWORK_MODULES into whatever the tier already has, rather than
+    overwriting — preserves any other module customization on the row.
+    Runs on every migrate so this survives prod-data reloads. Idempotent.
+    """
+    result = connection.execute(
+        text(
+            "UPDATE tier "
+            "SET modules = ("
+            "    SELECT COALESCE(jsonb_agg(DISTINCT m), '[]'::jsonb) "
+            "    FROM jsonb_array_elements_text("
+            "        COALESCE(modules::jsonb, '[]'::jsonb) || CAST(:network_modules AS jsonb)"
+            "    ) AS m"
+            ") "
+            "WHERE name = ANY(:tier_names) "
+            "AND NOT (COALESCE(modules::jsonb, '[]'::jsonb) @> CAST(:network_modules AS jsonb))"
+        ),
+        {"network_modules": json.dumps(NETWORK_MODULES), "tier_names": list(PAID_TIER_NAMES)},
+    )
+    connection.commit()
+    if result.rowcount:
+        logger.info(f"✓ Converged {result.rowcount} paid tier(s) to include Network modules")
 
 
 def seed_tier_data(connection: Connection) -> None:
@@ -94,6 +125,7 @@ def seed_tier_data(connection: Connection) -> None:
         if existing_tiers > 0 and tiers_with_billing > 0:
             logger.info(f"Tier data already seeded ({existing_tiers} tiers with billing data found). Skipping.")
             _enforce_free_trial_unlimited(connection)
+            _enforce_paid_tier_network_modules(connection)
             return
 
         # Define tier data mapping (name -> data)
@@ -139,6 +171,7 @@ def seed_tier_data(connection: Connection) -> None:
                     "support": "Email",
                     "features": ["Full CRM", "Dashboard", "Advanced Reports", "API Access", "Integrations"]
                 },
+                "modules": ["core", "admin", "management", "automations"] + NETWORK_MODULES,
                 "stripe_price_id": "price_basic_monthly",  # Mock Stripe price ID
                 "is_active": True
             },
@@ -161,6 +194,7 @@ def seed_tier_data(connection: Connection) -> None:
                         "SLA Guarantee"
                     ]
                 },
+                "modules": ["core", "admin", "management", "automations"] + NETWORK_MODULES,
                 "stripe_price_id": "price_premium_monthly",  # Mock Stripe price ID
                 "is_active": True
             },
@@ -175,6 +209,7 @@ def seed_tier_data(connection: Connection) -> None:
                     "support": "Priority",
                     "features": ["Full CRM", "Dashboard", "Advanced Reports", "API Access", "Integrations", "Custom Workflows"]
                 },
+                "modules": ["core", "admin", "management", "automations"] + NETWORK_MODULES,
                 "stripe_price_id": "price_premium_monthly",
                 "is_active": True
             },
@@ -188,6 +223,7 @@ def seed_tier_data(connection: Connection) -> None:
                     "support": "Dedicated",
                     "features": ["Full CRM", "Dashboard", "Advanced Reports", "API Access", "Integrations", "Custom Workflows", "White Label", "SLA Guarantee"]
                 },
+                "modules": ["core", "admin", "management", "automations"] + NETWORK_MODULES,
                 "stripe_price_id": "price_enterprise_monthly",
                 "is_active": True
             }
