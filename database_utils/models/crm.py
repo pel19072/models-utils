@@ -730,7 +730,12 @@ class CollectionVisit(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
     outcome = Column(Enum(CollectionVisitOutcome), nullable=False)
-    visit_code = Column(Enum(CollectionVisitCode), nullable=True)
+    # values_callable required: CollectionVisitCode members are UPPER_SNAKE
+    # but their .value is camelCase (must match uplink-mobile's VISIT_CODES
+    # verbatim) — without this SQLAlchemy binds .name and every insert 500s
+    # against the postgres enum (which was correctly created from .value in
+    # rs1_route_cash).
+    visit_code = Column(Enum(CollectionVisitCode, values_callable=lambda e: [m.value for m in e]), nullable=True)
     promise_date = Column(Date, nullable=True)
     note = Column(String, nullable=True)
 
