@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, BigInteger, Boolean, JSON, DateTime, ForeignKey, Enum, text, Uuid, Float,
+    Column, String, Integer, BigInteger, Boolean, JSON, DateTime, Date, ForeignKey, Enum, text, Uuid, Float,
     Table, Index, CheckConstraint
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -83,6 +83,15 @@ class TaskStateColor(str, enum.Enum):
     BLUE = "BLUE"
     PURPLE = "PURPLE"
     PINK = "PINK"
+
+
+class TaskJobKind(str, enum.Enum):
+    """uplink-mobile tecnicos: what kind of field job a Task represents.
+    Nullable — office/back-office tasks (not field jobs) leave it unset."""
+    INSTALL = "INSTALL"
+    FAULT = "FAULT"
+    CHANGE = "CHANGE"
+    REMOVE = "REMOVE"
 
 
 class TaskLinkedObjectType(str, enum.Enum):
@@ -422,6 +431,13 @@ class Payment(Base):
         Uuid, ForeignKey("payment.id", ondelete="RESTRICT"), nullable=True
     )
     notes = Column(String, nullable=True)
+    # pi1_payment_idem: offline-write safety for uplink-mobile cobros — the
+    # client generates this once per collection attempt and retries send it
+    # unchanged; PaymentService check-then-insert / catches the unique
+    # violation on (company_id, idempotency_key) and returns the existing
+    # row instead of double-recording money. `received_by` above already
+    # covers "collected_by" for cash-cut aggregation — no new column needed.
+    idempotency_key = Column(String, nullable=True)
 
     # Relationships
     order = relationship("Order", back_populates="payments")
@@ -437,6 +453,12 @@ class Payment(Base):
         ),
         Index("ix_payment_company_order", "company_id", "order_id"),
         Index("ix_payment_company_paid_at", "company_id", "paid_at"),
+        Index(
+            "uq_payment_company_idem",
+            "company_id", "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
     )
 
 
@@ -505,6 +527,10 @@ class Task(Base):
     time_spent_minutes = Column(Integer, nullable=True)
     linked_object_type = Column(Enum(TaskLinkedObjectType), nullable=True)
     linked_object_id = Column(Uuid, nullable=True)
+    # uplink-mobile tecnicos (tc1_task_closeout): field-job scheduling.
+    # Both nullable — office tasks never set them.
+    scheduled_date = Column(Date, nullable=True)
+    job_kind = Column(Enum(TaskJobKind), nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
     task_state_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("task_state.id", ondelete="RESTRICT"), nullable=False)
@@ -515,6 +541,17 @@ class Task(Base):
     task_state = relationship("TaskState", back_populates="tasks")
     creator = relationship("User", foreign_keys=[created_by])
     assignees = relationship("User", secondary=task_assignee)
+    closeout = relationship("TaskCloseout", back_populates="task", uselist=False, cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # tecnicos "today" screen filter (routers/tasks.py `assignee_id` +
+        # `scheduled_date` query per doc). Partial: most tasks never set it.
+        Index(
+            "ix_task_company_scheduled_date",
+            "company_id", "scheduled_date",
+            postgresql_where=text("scheduled_date IS NOT NULL"),
+        ),
+    )
 
 
 class TaskTemplate(Base):
@@ -567,3 +604,196 @@ class Integration(Base):
 
     # Relationships
     company = relationship("Company", back_populates="integrations")
+
+
+# --- uplink-mobile integration (2026-08-18) -------------------------------
+# uf1_uploaded_file / rs1_route_cash / tc1_task_closeout. Backs `apps/cobros`
+# (collection routes + cash cuts) and `apps/tecnicos` (task closeout
+# evidence). See docs/superpowers/plans/2026-08-18-uplink-mobile-real-data-
+# integration.md "Backend & DB Changes".
+
+class UploadedFileOwnerType(str, enum.Enum):
+    TASK_CLOSEOUT = "TASK_CLOSEOUT"
+    COLLECTION_VISIT = "COLLECTION_VISIT"
+    CASH_SESSION = "CASH_SESSION"
+
+
+class UploadedFileKind(str, enum.Enum):
+    PHOTO = "PHOTO"
+    SIGNATURE = "SIGNATURE"
+
+
+class UploadedFile(Base):
+    """Shared polymorphic file store (photos/signatures) for mobile closeout
+    evidence. Reuses the linked_object_type/linked_object_id pattern already
+    established on Task (owner_type/owner_id here). Storage is a Railway
+    volume — storage_key is a relative path, not a URL.
+    `# ponytail: single-instance volume storage, not multi-replica-safe —
+    move storage_key's backing implementation to S3-compatible object
+    storage the moment backend-erp scales to >1 replica.`"""
+    __tablename__ = "uploaded_file"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    owner_type = Column(Enum(UploadedFileOwnerType), nullable=False)
+    owner_id = Column(Uuid, nullable=False)
+    kind = Column(Enum(UploadedFileKind), nullable=False)
+    storage_key = Column(String, nullable=False)
+    content_type = Column(String, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="uploaded_files")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+
+    __table_args__ = (
+        Index("ix_uploaded_file_owner", "owner_type", "owner_id"),
+    )
+
+
+class CollectionRouteStatus(str, enum.Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+
+
+class RouteStopStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    VISITED = "VISITED"
+    NO_CONTACT = "NO_CONTACT"
+
+
+class CollectionVisitOutcome(str, enum.Enum):
+    PAID = "PAID"
+    PARTIAL = "PARTIAL"
+    NO_CONTACT = "NO_CONTACT"
+
+
+class CollectionVisitCode(str, enum.Enum):
+    """Values match VISIT_CODES in uplink-mobile apps/cobros/src/data.ts:71
+    verbatim (camelCase) — the mobile app sends these strings as-is."""
+    NO_ONE_HOME = "noOneHome"
+    PROMISE = "promise"
+    REFUSED = "refused"
+    COMPLAINT = "complaint"
+    MOVED = "moved"
+
+
+class CashSessionStatus(str, enum.Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+
+
+class CollectionRoute(Base):
+    __tablename__ = "collection_route"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    route_date = Column(Date, nullable=False)
+    status = Column(Enum(CollectionRouteStatus), nullable=False, default=CollectionRouteStatus.OPEN, server_default='OPEN')
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    collector_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="collection_routes")
+    collector = relationship("User", foreign_keys=[collector_id])
+    stops = relationship("RouteStop", back_populates="route", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_collection_route_company_date", "company_id", "route_date"),
+    )
+
+
+class RouteStop(Base):
+    __tablename__ = "route_stop"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    sequence = Column(Integer, nullable=False, default=0)
+    status = Column(Enum(RouteStopStatus), nullable=False, default=RouteStopStatus.PENDING, server_default='PENDING')
+
+    route_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("collection_route.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    route = relationship("CollectionRoute", back_populates="stops")
+    client = relationship("Client")
+    visits = relationship("CollectionVisit", back_populates="route_stop", cascade="all, delete-orphan")
+
+
+class CollectionVisit(Base):
+    __tablename__ = "collection_visit"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    outcome = Column(Enum(CollectionVisitOutcome), nullable=False)
+    visit_code = Column(Enum(CollectionVisitCode), nullable=True)
+    promise_date = Column(Date, nullable=True)
+    note = Column(String, nullable=True)
+
+    route_stop_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("route_stop.id", ondelete="CASCADE"), nullable=False, index=True)
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("payment.id", ondelete="SET NULL"), nullable=True)
+    signature_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("uploaded_file.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    route_stop = relationship("RouteStop", back_populates="visits")
+    payment = relationship("Payment")
+    signature_file = relationship("UploadedFile", foreign_keys=[signature_file_id])
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class CashSession(Base):
+    __tablename__ = "cash_session"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    opened_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    counted_cash_cents = Column(BigInteger, nullable=True)
+    status = Column(Enum(CashSessionStatus), nullable=False, default=CashSessionStatus.OPEN, server_default='OPEN')
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    collector_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True)
+    route_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("collection_route.id", ondelete="SET NULL"), nullable=True)
+    deposit_slip_photo_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("uploaded_file.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    company = relationship("Company", back_populates="cash_sessions")
+    collector = relationship("User", foreign_keys=[collector_id])
+    route = relationship("CollectionRoute")
+    deposit_slip_photo = relationship("UploadedFile", foreign_keys=[deposit_slip_photo_id])
+
+    __table_args__ = (
+        Index("ix_cash_session_company_collector", "company_id", "collector_id"),
+    )
+
+
+class TaskCloseout(Base):
+    """Extends Task, doesn't fork a parallel "Job" model (tc1_task_closeout).
+    One-to-one with Task via the unique FK."""
+    __tablename__ = "task_closeout"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_gt)
+    checklist_state = Column(JSON, nullable=True)  # {check_id: bool}
+    serial_number = Column(String, nullable=True)
+    device_match = Column(JSON, nullable=True)
+    gps_lat = Column(Float, nullable=True)
+    gps_lng = Column(Float, nullable=True)
+    gps_accuracy_m = Column(Float, nullable=True)
+    gps_captured_at = Column(DateTime(timezone=True), nullable=True)
+    signer_name = Column(String, nullable=True)
+    signer_id_number = Column(String, nullable=True)  # DPI
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+
+    task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("task.id", ondelete="CASCADE"), nullable=False, unique=True)
+    technician_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True)
+    signature_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("uploaded_file.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    task = relationship("Task", back_populates="closeout")
+    technician = relationship("User", foreign_keys=[technician_id])
+    signature_file = relationship("UploadedFile", foreign_keys=[signature_file_id])
