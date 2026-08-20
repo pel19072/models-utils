@@ -20,7 +20,7 @@ One module per entity. `schemas/__init__.py` star-imports all modules and runs
 | Domain | Modules |
 |---|---|
 | Auth / tenancy | `user`, `company`, `role`, `permission`, `invitation`, `notification`, `audit_log`, `requests` (Login + flat company-only Signup), `email_verification`, `password_reset` |
-| SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice`, `tier_change_request` — rb1 extends `tier` and `subscription` (see below) |
+| SaaS billing | `tier`, `subscription`, `payment_method`, `billing_invoice` — rb1 extends `tier` and `subscription` (see below) |
 | CRM | `client`, `custom_field`, `order`, `order_item`, `payment`, `invoice`, `product` (legacy), `recurring_order` (legacy), `task`, `task_state`, `task_template`, `integration` |
 | ISP | `service_plan`, `client_service`, `inventory`, `playbook`, `device_category`, `insight` (Cycle 4) |
 | Network config (Cycle 5) | `acs_registration`, `device_credential`, `network_access`, `provisioning_settings` |
