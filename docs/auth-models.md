@@ -27,12 +27,16 @@ both auth-erp (primary) and backend-erp (token/permission validation).
 | `Subscription` (subscription) | Company's SaaS subscription |
 | `PaymentMethod` (payment_method) | SaaS billing payment method |
 | `BillingInvoice` (billing_invoice) | SaaS subscription invoice |
-| `TierChangeRequest` (tier_change_request) | Tier change approval workflow |
 | `BillingWebhookEvent` (billing_webhook_event) | Recurrente webhook delivery idempotency log — `svix_id` string PK + `event_type`/`created_at` (rb1) |
 
 Note the two billing domains: these SaaS-billing models cover ISP companies
 paying Uplink; **subscriber** billing (ISP end-customers) lives in the CRM/ISP
 models ([crm-models.md](crm-models.md), [isp-models.md](isp-models.md)).
+
+`TierChangeRequest` (the manual tier-change approval workflow) was removed —
+superseded by Recurrente self-serve checkout/cancel. Its physical
+`tier_change_request` table is still present pending a later destructive-change
+release (drop-after-prod rule); see [limitations.md](limitations.md).
 
 ## Connections to Other Components
 
@@ -56,8 +60,7 @@ models ([crm-models.md](crm-models.md), [isp-models.md](isp-models.md)).
   `Subscription.status` (ACTIVE/PAST_DUE/CANCELED/TRIALING),
   `Subscription.billing_type` (AUTOMATIC/MANUAL),
   `Subscription.billing_cycle` (MONTHLY/YEARLY),
-  `BillingInvoice.status` (PENDING/PAID/FAILED/REFUNDED),
-  `TierChangeRequest.status` (PENDING/APPROVED/REJECTED). The only enum in this
+  `BillingInvoice.status` (PENDING/PAID/FAILED/REFUNDED). The only enum in this
   area, `NotificationStatus`, is defined in `schemas/notification.py` (a schema),
   not in the auth model.
 - System role names live in `constants/roles.py` (`Roles`:

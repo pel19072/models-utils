@@ -13,6 +13,12 @@
 - **Legacy models retained**: `Product`, `RecurringOrder`/`RecurringOrderItem`
   are kept for the transition and because `cron-erp` still consumes
   RecurringOrder for recurring order generation.
+- **`tier_change_request` table retained, model dropped**: the manual
+  tier-change approval workflow (`TierChangeRequest` model, its routers, and
+  its frontend UI) was removed — superseded by Recurrente self-serve
+  checkout/cancel. The table itself is still physically present; its drop is
+  a separate, later destructive-change release (all consuming code already
+  removed from every service — this is purely the drop-after-prod rule).
 
 ## The network graph (Cycle 10, doc 35 §10) — shipped limitations
 
